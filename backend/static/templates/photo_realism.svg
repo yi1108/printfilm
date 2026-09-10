@@ -1,0 +1,14 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'>
+  <defs>
+    <linearGradient id='sky' x1='0' y1='0' x2='0' y2='1'>
+      <stop offset='0%' stop-color='#87a8c4'/>
+      <stop offset='100%' stop-color='#d4c4a8'/>
+    </linearGradient>
+  </defs>
+  <rect width='640' height='360' fill='url(#sky)'/>
+  <polygon points='0,260 180,120 320,240 480,100 640,220 640,360 0,360' fill='#5a6b4a'/>
+  <circle cx='520' cy='80' r='42' fill='#f2e0a8' opacity='0.85'/>
+  <rect x='60' y='200' width='90' height='60' fill='#8a9098' opacity='0.7'/>
+  <text x='48' y='70' font-family='Georgia, serif' font-size='34' fill='#1a1a1a'>��Dq</text>
+  <text x='48' y='100' font-family='sans-serif' font-size='14' fill='#1a1a1a' opacity='0.55'>Photo Realism</text>
+</svg>

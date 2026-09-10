@@ -1,0 +1,7 @@
+﻿<svg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'>
+  <rect width='640' height='360' fill='#1f1a17'/>
+  <circle cx='480' cy='120' r='90' fill='#f0c75e' opacity='0.25'/>
+  <rect x='48' y='48' width='220' height='140' rx='8' fill='#f0c75e' opacity='0.85'/>
+  <text x='48' y='280' font-family='Georgia, serif' font-size='42' fill='#f0c75e'>Collage</text>
+  <text x='48' y='320' font-family='sans-serif' font-size='18' fill='#f0c75e' opacity='0.7'>FrameCut Template</text>
+</svg>

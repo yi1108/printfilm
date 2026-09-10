@@ -1,0 +1,11 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'>
+  <rect width='640' height='360' fill='#1c1820'/>
+  <rect x='60' y='50' width='520' height='260' fill='#2a2430' stroke='#6b5a78' stroke-width='3'/>
+  <line x1='60' y1='120' x2='580' y2='120' stroke='#ff6b9d' stroke-width='1' opacity='0.4'/>
+  <line x1='60' y1='200' x2='580' y2='200' stroke='#5ec8ff' stroke-width='1' opacity='0.35'/>
+  <line x1='60' y1='280' x2='580' y2='280' stroke='#ffe66d' stroke-width='1' opacity='0.3'/>
+  <text x='90' y='100' font-family='Georgia, serif' font-size='40' fill='#ffe66d'>
+� VHS</text>
+  <text x='90' y='140' font-family='sans-serif' font-size='14' fill='#5ec8ff' opacity='0.85'>Retro Tape</text>
+  <text x='480' y='290' font-family='monospace' font-size='18' fill='#ff6b9d'>� PLAY</text>
+</svg>

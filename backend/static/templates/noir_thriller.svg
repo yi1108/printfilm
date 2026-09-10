@@ -1,0 +1,8 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'>
+  <rect width='640' height='360' fill='#0c0c10'/>
+  <polygon points='0,360 280,80 360,80 640,360' fill='#1a1a24'/>
+  <circle cx='480' cy='100' r='48' fill='#f2e8c9' opacity='0.15'/>
+  <rect x='120' y='140' width='80' height='180' fill='#2a2a38' opacity='0.85'/>
+  <text x='48' y='70' font-family='Georgia, serif' font-size='36' fill='#c9c4b8'>�r��</text>
+  <text x='48' y='100' font-family='sans-serif' font-size='14' fill='#c9c4b8' opacity='0.55'>Noir Thriller</text>
+</svg>

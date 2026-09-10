@@ -1,0 +1,656 @@
+{
+  "days": {
+    "2026-08-26": {
+      "summary": {
+        "usage_calls": 322,
+        "usage_yuan": 7956.86,
+        "avg_yuan_per_call": 24.71,
+        "median_yuan_per_call": 28.98,
+        "avg_tokens_per_call": 358075.0,
+        "task_count": 387,
+        "task_succeeded": 237,
+        "task_failed": 75,
+        "task_cancelled": 75,
+        "unique_users_usage": 9,
+        "unique_users_tasks": 7
+      },
+      "by_user": [
+        {
+          "user_email": "1226863248@qq.com",
+          "calls": 24,
+          "yuan": 597.56,
+          "tokens": 8660000,
+          "tasks": 28.0,
+          "succeeded": 24.0,
+          "failed": 4.0,
+          "cancelled": 0.0,
+          "yuan_share_pct": 7.5,
+          "calls_per_task": 0.86
+        },
+        {
+          "user_email": "1275215107@qq.com",
+          "calls": 30,
+          "yuan": 455.56,
+          "tokens": 6600000,
+          "tasks": 27.0,
+          "succeeded": 27.0,
+          "failed": 0.0,
+          "cancelled": 0.0,
+          "yuan_share_pct": 5.7,
+          "calls_per_task": 1.11
+        },
+        {
+          "user_email": "2929455133@qq.com",
+          "calls": 141,
+          "yuan": 3555.52,
+          "tokens": 51520000,
+          "tasks": 183.0,
+          "succeeded": 96.0,
+          "failed": 41.0,
+          "cancelled": 46.0,
+          "yuan_share_pct": 44.7,
+          "calls_per_task": 0.77
+        },
+        {
+          "user_email": "363898077@qq.com",
+          "calls": 68,
+          "yuan": 1878.36,
+          "tokens": 27220000,
+          "tasks": 97.0,
+          "succeeded": 64.0,
+          "failed": 29.0,
+          "cancelled": 4.0,
+          "yuan_share_pct": 23.6,
+          "calls_per_task": 0.7
+        },
+        {
+          "user_email": "460848246@qq.com",
+          "calls": 22,
+          "yuan": 585.16,
+          "tokens": 8480000,
+          "tasks": 22.0,
+          "succeeded": 10.0,
+          "failed": 0.0,
+          "cancelled": 12.0,
+          "yuan_share_pct": 7.4,
+          "calls_per_task": 1.0
+        },
+        {
+          "user_email": "460848247@qq.com",
+          "calls": 23,
+          "yuan": 640.36,
+          "tokens": 9280000,
+          "tasks": 24.0,
+          "succeeded": 12.0,
+          "failed": 1.0,
+          "cancelled": 11.0,
+          "yuan_share_pct": 8.0,
+          "calls_per_task": 0.96
+        },
+        {
+          "user_email": "dennies@yeah.net",
+          "calls": 6,
+          "yuan": 133.88,
+          "tokens": 1940000,
+          "tasks": 6.0,
+          "succeeded": 4.0,
+          "failed": 0.0,
+          "cancelled": 2.0,
+          "yuan_share_pct": 1.7,
+          "calls_per_task": 1.0
+        },
+        {
+          "user_email": "eric@qq.com",
+          "calls": 7,
+          "yuan": 103.53999999999999,
+          "tokens": 1500000,
+          "tasks": 0.0,
+          "succeeded": 0.0,
+          "failed": 0.0,
+          "cancelled": 0.0,
+          "yuan_share_pct": 1.3,
+          "calls_per_task": NaN
+        },
+        {
+          "user_email": "likun@shopee.com",
+          "calls": 1,
+          "yuan": 6.92,
+          "tokens": 100000,
+          "tasks": 0.0,
+          "succeeded": 0.0,
+          "failed": 0.0,
+          "cancelled": 0.0,
+          "yuan_share_pct": 0.1,
+          "calls_per_task": NaN
+        }
+      ],
+      "by_hour_usage": [
+        {
+          "hour": 2,
+          "calls": 11,
+          "yuan": 253.94
+        },
+        {
+          "hour": 3,
+          "calls": 19,
+          "yuan": 458.2
+        },
+        {
+          "hour": 5,
+          "calls": 2,
+          "yuan": 11.04
+        },
+        {
+          "hour": 6,
+          "calls": 12,
+          "yuan": 122.88
+        },
+        {
+          "hour": 7,
+          "calls": 7,
+          "yuan": 115.94
+        },
+        {
+          "hour": 8,
+          "calls": 61,
+          "yuan": 1529.24
+        },
+        {
+          "hour": 9,
+          "calls": 1,
+          "yuan": 31.74
+        },
+        {
+          "hour": 13,
+          "calls": 11,
+          "yuan": 314.66
+        },
+        {
+          "hour": 14,
+          "calls": 42,
+          "yuan": 1178.68
+        },
+        {
+          "hour": 15,
+          "calls": 34,
+          "yuan": 781.2
+        },
+        {
+          "hour": 16,
+          "calls": 20,
+          "yuan": 426.53999999999996
+        },
+        {
+          "hour": 17,
+          "calls": 20,
+          "yuan": 557.6
+        },
+        {
+          "hour": 18,
+          "calls": 39,
+          "yuan": 953.76
+        },
+        {
+          "hour": 19,
+          "calls": 43,
+          "yuan": 1221.44
+        }
+      ],
+      "by_hour_tasks": [
+        {
+          "hour": 2,
+          "tasks": 26
+        },
+        {
+          "hour": 3,
+          "tasks": 6
+        },
+        {
+          "hour": 5,
+          "tasks": 1
+        },
+        {
+          "hour": 6,
+          "tasks": 5
+        },
+        {
+          "hour": 7,
+          "tasks": 6
+        },
+        {
+          "hour": 8,
+          "tasks": 62
+        },
+        {
+          "hour": 9,
+          "tasks": 1
+        },
+        {
+          "hour": 13,
+          "tasks": 14
+        },
+        {
+          "hour": 14,
+          "tasks": 48
+        },
+        {
+          "hour": 15,
+          "tasks": 59
+        },
+        {
+          "hour": 16,
+          "tasks": 27
+        },
+        {
+          "hour": 17,
+          "tasks": 26
+        },
+        {
+          "hour": 18,
+          "tasks": 62
+        },
+        {
+          "hour": 19,
+          "tasks": 44
+        }
+      ]
+    },
+    "2026-08-27": {
+      "summary": {
+        "usage_calls": 473,
+        "usage_yuan": 13352.26,
+        "avg_yuan_per_call": 28.23,
+        "median_yuan_per_call": 28.98,
+        "avg_tokens_per_call": 409049.0,
+        "task_count": 1354,
+        "task_succeeded": 320,
+        "task_failed": 450,
+        "task_cancelled": 573,
+        "unique_users_usage": 13,
+        "unique_users_tasks": 9
+      },
+      "by_user": [
+        {
+          "user_email": "123456@qq.com",
+          "calls": 13,
+          "yuan": 407.18,
+          "tokens": 5900000,
+          "tasks": 142.0,
+          "succeeded": 12.0,
+          "failed": 20.0,
+          "cancelled": 99.0,
+          "yuan_share_pct": 3.0,
+          "calls_per_task": 0.09
+        },
+        {
+          "user_email": "13140095121@163.com",
+          "calls": 1,
+          "yuan": 30.36,
+          "tokens": 440000,
+          "tasks": 1.0,
+          "succeeded": 1.0,
+          "failed": 0.0,
+          "cancelled": 0.0,
+          "yuan_share_pct": 0.2,
+          "calls_per_task": 1.0
+        },
+        {
+          "user_email": "2810959610@qq.com",
+          "calls": 1,
+          "yuan": 6.92,
+          "tokens": 100000,
+          "tasks": 0.0,
+          "succeeded": 0.0,
+          "failed": 0.0,
+          "cancelled": 0.0,
+          "yuan_share_pct": 0.1,
+          "calls_per_task": NaN
+        },
+        {
+          "user_email": "2929455133@qq.com",
+          "calls": 306,
+          "yuan": 8902.6,
+          "tokens": 129000000,
+          "tasks": 1014.0,
+          "succeeded": 195.0,
+          "failed": 406.0,
+          "cancelled": 413.0,
+          "yuan_share_pct": 66.7,
+          "calls_per_task": 0.3
+        },
+        {
+          "user_email": "363898077@qq.com",
+          "calls": 22,
+          "yuan": 612.8,
+          "tokens": 8880000,
+          "tasks": 26.0,
+          "succeeded": 16.0,
+          "failed": 4.0,
+          "cancelled": 6.0,
+          "yuan_share_pct": 4.6,
+          "calls_per_task": 0.85
+        },
+        {
+          "user_email": "366727512@qq.com",
+          "calls": 14,
+          "yuan": 346.4,
+          "tokens": 5020000,
+          "tasks": 45.0,
+          "succeeded": 13.0,
+          "failed": 7.0,
+          "cancelled": 25.0,
+          "yuan_share_pct": 2.6,
+          "calls_per_task": 0.31
+        },
+        {
+          "user_email": "37169709@qq.com",
+          "calls": 59,
+          "yuan": 1649.2,
+          "tokens": 23900000,
+          "tasks": 70.0,
+          "succeeded": 46.0,
+          "failed": 11.0,
+          "cancelled": 13.0,
+          "yuan_share_pct": 12.4,
+          "calls_per_task": 0.84
+        },
+        {
+          "user_email": "406886024@qq.com",
+          "calls": 23,
+          "yuan": 652.82,
+          "tokens": 9460000,
+          "tasks": 23.0,
+          "succeeded": 19.0,
+          "failed": 0.0,
+          "cancelled": 4.0,
+          "yuan_share_pct": 4.9,
+          "calls_per_task": 1.0
+        },
+        {
+          "user_email": "41099017@qq.com",
+          "calls": 1,
+          "yuan": 6.92,
+          "tokens": 100000,
+          "tasks": 0.0,
+          "succeeded": 0.0,
+          "failed": 0.0,
+          "cancelled": 0.0,
+          "yuan_share_pct": 0.1,
+          "calls_per_task": NaN
+        },
+        {
+          "user_email": "867805236@qq.com",
+          "calls": 1,
+          "yuan": 6.92,
+          "tokens": 100000,
+          "tasks": 0.0,
+          "succeeded": 0.0,
+          "failed": 0.0,
+          "cancelled": 0.0,
+          "yuan_share_pct": 0.1,
+          "calls_per_task": NaN
+        },
+        {
+          "user_email": "gaobangtao@163.com",
+          "calls": 1,
+          "yuan": 11.04,
+          "tokens": 160000,
+          "tasks": 1.0,
+          "succeeded": 0.0,
+          "failed": 0.0,
+          "cancelled": 1.0,
+          "yuan_share_pct": 0.1,
+          "calls_per_task": 1.0
+        },
+        {
+          "user_email": "reeseradiant@eulershift.com",
+          "calls": 30,
+          "yuan": 712.18,
+          "tokens": 10320000,
+          "tasks": 32.0,
+          "succeeded": 18.0,
+          "failed": 2.0,
+          "cancelled": 12.0,
+          "yuan_share_pct": 5.3,
+          "calls_per_task": 0.94
+        },
+        {
+          "user_email": "s.tunnin.g.d.fh@gmail.com",
+          "calls": 1,
+          "yuan": 6.92,
+          "tokens": 100000,
+          "tasks": 0.0,
+          "succeeded": 0.0,
+          "failed": 0.0,
+          "cancelled": 0.0,
+          "yuan_share_pct": 0.1,
+          "calls_per_task": NaN
+        }
+      ],
+      "by_hour_usage": [
+        {
+          "hour": 2,
+          "calls": 1,
+          "yuan": 33.12
+        },
+        {
+          "hour": 3,
+          "calls": 22,
+          "yuan": 579.64
+        },
+        {
+          "hour": 4,
+          "calls": 23,
+          "yuan": 650.06
+        },
+        {
+          "hour": 5,
+          "calls": 38,
+          "yuan": 1123.58
+        },
+        {
+          "hour": 6,
+          "calls": 50,
+          "yuan": 1446.5
+        },
+        {
+          "hour": 7,
+          "calls": 114,
+          "yuan": 3253.14
+        },
+        {
+          "hour": 8,
+          "calls": 58,
+          "yuan": 1491.96
+        },
+        {
+          "hour": 9,
+          "calls": 7,
+          "yuan": 173.89999999999998
+        },
+        {
+          "hour": 10,
+          "calls": 22,
+          "yuan": 655.62
+        },
+        {
+          "hour": 13,
+          "calls": 43,
+          "yuan": 1220.14
+        },
+        {
+          "hour": 16,
+          "calls": 26,
+          "yuan": 748.04
+        },
+        {
+          "hour": 17,
+          "calls": 5,
+          "yuan": 140.76
+        },
+        {
+          "hour": 20,
+          "calls": 30,
+          "yuan": 864.06
+        },
+        {
+          "hour": 21,
+          "calls": 21,
+          "yuan": 600.4
+        },
+        {
+          "hour": 22,
+          "calls": 13,
+          "yuan": 371.34
+        }
+      ],
+      "by_hour_tasks": [
+        {
+          "hour": 2,
+          "tasks": 2
+        },
+        {
+          "hour": 3,
+          "tasks": 30
+        },
+        {
+          "hour": 4,
+          "tasks": 41
+        },
+        {
+          "hour": 5,
+          "tasks": 421
+        },
+        {
+          "hour": 6,
+          "tasks": 90
+        },
+        {
+          "hour": 7,
+          "tasks": 89
+        },
+        {
+          "hour": 8,
+          "tasks": 68
+        },
+        {
+          "hour": 9,
+          "tasks": 5
+        },
+        {
+          "hour": 10,
+          "tasks": 46
+        },
+        {
+          "hour": 13,
+          "tasks": 43
+        },
+        {
+          "hour": 14,
+          "tasks": 37
+        },
+        {
+          "hour": 16,
+          "tasks": 36
+        },
+        {
+          "hour": 20,
+          "tasks": 75
+        },
+        {
+          "hour": 21,
+          "tasks": 7
+        },
+        {
+          "hour": 22,
+          "tasks": 323
+        },
+        {
+          "hour": 23,
+          "tasks": 41
+        }
+      ]
+    }
+  },
+  "daily_trend": [
+    {
+      "day": "2026-08-11",
+      "calls": 68,
+      "yuan": 1453.1399999999999
+    },
+    {
+      "day": "2026-08-12",
+      "calls": 70,
+      "yuan": 1874.98
+    },
+    {
+      "day": "2026-08-13",
+      "calls": 31,
+      "yuan": 789.74
+    },
+    {
+      "day": "2026-08-14",
+      "calls": 24,
+      "yuan": 542.6
+    },
+    {
+      "day": "2026-08-17",
+      "calls": 113,
+      "yuan": 1719.98
+    },
+    {
+      "day": "2026-08-18",
+      "calls": 161,
+      "yuan": 2349.4
+    },
+    {
+      "day": "2026-08-19",
+      "calls": 36,
+      "yuan": 302.78
+    },
+    {
+      "day": "2026-08-20",
+      "calls": 176,
+      "yuan": 1810.18
+    },
+    {
+      "day": "2026-08-21",
+      "calls": 348,
+      "yuan": 3117.42
+    },
+    {
+      "day": "2026-08-24",
+      "calls": 137,
+      "yuan": 2410.5
+    },
+    {
+      "day": "2026-08-25",
+      "calls": 29,
+      "yuan": 643.24
+    },
+    {
+      "day": "2026-08-26",
+      "calls": 322,
+      "yuan": 7956.86
+    },
+    {
+      "day": "2026-08-27",
+      "calls": 473,
+      "yuan": 13352.26
+    }
+  ],
+  "burst_aug27_05h": {
+    "total_tasks": 421,
+    "by_user": {
+      "2929455133@qq.com": 304,
+      "123456@qq.com": 113,
+      "363898077@qq.com": 4
+    }
+  },
+  "burst_aug27_22h": {
+    "total_tasks": 323,
+    "by_user": {
+      "2929455133@qq.com": 323
+    }
+  }
+}

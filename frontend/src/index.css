@@ -1,0 +1,66 @@
+:root {
+  --pf-lime: #b6ff00;
+  --pf-lime-soft: #eefcc8;
+  --pf-ink: #111318;
+  --pf-muted: #6b7280;
+  --pf-bg: #f7f8fa;
+  --pf-card: #ffffff;
+  --pf-line: rgba(17, 19, 24, 0.1);
+  --pf-radius: 14px;
+  --pf-radius-sm: 10px;
+  --pf-shadow: 0 8px 28px rgba(17, 19, 24, 0.06);
+  --pf-nav-h: 64px;
+
+  /* legacy aliases used by residual styles */
+  --ink: var(--pf-ink);
+  --paper: var(--pf-bg);
+  --paper-deep: #e8eaee;
+  --accent: var(--pf-lime);
+  --teal: #2a6f7a;
+  --crimson: #c43c2e;
+  --moss: #2a6f7a;
+  --muted: var(--pf-muted);
+  --line: var(--pf-line);
+  --shadow: var(--pf-shadow);
+  --hero-ink: #e8eef2;
+
+  font-family: 'Noto Sans SC', 'PingFang SC', sans-serif;
+  color: var(--pf-ink);
+  background: var(--pf-bg);
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--pf-bg);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}

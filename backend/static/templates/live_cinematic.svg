@@ -1,0 +1,16 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'>
+  <defs>
+    <linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>
+      <stop offset='0%' stop-color='#121820'/>
+      <stop offset='100%' stop-color='#3a2818'/>
+    </linearGradient>
+  </defs>
+  <rect width='640' height='360' fill='url(#g)'/>
+  <rect x='0' y='0' width='640' height='32' fill='#050505'/>
+  <rect x='0' y='328' width='640' height='32' fill='#050505'/>
+  <ellipse cx='400' cy='170' rx='120' ry='100' fill='#c9a07a' opacity='0.55'/>
+  <circle cx='400' cy='150' r='48' fill='#d4b396'/>
+  <rect x='360' y='198' width='80' height='90' rx='8' fill='#2a3544'/>
+  <text x='48' y='80' font-family='Georgia, serif' font-size='34' fill='#f0e4d4'>�5q</text>
+  <text x='48' y='112' font-family='sans-serif' font-size='14' fill='#f0e4d4' opacity='0.65'>Live Cinematic</text>
+</svg>

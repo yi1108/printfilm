@@ -1,0 +1,13 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'>
+  <rect width='640' height='360' fill='#0a0618'/>
+  <rect x='80' y='200' width='60' height='160' fill='#1a1030'/>
+  <rect x='160' y='140' width='50' height='220' fill='#221440'/>
+  <rect x='230' y='180' width='70' height='180' fill='#181028'/>
+  <rect x='400' y='120' width='55' height='240' fill='#1e1240'/>
+  <rect x='480' y='160' width='90' height='200' fill='#140c28'/>
+  <line x1='0' y1='300' x2='640' y2='300' stroke='#00e5c0' stroke-width='2' opacity='0.7'/>
+  <line x1='0' y1='310' x2='640' y2='310' stroke='#ff2d95' stroke-width='1.5' opacity='0.5'/>
+  <circle cx='520' cy='80' r='36' fill='#ff2d95' opacity='0.35'/>
+  <text x='48' y='70' font-family='Georgia, serif' font-size='36' fill='#00e5c0'>[Zy</text>
+  <text x='48' y='100' font-family='sans-serif' font-size='14' fill='#ff2d95' opacity='0.8'>Cyber Neon</text>
+</svg>

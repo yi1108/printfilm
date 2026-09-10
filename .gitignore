@@ -1,0 +1,73 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# Logs & local scratch (batch ops, polls, tokens)
+*.log
+.tmp/
+.tmp/**
+agent-tools/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+backend/.venv/
+.venv/
+venv/
+
+# Secrets & local env（仅允许 *.example 与 frontend/.env.production）
+.env
+.env.*
+!.env.example
+!.env.*.example
+!**/.env.example
+!**/.env.*.example
+!frontend/.env.production
+deploy/scripts/deploy_kepu.py
+deploy/scripts/deploy_kepu_8136.py
+deploy/scripts/deploy_kepu*.py
+
+# Never commit tokens / credentials dumps / private keys
+**/token.txt
+**/*credentials*.json
+**/secrets.json
+**/*secret*.json
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*.ppk
+id_rsa
+id_ed25519
+*.id_rsa
+*.id_ed25519
+!**/example*.pem
+.netrc
+.npmrc
+
+# Backend runtime data
+backend/ai_movie.db
+backend/*.db
+backend/.celery_autoscale/
+backend/static/generated/
+backend/static/voice_previews/
+backend/frontend/
+
+# Frontend build
+frontend/node_modules/
+frontend/dist/
+
+# Claude / local agent notes (project skills live under .cursor/skills — keep those)
+.claude/
+.work/

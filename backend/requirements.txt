@@ -1,0 +1,20 @@
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+sqlalchemy==2.0.40
+asyncpg==0.30.0
+psycopg2-binary==2.9.10
+pydantic==2.11.3
+pydantic-settings==2.9.1
+python-jose[cryptography]==3.4.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.3.0
+python-multipart==0.0.20
+celery==5.5.1
+redis==5.2.1
+httpx==0.28.1
+sse-starlette==2.2.1
+python-dotenv==1.1.0
+email-validator==2.2.0
+edge-tts==7.2.3
+oss2==2.19.1
+# Optional: pip install "volcengine-python-sdk[ark]" if you prefer official SDK

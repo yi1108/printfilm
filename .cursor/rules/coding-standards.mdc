@@ -1,0 +1,21 @@
+---
+description: PRINTFILM 全局规范入口；改代码前遵循 docs/STANDARDS.md
+alwaysApply: true
+---
+
+# 全局规范
+
+编写或修改本仓库代码、文档、发布相关内容时，必须遵守：
+
+**[docs/STANDARDS.md](../../docs/STANDARDS.md)**
+
+重点摘要：
+
+- 函数 / 组件 / Hook 顶部要有功能注释；成组变量用块注释说明
+- 单文件尽量不超过 500 行；公共逻辑抽到 `lib/` / `services/` / `components/`
+- 用户端样式跟 `pf-*` + `printfilm.css`；管理端优先 Tailwind + shadcn
+- 列表筛选与分页走服务端
+- 密钥与 `deploy_kepu.py` 不上库；发布走机器部署并写 `docs/releases/`
+- 易支付生产回调勿含 `/api/`（用 `/epay/notify`）
+
+细则、目录分层与发版自检清单以 `docs/STANDARDS.md` 全文为准。

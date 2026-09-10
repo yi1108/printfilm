@@ -1,0 +1,16 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'>
+  <defs>
+    <linearGradient id='dusk' x1='0' y1='0' x2='0' y2='1'>
+      <stop offset='0%' stop-color='#2a1848'/>
+      <stop offset='60%' stop-color='#6b3a2a'/>
+      <stop offset='100%' stop-color='#1a1420'/>
+    </linearGradient>
+  </defs>
+  <rect width='640' height='360' fill='url(#dusk)'/>
+  <polygon points='320,60 360,200 280,200' fill='#4a5568' opacity='0.85'/>
+  <polygon points='200,120 260,280 140,280' fill='#3d4a5c' opacity='0.7'/>
+  <polygon points='440,100 500,280 380,280' fill='#354050' opacity='0.75'/>
+  <circle cx='480' cy='80' r='40' fill='#f0c878' opacity='0.5'/>
+  <text x='48' y='70' font-family='Georgia, serif' font-size='36' fill='#f5e6c8'>G{��</text>
+  <text x='48' y='100' font-family='sans-serif' font-size='14' fill='#f5e6c8' opacity='0.55'>Epic Fantasy</text>
+</svg>

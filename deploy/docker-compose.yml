@@ -1,0 +1,43 @@
+# 独立中间件：仅 Postgres + Redis（与 /opt/kepu 无关）
+# 默认端口避开 kepu 的 5432/6379
+# 启动: docker compose -f deploy/docker-compose.yml --env-file deploy/.env.prod up -d
+# PG/Redis 均映射 0.0.0.0（本机直连调试）；常规发布勿对容器执行 compose up
+name: ai-movie-infra
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ai-movie-pg
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:${POSTGRES_PORT:-15432}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-printfilm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env.prod}
+      POSTGRES_DB: ${POSTGRES_DB:-printfilm}
+    volumes:
+      - ai_movie_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-printfilm} -d ${POSTGRES_DB:-printfilm}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: ai-movie-redis
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:${REDIS_PORT:-16379}:6379"
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - ai_movie_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  ai_movie_pgdata:
+  ai_movie_redisdata:

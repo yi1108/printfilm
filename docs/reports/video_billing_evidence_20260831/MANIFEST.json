@@ -1,0 +1,67 @@
+{
+  "frozen_at": "2026-08-31T11:07:18.766579+08:00",
+  "source_dir": "C:\\Users\\L1822\\IdeaProjects\\ai_movie\\.tmp\\video_billing_report",
+  "evidence_dir": "C:\\Users\\L1822\\IdeaProjects\\ai_movie\\docs\\reports\\video_billing_evidence_20260831",
+  "files": [
+    {
+      "file": "aug26_27_analysis.json",
+      "bytes": 14568,
+      "sha256": "5425776a5d20e34186a50f99f95f73c32a6c123bab32c0128d7b007603eafc42"
+    },
+    {
+      "file": "user_2929455133_aug26_27.json",
+      "bytes": 29425,
+      "sha256": "8fe5176e62be862cab614d5056432c20fe2b9c32499cf2f685e1a10dd9e8918d"
+    },
+    {
+      "file": "meta_export.json",
+      "bytes": 350,
+      "sha256": "9f7afc17354fc950519a05259e48fcaf56604c67a693d65425c9cf519d958c3a"
+    },
+    {
+      "file": "video_billing_20260831_1044.xlsx",
+      "bytes": 701407,
+      "sha256": "dffa1f93d1f5cd6c71032516e24a24a797fd1c794a291501f57eda20c95566e7"
+    },
+    {
+      "file": "video_tasks_20260831_1044.csv",
+      "bytes": 716066,
+      "sha256": "41a39e80041600a6fd50bbc954cc8313b2b3cf1857e7ca373ec1372396c0f562"
+    },
+    {
+      "file": "video_usage_20260831_1044.csv",
+      "bytes": 284936,
+      "sha256": "cd809e0e893a32ab62a7d1f768ee8c8848359845e5b6a3e6f21d2bd9ae6fe5a9"
+    },
+    {
+      "file": "video_billing_analysis.html",
+      "bytes": 2982046,
+      "sha256": "146983a4325b7a72328d700bf1f763b3b124546eaa0406a02e2af54c9497ee23"
+    },
+    {
+      "file": "aug26_27_cost_analysis.html",
+      "bytes": 15322,
+      "sha256": "bd9c1637199307cc146c2f4389c7e96290e26684b4801847400ff3916a480d8d"
+    },
+    {
+      "file": "charts/01_task_distribution.png",
+      "bytes": 37986,
+      "sha256": "8bed03f4eebed3144d623acd639b6fd183a90753b62e508c3fb7dd64c8fceb64"
+    },
+    {
+      "file": "charts/02_charge_by_domain.png",
+      "bytes": 22473,
+      "sha256": "a81bfbdf4c6fc785e4d521d46bb711cc71098a021af1b6ddfab15e63dea186a2"
+    },
+    {
+      "file": "charts/03_daily_tasks_vs_cost.png",
+      "bytes": 46594,
+      "sha256": "9d60992ade92a0a76974d028f2143ac31815b0481cfb4729ba892a26937b13d7"
+    },
+    {
+      "file": "charts/04_status_pie.png",
+      "bytes": 41808,
+      "sha256": "7f631c797ac885647e40bd5f8b2832a5b3a0e97e0b1b4c5e58273f98b595f72a"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.ai_movie.db
+ai_movie.db
+.env
+*.egg-info/
+.pytest_cache/
+data/
+static/mock/image_*.svg

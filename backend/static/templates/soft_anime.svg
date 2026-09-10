@@ -1,0 +1,15 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'>
+  <defs>
+    <linearGradient id='sky' x1='0' y1='0' x2='0' y2='1'>
+      <stop offset='0%' stop-color='#a8d4f0'/>
+      <stop offset='100%' stop-color='#f7d6e8'/>
+    </linearGradient>
+  </defs>
+  <rect width='640' height='360' fill='url(#sky)'/>
+  <circle cx='480' cy='90' r='55' fill='#fff4c8' opacity='0.9'/>
+  <ellipse cx='200' cy='280' rx='160' ry='40' fill='#fff' opacity='0.35'/>
+  <circle cx='220' cy='200' r='48' fill='#f5c6b8'/>
+  <rect x='190' y='245' width='60' height='70' rx='12' fill='#7eb8e8'/>
+  <text x='48' y='70' font-family='Georgia, serif' font-size='36' fill='#3a4060'>�I�+</text>
+  <text x='48' y='100' font-family='sans-serif' font-size='14' fill='#3a4060' opacity='0.6'>Soft Anime</text>
+</svg>

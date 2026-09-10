@@ -1,0 +1,429 @@
+/* 漫剧生图选项条：风格 / 模型 / 画幅 */
+
+.fc-gen-opts {
+  position: relative;
+  margin-top: 8px;
+}
+
+.fc-gen-opts-triggers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fc-gen-opt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 148px;
+  height: 30px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #475569;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.fc-gen-opt-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+.fc-gen-opt-btn.active {
+  background: rgba(182, 255, 0, 0.28);
+  color: #3d6500;
+}
+
+.fc-gen-opt-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fc-gen-opt-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fc-gen-opt-panel {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 30;
+  width: min(360px, calc(100vw - 64px));
+  max-height: 320px;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
+}
+
+.fc-gen-opt-panel--portal {
+  position: fixed;
+  z-index: 320;
+  bottom: auto;
+  right: auto;
+  max-height: min(360px, calc(100vh - 96px));
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.drama-ep-header-gen-opts .fc-gen-opt-panel:not(.fc-gen-opt-panel--portal) {
+  bottom: auto;
+  top: calc(100% + 8px);
+}
+
+.drama-assets-gen-opts .fc-gen-opt-panel {
+  bottom: auto;
+  top: calc(100% + 8px);
+}
+
+.fc-gen-style-panel {
+  width: min(420px, calc(100vw - 48px));
+  max-height: 360px;
+}
+
+.fc-gen-opt-panel-title {
+  margin-bottom: 8px;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.fc-gen-style-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.fc-gen-style-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+}
+
+.fc-gen-style-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  background: #f8fafc;
+}
+
+.fc-gen-style-card span {
+  padding: 4px 6px 6px;
+  color: #334155;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.fc-gen-style-card.selected {
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 1px #7c3aed;
+}
+
+.fc-gen-model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fc-gen-model-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fc-gen-model-item strong {
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.fc-gen-model-item span {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.fc-gen-model-item.selected {
+  border-color: #7c3aed;
+  background: #faf5ff;
+}
+
+.fc-gen-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fc-gen-chip {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #fff;
+  color: #475569;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.fc-gen-chip.selected {
+  border-color: rgba(182, 255, 0, 0.9);
+  background: rgba(182, 255, 0, 0.28);
+  color: #3d6500;
+}
+
+.fc-gen-duration-custom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.fc-gen-duration-custom input {
+  width: 72px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 12px;
+}
+
+.drama-assets-gen-opts {
+  margin: 0 0 1rem;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.drama-assets-gen-opts .fc-gen-opts {
+  margin-top: 0;
+}
+
+.fc-gen-skill-opts {
+  margin-top: 6px;
+}
+
+.fc-skill-picker-toolbar,
+.pf-skill-picker-toolbar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.fc-skill-picker-link,
+.pf-skill-picker-link {
+  border: none;
+  padding: 0;
+  background: none;
+  color: #64748b;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.fc-skill-picker-link:hover,
+.pf-skill-picker-link:hover {
+  color: #3d6500;
+}
+
+.fc-skill-picker-list,
+.pf-skill-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fc-skill-picker-item,
+.pf-skill-picker-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  cursor: pointer;
+  color: #0f172a;
+}
+
+.fc-skill-picker-item input,
+.pf-skill-picker-item input {
+  margin-top: 2px;
+  accent-color: #65a30d;
+}
+
+.fc-skill-picker-item span,
+.pf-skill-picker-item span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fc-skill-picker-item strong,
+.pf-skill-picker-item strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.fc-skill-picker-item em,
+.pf-skill-picker-item em {
+  color: #94a3b8;
+  font-style: normal;
+  font-size: 11px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.fc-skill-picker-item.is-checked,
+.pf-skill-picker-item.is-checked {
+  border-color: rgba(182, 255, 0, 0.9);
+  background: rgba(182, 255, 0, 0.18);
+}
+
+.fc-skill-picker-row,
+.pf-skill-picker-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.fc-skill-picker-row .fc-skill-picker-item,
+.pf-skill-picker-row .pf-skill-picker-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.fc-skill-picker-actions,
+.pf-skill-picker-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.fc-skill-picker-action,
+.pf-skill-picker-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0;
+}
+
+.fc-skill-picker-action:hover,
+.pf-skill-picker-action:hover {
+  color: #3d6500;
+  border-color: #cbd5e1;
+}
+
+.fc-skill-picker-preview,
+.pf-skill-picker-preview {
+  margin-top: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  overflow: hidden;
+}
+
+.fc-skill-picker-preview-head,
+.pf-skill-picker-preview-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #fff;
+}
+
+.fc-skill-picker-preview-head > div:first-child,
+.pf-skill-picker-preview-head > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fc-skill-picker-preview-head strong,
+.pf-skill-picker-preview-head strong {
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.fc-skill-picker-preview-head span,
+.pf-skill-picker-preview-head span {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.fc-skill-picker-preview-head-actions,
+.pf-skill-picker-preview-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.fc-skill-picker-preview-body,
+.pf-skill-picker-preview-body {
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  padding: 12px;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #334155;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.fc-skill-picker-empty,
+.pf-skill-picker-empty {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.fc-skill-picker-error,
+.pf-skill-picker-error {
+  margin: 6px 0 0;
+  color: #b91c1c;
+  font-size: 11px;
+}

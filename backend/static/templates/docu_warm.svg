@@ -1,0 +1,8 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'>
+  <rect width='640' height='360' fill='#3d3428'/>
+  <rect x='40' y='40' width='560' height='280' fill='#c4a882' opacity='0.25'/>
+  <rect x='80' y='100' width='240' height='160' fill='#8b7355' opacity='0.7'/>
+  <circle cx='420' cy='140' r='70' fill='#e8c89a' opacity='0.4'/>
+  <text x='80' y='300' font-family='Georgia, serif' font-size='36' fill='#f0e6d4'>)���</text>
+  <text x='80' y='330' font-family='sans-serif' font-size='14' fill='#f0e6d4' opacity='0.6'>Warm Documentary</text>
+</svg>

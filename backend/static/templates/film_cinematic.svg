@@ -1,0 +1,15 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'>
+  <defs>
+    <linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>
+      <stop offset='0%' stop-color='#1a2332'/>
+      <stop offset='100%' stop-color='#3d2a22'/>
+    </linearGradient>
+  </defs>
+  <rect width='640' height='360' fill='url(#g)'/>
+  <rect x='0' y='0' width='640' height='28' fill='#0d0d0d'/>
+  <rect x='0' y='332' width='640' height='28' fill='#0d0d0d'/>
+  <ellipse cx='420' cy='160' rx='140' ry='90' fill='#c4784a' opacity='0.35'/>
+  <rect x='72' y='90' width='200' height='160' rx='4' fill='#2c3d55' opacity='0.9'/>
+  <text x='72' y='290' font-family='Georgia, serif' font-size='36' fill='#e8d5c4'>5q</text>
+  <text x='72' y='318' font-family='sans-serif' font-size='14' fill='#e8d5c4' opacity='0.65'>Cinematic Film</text>
+</svg>

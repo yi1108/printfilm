@@ -1,0 +1,14 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360" viewBox="0 0 480 360" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="480" y2="360" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1a2f28"/>
+      <stop offset="0.45" stop-color="#3d5c4a"/>
+      <stop offset="1" stop-color="#c4a574"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="360" fill="url(#bg)"/>
+  <path d="M0 250 C80 210 140 270 220 230 C300 190 360 250 480 210 L480 360 L0 360 Z" fill="#0f1f1a" opacity="0.55"/>
+  <path d="M40 180 C120 140 180 200 260 150 C340 100 400 160 460 120" stroke="#e8d5a8" stroke-width="2" opacity="0.35"/>
+  <circle cx="360" cy="88" r="28" fill="#f0e2b8" opacity="0.45"/>
+  <text x="240" y="300" text-anchor="middle" fill="#f7f0df" font-family="serif" font-size="22">古代神话史诗</text>
+</svg>

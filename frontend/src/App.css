@@ -1,0 +1,119 @@
+/* Residual styles for Auth and shared form utilities.
+   Marketing / studio shells live in styles/printfilm.css */
+
+.auth-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  background: var(--pf-bg);
+}
+
+.auth-panel {
+  padding: 3rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.75rem;
+  background: #fff;
+}
+
+.auth-panel-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.auth-panel h1 {
+  font-family: 'Space Grotesk', 'Noto Sans SC', sans-serif;
+  font-size: 2rem;
+  letter-spacing: 0.04em;
+  margin: 0.5rem 0 0;
+}
+
+.auth-visual {
+  position: relative;
+  overflow: hidden;
+  background: #111318;
+}
+
+.ink-wash {
+  position: absolute;
+  inset: -20%;
+  background:
+    radial-gradient(circle at 30% 40%, rgba(182, 255, 0, 0.35), transparent 42%),
+    radial-gradient(circle at 72% 58%, rgba(42, 111, 122, 0.35), transparent 38%),
+    repeating-linear-gradient(
+      -12deg,
+      transparent,
+      transparent 18px,
+      rgba(232, 238, 242, 0.04) 18px,
+      rgba(232, 238, 242, 0.04) 19px
+    );
+  animation: drift 14s ease-in-out infinite alternate;
+}
+
+@keyframes drift {
+  from {
+    transform: translate3d(-2%, -1%, 0) scale(1.02);
+  }
+  to {
+    transform: translate3d(2%, 2%, 0) scale(1.08);
+  }
+}
+
+.lede {
+  max-width: 36rem;
+  color: var(--pf-muted);
+  margin: 0 0 1rem;
+  font-size: 1.05rem;
+}
+
+.btn {
+  border: 1px solid var(--pf-ink);
+  background: transparent;
+  color: var(--pf-ink);
+  padding: 0.7rem 1.2rem;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.btn.primary {
+  background: var(--pf-lime);
+  border-color: var(--pf-lime);
+  color: var(--pf-ink);
+}
+
+.linkish {
+  border: 0;
+  background: none;
+  color: var(--pf-muted);
+  padding: 0;
+  text-align: left;
+}
+
+.error {
+  color: var(--crimson);
+}
+
+.auth-notice {
+  color: #027a48;
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 900px) {
+  .auth-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-visual {
+    min-height: 160px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ink-wash {
+    animation: none !important;
+  }
+}

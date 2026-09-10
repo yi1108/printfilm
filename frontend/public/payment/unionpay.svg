@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="银联">
+  <rect width="48" height="48" rx="11" fill="#fff"/>
+  <rect x="7" y="13" width="9" height="22" rx="2" fill="#E21836"/>
+  <rect x="19" y="13" width="9" height="22" rx="2" fill="#00447C"/>
+  <rect x="31" y="13" width="9" height="22" rx="2" fill="#007B84"/>
+  <path fill="#fff" d="M19 24h9v2h-9z" opacity="0.9"/>
+</svg>
