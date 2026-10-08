@@ -1,5 +1,7 @@
 # PRINTFILM
 
+**Languages:** [中文](README.md) | [English](README_EN.md)
+
 [![GitHub stars](https://img.shields.io/github/stars/yi1108/printfilm?style=social)](https://github.com/yi1108/printfilm)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
