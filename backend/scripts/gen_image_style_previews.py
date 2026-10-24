@@ -4,15 +4,14 @@ Usage (from backend/):
   .venv\\Scripts\\python.exe -m scripts.gen_image_style_previews
 
 Outputs:
-  backend/static/drama/image-styles/{id}.png
-  frontend/public/image-styles/{id}.jpg  (copy for static hosting)
+  backend/static/drama/image-styles/{id}.{png|jpg}
+  frontend/public/image-styles/{id}.{png|jpg}  (copy for static hosting)
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import shutil
 import sys
 from pathlib import Path
 
@@ -21,6 +20,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.config import get_settings
 from app.services.ark import get_ark
 from app.services.drama.image_styles import IMAGE_STYLE_IDS, IMAGE_STYLE_LABELS, IMAGE_STYLE_PROMPTS
+from app.services.drama.image_preview_files import (
+    repair_cached_preview_pair,
+    write_preview_pair,
+)
 from app.services.storage import local_path_from_url
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -46,9 +49,9 @@ def cover_prompt(style_id: str) -> tuple[str, str]:
 
 
 async def gen_one(sem: asyncio.Semaphore, style_id: str, ark) -> tuple[str, str]:
-    dest = BACKEND_DIR / f"{style_id}.png"
-    if dest.exists() and dest.stat().st_size > 10_000:
-        logger.info("skip existing %s", style_id)
+    extension = repair_cached_preview_pair(style_id, BACKEND_DIR, FRONTEND_DIR)
+    if extension:
+        logger.info("skip existing %s (%s)", style_id, extension)
         return style_id, "skip"
 
     prompt, negative = cover_prompt(style_id)
@@ -70,10 +73,13 @@ async def gen_one(sem: asyncio.Semaphore, style_id: str, ark) -> tuple[str, str]
     if not src or not src.exists():
         return style_id, "missing local file"
 
-    BACKEND_DIR.mkdir(parents=True, exist_ok=True)
-    FRONTEND_DIR.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(src, dest)
-    shutil.copy2(src, FRONTEND_DIR / f"{style_id}.jpg")
+    try:
+        extension = write_preview_pair(src, style_id, BACKEND_DIR, FRONTEND_DIR)
+    except (OSError, ValueError) as exc:
+        logger.error("fail %s: unsupported or unreadable image: %s", style_id, exc)
+        return style_id, str(exc)
+
+    dest = BACKEND_DIR / f"{style_id}{extension}"
     logger.info("saved %s (%s bytes)", style_id, dest.stat().st_size)
     return style_id, "ok"
 
