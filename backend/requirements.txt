@@ -11,6 +11,7 @@ bcrypt==4.3.0
 python-multipart==0.0.20
 redis==5.2.1
 httpx==0.28.1
+stripe==16.0.1
 sse-starlette==2.2.1
 python-dotenv==1.1.0
 email-validator==2.2.0

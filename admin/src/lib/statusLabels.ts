@@ -51,6 +51,7 @@ export const LEDGER_KIND_LABELS: Record<string, string> = {
 export const PAY_TYPE_LABELS: Record<string, string> = {
   alipay: "支付宝",
   wxpay: "微信",
+  stripe: "银行卡 · Stripe",
 };
 
 /** Unified task platform status → Chinese */

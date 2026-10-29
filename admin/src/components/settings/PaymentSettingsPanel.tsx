@@ -1,8 +1,12 @@
 import { useState, type ChangeEvent } from "react";
+import { Copy } from "lucide-react";
+import { toast } from "sonner";
 import { LabeledControl, SettingsLoading, SettingsPanel, SettingsStatusBar, SettingsTabShell } from "@/components/settings/SettingsPanel";
 import { SecretField } from "@/components/settings/SecretField";
 import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
 import { useAdminModelSettings } from "@/hooks/useAdminModelSettings";
+import { stripeRateInputError, stripeSettingsPatch, stripeSettingsReady } from "@/lib/stripeSettings";
 import { MediaPriceSettings } from "./MediaPriceSettings";
 
 const RATE_FIELDS = [
@@ -27,9 +31,19 @@ export function PaymentSettingsPanel() {
   const { form, loading, saving, patchField, save } = useAdminModelSettings();
   const [epayKeyInput, setEpayKeyInput] = useState("");
   const [clearEpayKey, setClearEpayKey] = useState(false);
+  const [stripeKeyInput, setStripeKeyInput] = useState("");
+  const [clearStripeKey, setClearStripeKey] = useState(false);
+  const [stripeWebhookInput, setStripeWebhookInput] = useState("");
+  const [clearStripeWebhook, setClearStripeWebhook] = useState(false);
   const [smtpPasswordInput, setSmtpPasswordInput] = useState("");
   const [clearSmtpPassword, setClearSmtpPassword] = useState(false);
   const [numericDrafts, setNumericDrafts] = useState<Partial<Record<NumericKey, string>>>({});
+  const stripeDrafts = {
+    secretKey: stripeKeyInput,
+    webhookSecret: stripeWebhookInput,
+    clearSecretKey: clearStripeKey,
+    clearWebhookSecret: clearStripeWebhook,
+  };
 
   function numericControl(key: NumericKey) {
     return {
@@ -42,9 +56,19 @@ export function PaymentSettingsPanel() {
     };
   }
 
+  async function copyStripeWebhook() {
+    try {
+      await navigator.clipboard.writeText(form?.stripe_webhook_url || "/api/billing/stripe/webhook");
+      toast.success("Stripe Webhook 地址已复制");
+    } catch {
+      toast.error("复制失败，请手动复制 Webhook 地址");
+    }
+  }
+
   async function handleSave() {
     if (!form) return;
     const saved = await save({
+      ...stripeSettingsPatch(form, stripeDrafts),
       epay_api_url: form.epay_api_url.trim(),
       epay_pid: form.epay_pid.trim(),
       epay_key: clearEpayKey ? undefined : epayKeyInput.trim() || undefined,
@@ -79,6 +103,10 @@ export function PaymentSettingsPanel() {
     if (!saved) return;
     setEpayKeyInput("");
     setClearEpayKey(false);
+    setStripeKeyInput("");
+    setClearStripeKey(false);
+    setStripeWebhookInput("");
+    setClearStripeWebhook(false);
     setSmtpPasswordInput("");
     setClearSmtpPassword(false);
     setNumericDrafts({});
@@ -89,6 +117,8 @@ export function PaymentSettingsPanel() {
   const hasEpayKey = !clearEpayKey && (form.has_epay_key || Boolean(epayKeyInput.trim()));
   const epayInUse = Boolean(form.epay_pid.trim() || hasEpayKey);
   const epayReady = Boolean(form.epay_api_url.trim() && form.epay_pid.trim() && hasEpayKey);
+  const stripeReady = stripeSettingsReady(form, stripeDrafts);
+  const usdRateError = stripeRateInputError(form.stripe_usd_cny_rate);
   const hasSmtpPassword = !clearSmtpPassword && (form.has_smtp_password || Boolean(smtpPasswordInput.trim()));
   const smtpNeedsPassword = form.smtp_enabled && Boolean(form.smtp_user.trim());
   const smtpReady = form.smtp_enabled && Boolean(form.smtp_host.trim() && form.smtp_from.trim() && (!smtpNeedsPassword || hasSmtpPassword));
@@ -98,9 +128,10 @@ export function PaymentSettingsPanel() {
   };
 
   return <div className="space-y-5">
-    <SettingsTabShell onSave={handleSave} saving={saving} saveLabel="保存支付与通知设置">
+    <SettingsTabShell onSave={handleSave} saving={saving} disabled={Boolean(usdRateError)} saveLabel="保存支付与通知设置">
       <SettingsStatusBar title="支付与通知状态" items={[
         { id: "epay", label: "易支付", ready: epayReady, readyText: "配置完整", pendingText: "未完成接入" },
+        { id: "stripe", label: "Stripe", ready: stripeReady, readyText: "配置完整", pendingText: form.stripe_enabled ? "请补全 Stripe" : "未启用" },
         { id: "billing", label: "余额计费", ready: form.billing_enabled, readyText: "已开启", pendingText: "已关闭" },
         { id: "smtp", label: "邮件发送", ready: smtpReady, readyText: "配置完整", pendingText: form.smtp_enabled ? "请补全 SMTP" : "未启用" },
       ]} />
@@ -128,6 +159,42 @@ export function PaymentSettingsPanel() {
             </LabeledControl>
           </div>
         </details>
+      </SettingsPanel>
+
+      <SettingsPanel title="Stripe 支付接入" description="按网站语言选择收款币种：中文使用人民币 CNY，英文使用美元 USD。美元报价按后台汇率换算，站内到账余额仍以人民币计。">
+        <div className="settings-toggle-row">
+          <div><strong>启用 Stripe 支付</strong><span>开启并保存完整配置后，用户可在充值页选择银行卡支付。</span></div>
+          <Switch aria-label="启用 Stripe 支付" checked={Boolean(form.stripe_enabled)} onCheckedChange={(value) => patchField("stripe_enabled", value)} />
+        </div>
+        <div className="settings-field-grid mt-5">
+          <LabeledControl label="Stripe 收款币种" hint="根据用户当前网站语言自动选择；支付宝与微信支付仍使用人民币。">
+            <input className="settings-input" readOnly value="中文 CNY / 英文 USD（按网站语言）" />
+          </LabeledControl>
+          <LabeledControl label="美元兑人民币汇率" optional error={usdRateError}
+            hint="1 USD = 输入值 CNY；手动设置，最多六位小数。留空时中文 CNY 可用，英文 USD 暂不可用。">
+            <input className="settings-input" type="text" inputMode="decimal" placeholder="输入 1 美元对应的人民币金额" value={form.stripe_usd_cny_rate || ""}
+              onChange={(event) => patchField("stripe_usd_cny_rate", event.target.value)} autoComplete="off" spellCheck={false} />
+          </LabeledControl>
+          <SecretField label="Stripe API 密钥" value={stripeKeyInput} configured={Boolean(form.has_stripe_secret_key)} required={form.stripe_enabled}
+            placeholder="sk_test_… 或 sk_live_…" hint="填写 Stripe 控制台中的 Secret key；托管收银台不需要 Publishable key。"
+            clearPending={clearStripeKey} onUndoClear={() => setClearStripeKey(false)}
+            onChange={(value) => { setStripeKeyInput(value); setClearStripeKey(false); }} onClear={() => setClearStripeKey(true)} />
+          <SecretField label="Stripe Webhook 签名密钥" value={stripeWebhookInput} configured={Boolean(form.has_stripe_webhook_secret)} required={form.stripe_enabled}
+            placeholder="whsec_…" hint="填写此 Webhook 端点对应的 Signing secret，用于验证付款通知。"
+            clearPending={clearStripeWebhook} onUndoClear={() => setClearStripeWebhook(false)}
+            onChange={(value) => { setStripeWebhookInput(value); setClearStripeWebhook(false); }} onClear={() => setClearStripeWebhook(true)} />
+          <LabeledControl label="Stripe 支付返回站点" optional hint="填写用户端源地址，不含页面路径；留空使用「站点工具」的后端公网基址。前后端分离时应填写用户端地址，例如本地 http://127.0.0.1:5183。">
+            <input className="settings-input" type="url" placeholder="https://app.example.com" value={form.stripe_frontend_url || ""} onChange={(event) => patchField("stripe_frontend_url", event.target.value)} autoCapitalize="none" spellCheck={false} />
+          </LabeledControl>
+          <LabeledControl label="Stripe Webhook 通知地址" hint="在 Stripe 控制台添加此端点。公网域名取自「站点工具」的后端公网基址。">
+            <div className="flex items-center gap-2">
+              <input className="settings-input min-w-0" readOnly value={form.stripe_webhook_url || "/api/billing/stripe/webhook"} />
+              <Button type="button" variant="outline" aria-label="复制 Stripe Webhook 通知地址" onClick={() => void copyStripeWebhook()}><Copy size={14} />复制</Button>
+            </div>
+          </LabeledControl>
+        </div>
+        <p className="settings-panel-footnote">美元支付金额 = 人民币套餐价格 ÷ 美元汇率，四舍五入到美分。保存新汇率只影响新订单，已创建订单按下单时的金额与汇率支付；充值到账及赠送余额仍以人民币计。</p>
+        <p className="settings-panel-footnote">Webhook 使用 Snapshot 事件：checkout.session.completed、checkout.session.async_payment_succeeded、checkout.session.async_payment_failed 和 checkout.session.expired。支付确认到账后才增加余额；停用 Stripe 时保留已有配置。</p>
       </SettingsPanel>
 
       <SettingsPanel title="余额与计费" description="控制生成扣费及新用户赠送。图片与视频价格在下方单独发布，不随本表单保存。">

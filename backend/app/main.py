@@ -216,6 +216,8 @@ async def _apply_schema_patches(engine_override: AsyncEngine | None = None) -> N
         await apply_team_schema_patches(conn)
         from app.media_schema import apply_media_schema_patches
         await apply_media_schema_patches(conn)
+        from app.payment_schema import apply_payment_schema_patches
+        await apply_payment_schema_patches(conn)
         scols = await _pg_columns(conn, "shots")
         if "segment_script" not in scols:
             await conn.execute(text("ALTER TABLE shots ADD COLUMN segment_script TEXT DEFAULT ''"))

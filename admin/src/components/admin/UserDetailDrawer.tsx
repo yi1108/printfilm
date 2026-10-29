@@ -19,6 +19,7 @@ import { AdminModal } from "@/components/admin/AdminModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatAccountId } from "@/lib/admin-account";
 import { fenToYuan } from "@/lib/utils";
+import { orderPaymentLabel } from "@/lib/orderPayment";
 import { ledgerKindLabel, orderStatusLabel } from "@/lib/statusLabels";
 
 type ListRes<T> = PageResult<T>;
@@ -126,7 +127,7 @@ export function UserDetailDrawer({ userId, open, onOpenChange, initialUser }: Us
                     orders.map((o) => (
                       <tr key={o.id}>
                         <td className="font-mono text-xs">{o.out_trade_no}</td>
-                        <td>¥{fenToYuan(o.amount_fen)}</td>
+                        <td>{orderPaymentLabel(o)}</td>
                         <td>{orderStatusLabel(o.status)}</td>
                         <td className="text-xs">{new Date(o.created_at).toLocaleString()}</td>
                       </tr>

@@ -471,7 +471,11 @@ async def close_expired_pending_orders(
     from app.models import Order
 
     now = datetime.now(timezone.utc)
-    stmt = select(Order).where(Order.status == "pending")
+    # Stripe owns its Checkout expiry; never apply Epay's five-minute timeout.
+    stmt = (
+        select(Order).where(Order.status == "pending", Order.pay_type != "stripe")
+        .with_for_update().execution_options(populate_existing=True)
+    )
     if team_id is not None:
         stmt = stmt.where(Order.team_id == team_id)
     elif user_id is not None:

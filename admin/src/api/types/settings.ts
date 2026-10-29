@@ -60,6 +60,17 @@ export type AdminModelSettings = {
   epay_notify_url: string;
   epay_return_url: string;
   has_epay_key: boolean;
+  stripe_enabled: boolean;
+  stripe_secret_key: string;
+  has_stripe_secret_key: boolean;
+  stripe_webhook_secret: string;
+  has_stripe_webhook_secret: boolean;
+  stripe_frontend_url: string;
+  stripe_currency: "auto" | "cny" | "usd" | "hkd";
+  stripe_usd_cny_rate: string;
+  stripe_hkd_cny_rate: string;
+  stripe_ready: boolean;
+  stripe_webhook_url: string;
   billing_enabled: boolean;
   billing_markup: number;
   billing_estimate_buffer: number;

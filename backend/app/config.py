@@ -152,6 +152,18 @@ class Settings(BaseSettings):
     epay_notify_url: str = ""
     epay_return_url: str = ""
 
+    # Stripe Checkout（后台配置优先，环境变量用于初始默认值）
+    stripe_enabled: bool = False
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    # 前端独立部署时指定其公网地址；空值使用 public_base_url。
+    stripe_frontend_url: str = ""
+    # auto: 中文 CNY、英文 USD；固定币种保留用于兼容原配置。
+    stripe_currency: str = "cny"
+    # 精确十进制文本：1 单位外币对应多少人民币；空串表示尚未配置。
+    stripe_usd_cny_rate: str = ""
+    stripe_hkd_cny_rate: str = ""
+
     public_base_url: str = "http://127.0.0.1:8000"
     ffmpeg_path: str = "ffmpeg"
     ffprobe_path: str = "ffprobe"

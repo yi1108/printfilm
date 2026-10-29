@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Billing wallet + epay top-up APIs."""
+"""Billing wallet + Epay / Stripe top-up APIs."""
 from __future__ import annotations
 
 import logging
@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 
 from typing import Literal
+
+import stripe
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
@@ -21,7 +23,7 @@ from app.database import get_db
 from app.deps import get_current_user
 from app.models import Order, Project, UsageEvent, User
 from app.models_tasks import TaskRun
-from app.services import billing, epay
+from app.services import billing, epay, stripe_payments
 from app.services.billing.http import http_exception_for_value_error
 from app.services.billing.settlement import (
     billing_active,
@@ -61,7 +63,8 @@ async def quote_media(body: MediaQuoteBody, _user: User = Depends(get_current_us
 
 class CreateOrderBody(BaseModel):
     sku_id: str
-    pay_type: Literal["alipay", "wxpay"]
+    pay_type: Literal["alipay", "wxpay", "stripe"]
+    language: Literal["zh", "en"] = "zh"
 
 
 @router.get(
@@ -88,10 +91,19 @@ async def wallet(user: User = Depends(get_current_user)) -> dict:
     description="无需登录，返回可购买的充值套餐、支持的支付方式及计费倍率。",
     response_description="充值套餐与支付方式",
 )
-async def list_skus() -> dict:
+async def list_skus(language: Literal["zh", "en"] = Query("zh")) -> dict:
+    stripe_settings = get_settings()
+    stripe_ready = stripe_payments.is_ready(stripe_settings, language=language)
     return {
-        "skus": billing.SKUS,
-        "pay_types": ["alipay", "wxpay"],
+        "skus": [
+            {**sku, **({"stripe_quote": stripe_payments.quote_payment(int(sku["amount_fen"]), stripe_settings, language=language)} if stripe_ready else {})}
+            for sku in billing.SKUS
+        ],
+        "pay_types": ["alipay", "wxpay"] + (["stripe"] if stripe_ready else []),
+        "stripe_unavailable_reason": (
+            "usd_rate_missing" if stripe_settings.stripe_enabled and stripe_settings.stripe_currency == "auto"
+            and language == "en" and not stripe_settings.stripe_usd_cny_rate.strip() else None
+        ),
         "markup": settings.billing_markup,
     }
 
@@ -187,7 +199,7 @@ def _client_ip(request: Request) -> str:
     "/orders",
     summary="创建个人充值订单",
     description=(
-        "需要登录，选择充值套餐及支付宝或微信支付方式创建待支付订单，返回二维码、支付链接和订单有效期。"
+        "需要登录，选择充值套餐及支付宝、微信或已启用的 Stripe 支付方式，返回二维码或收银台链接和订单有效期。"
         "创建订单不会立即增加余额，实际到账由支付回调确认。"
     ),
     response_description="充值订单与支付信息",
@@ -198,11 +210,19 @@ async def create_order(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict:
+    if body.pay_type == "stripe" and not stripe_payments.is_ready(language=body.language):
+        raise HTTPException(status_code=503, detail="Stripe 支付未启用或未完成配置")
     # 下单前先清理该用户已过期的待支付单
     await billing.close_expired_pending_orders(db, user_id=user.id)
     sku = billing.sku_by_id(body.sku_id)
     if not sku:
         raise HTTPException(status_code=400, detail="未知充值包")
+    payment = {}
+    if body.pay_type == "stripe":
+        try:
+            payment = stripe_payments.quote_payment(int(sku["amount_fen"]), language=body.language)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     out_trade_no = f"PF{int(time.time())}{user.id:04d}{uuid.uuid4().hex[:8]}"
     order = Order(
         out_trade_no=out_trade_no,
@@ -212,9 +232,29 @@ async def create_order(
         credit_fen=int(sku["credit_fen"]),
         pay_type=body.pay_type,
         status="pending",
+        **payment,
     )
     db.add(order)
     await db.commit()
+    if body.pay_type == "stripe":
+        try:
+            session = await stripe_payments.create_checkout_session(order=order, sku_name=str(sku["name"]))
+        except (ValueError, stripe.StripeError) as exc:
+            order.status = "closed"
+            await db.commit()
+            logger.warning("stripe checkout unavailable order=%s error=%s", out_trade_no, type(exc).__name__)
+            raise HTTPException(status_code=503, detail="Stripe 收银台暂不可用，请稍后重试") from exc
+        order.trade_no = str(session["id"])
+        await db.commit()
+        return {
+            "out_trade_no": out_trade_no,
+            "sku_id": sku["id"], "sku_name": str(sku["name"]),
+            "pay_type": "stripe", "amount_fen": order.amount_fen, "credit_fen": order.credit_fen,
+            "trade_no": order.trade_no, "payurl": session["url"], "pay_mode": "redirect",
+            "qrcode": "", "img": "", "qr_payload": "", "submit_url": "",
+            "expire_seconds": stripe_payments.CHECKOUT_EXPIRE_SECONDS,
+            **stripe_payments.payment_snapshot(order),
+        }
     money_yuan = epay.money_yuan_from_fen(int(sku["amount_fen"]))
     try:
         mapi = await epay.create_mapi_payment(
@@ -248,6 +288,7 @@ async def create_order(
         "pay_mode": mapi.get("pay_mode") or ("qr" if mapi.get("qr_payload") else "redirect"),
         "expire_seconds": billing.ORDER_EXPIRE_SECONDS,
         "submit_url": epay.submit_url(fields),
+        **stripe_payments.payment_snapshot(order),
     }
 
 
@@ -439,6 +480,7 @@ async def list_orders(
                 "trade_no": o.trade_no,
                 "paid_at": o.paid_at.isoformat() if o.paid_at else None,
                 "created_at": o.created_at.isoformat() if o.created_at else None,
+                **stripe_payments.payment_snapshot(o),
             }
         )
     return {"orders": items}
@@ -467,6 +509,7 @@ async def get_order(
         "credit_fen": order.credit_fen,
         "pay_type": order.pay_type,
         "paid_at": order.paid_at.isoformat() if order.paid_at else None,
+        **stripe_payments.payment_snapshot(order),
     }
 
 
@@ -482,7 +525,10 @@ async def close_order(
     user: User = Depends(get_current_user),
 ) -> dict:
     """需要登录，仅可关闭本人的待支付个人订单。已关闭订单可重复请求，已支付订单不能关闭。"""
-    result = await db.execute(select(Order).where(Order.out_trade_no == out_trade_no))
+    result = await db.execute(
+        select(Order).where(Order.out_trade_no == out_trade_no).with_for_update()
+        .execution_options(populate_existing=True)
+    )
     order = result.scalar_one_or_none()
     if not order or order.user_id != user.id or order.team_id is not None:
         raise HTTPException(status_code=404, detail="订单不存在")
@@ -492,9 +538,39 @@ async def close_order(
         return {"out_trade_no": order.out_trade_no, "status": "closed"}
     if order.status != "pending":
         raise HTTPException(status_code=400, detail="当前状态不可关闭")
+    if order.pay_type == "stripe":
+        if not order.trade_no:
+            raise HTTPException(status_code=409, detail="Stripe 收银台正在创建，请稍后重试")
+        try:
+            await stripe_payments.expire_checkout_session(order.trade_no)
+        except (ValueError, stripe.StripeError) as exc:
+            # A completed Checkout may be waiting for its paid webhook. Leave
+            # it pending rather than locally cancelling a successful payment.
+            raise HTTPException(status_code=409, detail="Stripe 订单暂不能关闭，请刷新支付状态后重试") from exc
     order.status = "closed"
     await db.commit()
     return {"out_trade_no": order.out_trade_no, "status": "closed"}
+
+
+@router.post(
+    "/stripe/webhook",
+    summary="接收 Stripe 支付通知",
+    description="无需登录，使用原始请求体验证 Stripe-Signature；严格校验已绑定订单、金额及币种后幂等入账。",
+)
+async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)) -> dict:
+    if not get_settings().stripe_webhook_secret.strip():
+        raise HTTPException(status_code=503, detail="Stripe Webhook 未配置")
+    # Signature verification requires the exact bytes, never request.json().
+    payload = await request.body()
+    try:
+        event = stripe_payments.construct_event(payload, request.headers.get("stripe-signature", ""))
+        await stripe_payments.handle_checkout_event(db, event)
+    except ValueError as exc:
+        await db.rollback()
+        logger.warning("stripe webhook rejected error=%s", type(exc).__name__)
+        raise HTTPException(status_code=400, detail="无效的 Stripe 支付通知") from exc
+    await db.commit()
+    return {"received": True}
 
 
 def _notify_success(params: dict) -> bool:
@@ -552,6 +628,8 @@ async def epay_notify(request: Request, db: AsyncSession = Depends(get_db)) -> P
     if not order:
         logger.warning("epay notify unknown order %s", out_trade_no)
         return PlainTextResponse("fail", status_code=404)
+    if order.pay_type not in {"alipay", "wxpay"}:
+        return PlainTextResponse("fail", status_code=400)
 
     # amount check
     try:
