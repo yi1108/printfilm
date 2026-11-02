@@ -4,6 +4,7 @@ import Modal from '../ui/Modal'
 import PaymentBrandIcon from './PaymentBrandIcon'
 import { api } from '../../api'
 import { teamsApi } from '../../api/teams'
+import { cnyAmountDisplay } from '../../lib/billingPayments'
 
 export type PayCheckout = {
   out_trade_no: string
@@ -26,11 +27,6 @@ type Props = {
   checkout: PayCheckout | null
   onClose: () => void
   onPaid: () => void
-}
-
-/** 将分转换为支付弹窗显示的两位小数金额。 */
-function yuan(fen: number) {
-  return (fen / 100).toFixed(2)
 }
 
 /** 将剩余秒数格式化为分秒倒计时。 */
@@ -235,12 +231,12 @@ export default function PaymentModal({ open, checkout, onClose, onPaid, teamId }
 
         <div className="pf-pay-sku-box">
           <strong>{checkout.sku_name}</strong>
-          <span>到账 ¥{yuan(checkout.credit_fen)}</span>
+          <span>到账 {cnyAmountDisplay(checkout.credit_fen)}</span>
         </div>
 
         <div className="pf-pay-amount">
           <span>支付金额</span>
-          <em>¥{yuan(checkout.amount_fen)}</em>
+          <em>{cnyAmountDisplay(checkout.amount_fen)}</em>
         </div>
 
         <div className="pf-pay-qr-wrap">

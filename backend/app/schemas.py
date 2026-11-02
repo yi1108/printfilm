@@ -485,6 +485,9 @@ class AdminOrderOut(BaseModel):
     sku_id: str
     amount_fen: int
     credit_fen: int
+    payment_currency: str | None = None
+    payment_amount_minor: int | None = None
+    payment_exchange_rate: str | None = None
     pay_type: str
     status: str
     trade_no: str | None

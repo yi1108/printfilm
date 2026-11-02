@@ -2,6 +2,7 @@ import { workspaceScope } from './features/teams/workspaceScope'
 import { API_BASE, createJsonRequester, requestResponse, uploadFile } from './api/client'
 import { apiErrorMessage } from './api/http'
 import { curatedCreationTemplates } from './lib/creationTemplates'
+import type { PaymentCurrency, StripePaymentQuote } from './lib/billingPayments'
 
 /** 科普、账号和计费 API 共用 JSON 传输层。 */
 const request = createJsonRequester()
@@ -214,6 +215,7 @@ export type BillingSku = {
   amount_fen: number
   credit_fen: number
   recommended?: boolean
+  stripe_quote?: StripePaymentQuote | null
 }
 
 export type BillingOrder = {
@@ -227,6 +229,9 @@ export type BillingOrder = {
   trade_no?: string | null
   paid_at?: string | null
   created_at?: string | null
+  payment_currency?: PaymentCurrency | null
+  payment_amount_minor?: number | null
+  payment_exchange_rate?: string | null
 }
 
 export type UsageSummary = {
@@ -543,10 +548,10 @@ export const api = {
   wallet() {
     return request<Wallet>('/api/billing/wallet')
   },
-  billingSkus() {
-    return request<{ skus: BillingSku[]; pay_types: string[]; markup: number }>('/api/billing/skus')
+  billingSkus(language: 'zh' | 'en' = 'zh') {
+    return request<{ skus: BillingSku[]; pay_types: string[]; markup: number; stripe_unavailable_reason?: string | null }>(`/api/billing/skus?language=${language}`)
   },
-  createBillingOrder(sku_id: string, pay_type: 'alipay' | 'wxpay') {
+  createBillingOrder(sku_id: string, pay_type: 'alipay' | 'wxpay' | 'stripe', language: 'zh' | 'en' = 'zh') {
     return request<{
       out_trade_no: string
       sku_id: string
@@ -555,17 +560,20 @@ export const api = {
       amount_fen: number
       credit_fen: number
       pay_type: string
+      payment_currency?: PaymentCurrency
+      payment_amount_minor?: number
+      payment_exchange_rate?: string
       trade_no?: string
       qrcode?: string
       payurl?: string
       img?: string
       qr_payload?: string
-      /** qr=原生扫码；redirect=新开易支付收银台 */
+      /** qr=原生扫码；redirect=托管收银台 */
       pay_mode?: 'qr' | 'redirect' | string
       expire_seconds?: number
     }>('/api/billing/orders', {
       method: 'POST',
-      body: JSON.stringify({ sku_id, pay_type }),
+      body: JSON.stringify({ sku_id, pay_type, language }),
     })
   },
   getBillingOrder(outTradeNo: string) {
@@ -574,6 +582,9 @@ export const api = {
       status: string
       amount_fen: number
       credit_fen: number
+      payment_currency?: PaymentCurrency
+      payment_amount_minor?: number
+      payment_exchange_rate?: string
     }>(`/api/billing/orders/${encodeURIComponent(outTradeNo)}`)
   },
   /** 关闭待支付订单 */

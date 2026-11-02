@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Modal from '../ui/Modal'
 import { api, type BillingOrder } from '../../api'
+import { billingOrderChargeLabel, cnyAmountDisplay } from '../../lib/billingPayments'
 
 type Props = {
   open: boolean
@@ -20,9 +21,7 @@ const STATUS_CN: Record<string, string> = {
   closed: '已关闭',
 }
 
-function yuan(fen: number) {
-  return (fen / 100).toFixed(2)
-}
+const PAY_LABELS: Record<string, string> = { alipay: '支付宝', wxpay: '微信支付', stripe: 'Stripe' }
 
 function formatTime(iso?: string | null) {
   if (!iso) return '—'
@@ -80,8 +79,9 @@ export default function TopupHistoryModal({ open, onClose }: Props) {
                 <span className="pf-muted">{formatTime(o.paid_at || o.created_at)}</span>
               </div>
               <div className="pf-topup-meta">
-                <em>¥{yuan(o.amount_fen)}</em>
-                <span className="pf-muted">到账 ¥{yuan(o.credit_fen)}</span>
+                <em>{billingOrderChargeLabel(o)}</em>
+                <span className="pf-muted">到账 {cnyAmountDisplay(o.credit_fen)}</span>
+                <span className="pf-muted">{PAY_LABELS[o.pay_type] || o.pay_type}</span>
                 <span className={`pf-topup-status is-${o.status}`}>
                   {STATUS_CN[o.status] || o.status}
                 </span>

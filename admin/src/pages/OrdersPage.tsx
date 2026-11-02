@@ -18,6 +18,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PageHeader } from "@/components/ui/page";
 import { useAdminDetailQuery } from "@/hooks/useAdminDetailQuery";
 import { fenToYuan } from "@/lib/utils";
+import { orderPaymentLabel } from "@/lib/orderPayment";
 import { ledgerKindLabel, orderStatusLabel, payTypeLabel, taskDomainLabel } from "@/lib/statusLabels";
 
 type OrderRes = PageResult<AdminOrder>;
@@ -189,8 +190,8 @@ export function OrdersPage() {
                   <TableHead>商户单号</TableHead>
                   <TableHead>用户</TableHead>
                   <TableHead>SKU</TableHead>
-                  <TableHead>金额</TableHead>
-                  <TableHead>入账</TableHead>
+                  <TableHead>支付金额</TableHead>
+                  <TableHead>入账（CNY）</TableHead>
                   <TableHead>支付</TableHead>
                   <TableHead>状态</TableHead>
                   <TableHead>渠道单号</TableHead>
@@ -214,7 +215,7 @@ export function OrdersPage() {
                       <AdminEntityLink kind="user" id={o.user_id} label={o.user_email ?? undefined} />
                     </TableCell>
                     <TableCell>{o.sku_id}</TableCell>
-                    <TableCell>¥{fenToYuan(o.amount_fen)}</TableCell>
+                    <TableCell>{orderPaymentLabel(o)}</TableCell>
                     <TableCell>¥{fenToYuan(o.credit_fen)}</TableCell>
                     <TableCell>{payTypeLabel(o.pay_type)}</TableCell>
                     <TableCell>

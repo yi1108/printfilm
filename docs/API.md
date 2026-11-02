@@ -152,6 +152,10 @@ X-Edit-Version: <acquire 返回的 version>
 
 金额字段 `*_fen` 的单位为人民币分，`*_yuan` 为人民币元；其他价格与 Token 费率以字段说明为准。团队创作当前由所有者个人钱包付费，历史团队钱包入口不代表仍支持团队充值。详见 [BILLING.md](./BILLING.md) 和 [TEAM_MODE.md](./TEAM_MODE.md)。
 
+个人充值先查询 `GET /api/billing/skus` 的 `pay_types`。`POST /api/billing/orders` 接受 `sku_id` 和 `pay_type`（`alipay`、`wxpay`，以及启用并配置后的 `stripe`）；套餐金额与到账额度由服务端确定。Stripe 响应的 `pay_mode=redirect`，跳转 `payurl` 进入托管 Checkout；后台可选择 CNY、USD 或 HKD，按管理员设置的人民币/外币汇率自动换算。套餐 `stripe_quote`、下单响应及订单查询返回 `payment_currency`、`payment_amount_minor`、`payment_exchange_rate`；付款金额为对应币种的最小单位，钱包到账仍为 `credit_fen` 人民币分。订单固定报价不受后续汇率修改影响，历史空报价字段按 CNY 处理。支付后的浏览器返回参数不证明到账，需登录查询本人 `GET /api/billing/orders/{out_trade_no}` 的实际状态。Stripe 通知入口 `POST /api/billing/stripe/webhook` 不使用登录令牌，使用原始请求体及 `Stripe-Signature` 验签；部署与事件配置见 [Stripe Checkout](./BILLING.md#stripe-checkout)。
+
+Stripe 配置通过管理端 **系统设置 → 支付计费 → Stripe 支付接入** 保存，对应管理员专用 `GET/PATCH /api/admin/settings/models` 的 `stripe_enabled`、`stripe_secret_key`、`stripe_webhook_secret`、`stripe_frontend_url`、`stripe_currency`、`stripe_usd_cny_rate`、`stripe_hkd_cny_rate`。汇率为 1 单位外币对应的人民币金额，返回精确十进制字符串；PATCH 接受字符串或数字，最多六位小数、必须为正数，空串清除；选择外币却未配置相应汇率时 Stripe 不开放。不自动拉取实时汇率。密钥加密入库，读取时返回空串和 `has_stripe_secret_key`、`has_stripe_webhook_secret` 标记，另返回配置就绪标记 `stripe_ready` 和根据 `public_base_url` 计算的 `stripe_webhook_url`；就绪不代表已完成商户联调。PATCH 省略或留空密钥保留旧值，`clear_stripe_secret_key=true`、`clear_stripe_webhook_secret=true` 明确清空，若同时提交非空新密钥则采用新值。保存后刷新当前服务的运行配置，无需重启后端；数据库设置（含明确清空）优先于可选环境变量初始值。
+
 数字资产市场为可选模块。`GET /api/marketplace/capabilities` 可查询开关；市场关闭时其他市场业务接口返回 404。配置就绪状态不等于已完成真实存储或支付联调，详见 [MARKETPLACE.md](./MARKETPLACE.md)。
 
 ## 文档维护
@@ -160,3 +164,6 @@ X-Edit-Version: <acquire 返回的 version>
 - 请求和响应模型使用 `Field(description=...)` 说明含义、单位与空值行为，参数使用 `Query`、`Path`、`Header` 等声明说明。
 - 通用中文分组、分页提示和 FastAPI 默认响应描述由 `backend/app/openapi_docs.py` 统一提供。
 - 更新接口后直接重新生成 OpenAPI，不维护独立的静态接口清单；业务约束以实现和生成的模型为准。
+
+
+Stripe 按语言报价：后台 stripe_currency=auto，stripe_usd_cny_rate 设置美元兑人民币汇率。GET /api/billing/skus 接受 language=zh|en（默认 zh）；POST /api/billing/orders 接受 language（同上），中文选择 CNY、英文选择 USD。返回 stripe_quote 与订单 payment_* 均为服务端固定报价。英文缺少汇率时不开放 Stripe，并返回 stripe_unavailable_reason="usd_rate_missing"；中文仍可用。后台 stripe_ready 要求两种语言均配置完整。

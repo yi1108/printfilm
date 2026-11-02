@@ -9,6 +9,9 @@ export type AdminOrder = {
   sku_id: string;
   amount_fen: number;
   credit_fen: number;
+  payment_currency?: "cny" | "usd" | "hkd" | null;
+  payment_amount_minor?: number | null;
+  payment_exchange_rate?: string | null;
   pay_type: string;
   status: string;
   trade_no?: string | null;
