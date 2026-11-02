@@ -8,6 +8,8 @@ import {
   stripeSkuQuote,
   billingOrderChargeLabel,
   paymentAmount,
+  skuPriceDisplay,
+  cnyAmountDisplay,
 } from '../src/lib/billingPayments.ts'
 
 test('Stripe is offered only when the server enables it; unsupported providers stay unavailable', () => {
@@ -28,6 +30,14 @@ test('Missing or invalid quotes cannot make Stripe packages look free or use a C
   for (const quote of [undefined, null, { payment_currency: 'usd', payment_amount_minor: 0 }, { payment_currency: 'usd', payment_amount_minor: -1 }, { payment_currency: 'usd', payment_amount_minor: 1.5 }, { payment_currency: 'usd', payment_amount_minor: NaN }, { payment_currency: 'eur', payment_amount_minor: 13944 }]) {
     assert.equal(stripeSkuQuote(quote), null)
   }
+})
+
+test('Package card prices share one currency-code format across Alipay/WeChat and Stripe', () => {
+  assert.deepEqual(skuPriceDisplay({ stripeSelected: false, quote: null, amountFen: 99000 }), { currency: 'CNY', amount: '990.00' })
+  assert.deepEqual(skuPriceDisplay({ stripeSelected: true, quote: { payment_currency: 'usd', payment_amount_minor: 13944, payment_exchange_rate: '7.1' }, amountFen: 99000 }), { currency: 'USD', amount: '139.44' })
+  assert.deepEqual(skuPriceDisplay({ stripeSelected: true, quote: { payment_currency: 'cny', payment_amount_minor: 99000, payment_exchange_rate: '1' }, amountFen: 99000 }), { currency: 'CNY', amount: '990.00' })
+  assert.equal(skuPriceDisplay({ stripeSelected: true, quote: null, amountFen: 99000 }), null)
+  assert.equal(cnyAmountDisplay(99000), 'CNY 990.00')
 })
 
 test('Order history shows its saved payment snapshot independently of CNY wallet amounts', () => {

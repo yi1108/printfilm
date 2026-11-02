@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  Building2,
   ArrowUpRight,
   Check,
   CreditCard,
@@ -24,9 +23,10 @@ import {
   availableBillingPayTypes,
   billingPaymentReturn,
   billingReturnHint,
+  cnyAmountDisplay,
+  skuPriceDisplay,
   stripeCheckoutUrl,
   stripeSkuQuote,
-  paymentAmount,
   type BillingPayType,
 } from '../lib/billingPayments'
 import './pricing.css'
@@ -39,17 +39,6 @@ const HERO_FEATURES = [
   { key: 'featSafe', Icon: ShieldCheck },
   { key: 'featForever', Icon: InfinityIcon },
 ] as const
-
-// 分转元，到账金额固定展示两位小数。
-function yuan(fen: number) {
-  return (fen / 100).toFixed(2)
-}
-
-// 充值价格与赠送金额保留真实小数，整数金额省略小数位。
-function yuanShort(fen: number) {
-  const v = fen / 100
-  return Number.isInteger(v) ? String(v) : v.toFixed(2)
-}
 
 /** 定价与充值页 */
 export default function PricingPage() {
@@ -73,7 +62,6 @@ export default function PricingPage() {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [hint, setHint] = useState('')
-  const [payTip, setPayTip] = useState('')
   const [checkout, setCheckout] = useState<PayCheckout | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const loggedIn = Boolean(localStorage.getItem('token'))
@@ -224,12 +212,6 @@ export default function PricingPage() {
   // 选择已经开放的支付渠道。
   function pickPay(type: BillingPayType) {
     setPayType(type)
-    setPayTip('')
-  }
-
-  // 未开放渠道仅显示提示，不创建订单。
-  function pickUnavailable(label: string) {
-    setPayTip(t('pricing.unavailable', { label }))
   }
 
   // 支付成功后关闭结算弹窗并刷新账户数据。
@@ -294,7 +276,6 @@ export default function PricingPage() {
                 </div>
               </header>
 
-              {payTip ? <p className="pf-pricing-pay-tip" role="status">{payTip}</p> : null}
               {!skusLoading && !skusError && payTypes.length === 0 ? (
                 <p className="pf-pricing-pay-tip" role="status">{t('pricing.noPayMethods')}</p>
               ) : null}
@@ -317,30 +298,6 @@ export default function PricingPage() {
                     </span>
                   ) : null}
                 </button>)}
-
-                <button
-                  type="button"
-                  className="pf-pricing-pay-tile is-disabled"
-                  title={t('pricing.soonTitle')}
-                  onClick={() => pickUnavailable(t('pricing.unionpay'))}
-                >
-                  <PaymentBrandIcon brand="unionpay" size="md" />
-                  <span className="pf-pricing-pay-tile-label">{t('pricing.unionpay')}</span>
-                  <span className="pf-pricing-pay-tile-soon">{t('common.comingSoon')}</span>
-                </button>
-
-                <button
-                  type="button"
-                  className="pf-pricing-pay-tile is-disabled"
-                  title={t('pricing.transferTitle')}
-                  onClick={() => pickUnavailable(t('pricing.transfer'))}
-                >
-                  <span className="pf-pricing-pay-tile-icon" aria-hidden>
-                    <Building2 size={22} strokeWidth={1.8} />
-                  </span>
-                  <span className="pf-pricing-pay-tile-label">{t('pricing.transfer')}</span>
-                  <span className="pf-pricing-pay-tile-sub">{t('pricing.enterprise')}</span>
-                </button>
               </div>
               {stripeUnavailable && skuLocale === locale && <p className="pf-muted" role="status">{t('pricing.stripeUsdUnavailable')}</p>}
             </section>
@@ -378,6 +335,8 @@ export default function PricingPage() {
                   const stripeSelected = payType === 'stripe'
                   const quote = stripeSelected ? stripeSkuQuote(sku.stripe_quote) : null
                   const missingStripeQuote = stripeSelected && !quote
+                  // 各支付方式统一「货币代码 + 两位小数」；Stripe 报价缺失时价格区显示占位并禁止下单。
+                  const price = skuPriceDisplay({ stripeSelected, quote, amountFen: sku.amount_fen })
                   const label = m.pricing.skus[sku.id as keyof typeof m.pricing.skus] || sku.name
                   const tierHint =
                     m.pricing.skuHints[sku.id as keyof typeof m.pricing.skuHints] || t('pricing.foreverHint')
@@ -393,17 +352,17 @@ export default function PricingPage() {
                       </div>
                       <p className="pf-pricing-sku-hint">{tierHint}</p>
                       <div className="pf-pricing-sku-price">
-                        <span className="yen">{stripeSelected ? quote?.payment_currency.toUpperCase() : '¥'}</span>
-                        <strong>{stripeSelected ? quote ? paymentAmount(quote.payment_amount_minor) : '—' : yuanShort(sku.amount_fen)}</strong>
+                        <span className="yen">{price?.currency ?? '—'}</span>
+                        <strong>{price?.amount ?? '—'}</strong>
                       </div>
                       <p className="pf-pricing-sku-credit">
-                        <span>{t('pricing.credit')}</span><em>{stripeSelected ? 'CNY ' : ''}¥{yuan(sku.credit_fen)}</em>
+                        <span>{t('pricing.credit')}</span><em>{cnyAmountDisplay(sku.credit_fen)}</em>
                       </p>
                       {missingStripeQuote ? <p className="pf-pricing-sku-exchange" role="status">{t('pricing.stripeQuoteUnavailable')}</p> : quote && quote.payment_currency !== 'cny' ? (
                         <p className="pf-pricing-sku-exchange">{t('pricing.stripeExchange', { currency: quote.payment_currency.toUpperCase(), rate: quote.payment_exchange_rate })}</p>
                       ) : null}
                       {bonus > 0 ? (
-                        <p className="pf-pricing-sku-bonus"><Zap size={12} aria-hidden />{t('pricing.bonus', { amount: yuanShort(bonus) })}</p>
+                        <p className="pf-pricing-sku-bonus"><Zap size={12} aria-hidden />{t('pricing.bonus', { amount: cnyAmountDisplay(bonus) })}</p>
                       ) : (
                         <p className="pf-pricing-sku-bonus is-empty">&nbsp;</p>
                       )}

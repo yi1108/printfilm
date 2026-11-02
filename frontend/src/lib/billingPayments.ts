@@ -21,6 +21,28 @@ export function paymentAmount(amountMinor: number): string {
   return (amountMinor / 100).toFixed(2)
 }
 
+/**
+ * 套餐卡付款金额统一展示「货币代码 + 两位小数」：
+ * Stripe 选中时取服务端外币报价（报价无效返回 null，由页面拦截下单）；
+ * 支付宝/微信固定人民币，直接由分转元，浏览器不做任何汇率换算。
+ */
+export function skuPriceDisplay(input: {
+  stripeSelected: boolean
+  quote: StripePaymentQuote | null | undefined
+  amountFen: number
+}): { currency: string; amount: string } | null {
+  if (input.stripeSelected) {
+    const quote = stripeSkuQuote(input.quote)
+    return quote ? { currency: quote.payment_currency.toUpperCase(), amount: paymentAmount(quote.payment_amount_minor) } : null
+  }
+  return { currency: 'CNY', amount: paymentAmount(input.amountFen) }
+}
+
+/** 人民币金额（到账额、支付宝/微信付款额）统一展示「CNY + 两位小数」。 */
+export function cnyAmountDisplay(fen: number): string {
+  return `CNY ${paymentAmount(fen)}`
+}
+
 /** Legacy orders without a payment snapshot used CNY. Invalid new snapshots stay unavailable. */
 export function billingOrderCharge(order: {
   amount_fen: number
