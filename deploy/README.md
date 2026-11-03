@@ -112,7 +112,7 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env.prod down -v
 
 测试环境由 Jenkins 轮询 **GitHub 仓库 `yi1108/printfilm` 的 `dev` 分支**自动发布；日常测试发版提交并推送代码即可，不需要手动上传补丁或更新服务器容器。推送前用 `git remote -v` 确认目标；`origin` 指向该 GitHub 仓库时执行 `git push origin dev`，若 `origin` 指向 GitCC，则还需推送到对应 GitHub remote（例如 `git push github dev`）。推送后核对 Jenkins 构建版本与运行中的镜像标签一致。
 
-预发容器不需要 `backend/.env`。App 视频开关在管理后台「系统设置 → 站点工具」里保存，和数字资产市场开关放在一起，不需要改容器环境变量。未在后台打开时，启动不做 App 建表，原服务可以先起来。后台打开时会先完成幂等增量结构迁移再保存开关；迁移失败则开关不会打开。Apple 内购已配置时，启动仍会检查同一套结构。迁移在 PostgreSQL advisory lock 内完成，覆盖内容、播放、点赞、收藏、评论、Apple、钱包、退款和收益表；只新增缺失表、列和索引，不删除或改写历史数据。已在后台开启 App 后，若启动时结构仍不完整，错误写入 API 日志，进程继续提供原有接口；App 接口返回结构未就绪，不再把整个预发健康检查打失败。Jenkins 不需要单独执行迁移命令。
+预发容器不需要 `backend/.env`。App 视频开关在管理后台「系统设置 → 站点工具」里保存，和数字资产市场开关放在一起，不需要改容器环境变量。未在后台打开时，启动不做 App 建表，原服务可以先起来。后台打开时会先完成幂等增量结构迁移再保存开关；迁移失败则开关不会打开。Apple 内购已配置时，启动仍会检查同一套结构。迁移在 PostgreSQL advisory lock 内完成，覆盖内容、播放、点赞、收藏、评论、Apple、钱包、退款和收益表；只新增缺失表、列和索引，不删除或改写历史数据。数据库补列、App 结构、任务运行时和市场启动都有时间上限。某一步失败或超过时限时，错误写入 API 日志，进程继续监听 `/api/health`，不再把整个预发健康检查打失败。Jenkins 不需要单独执行迁移命令。
 
 ```sh
 docker compose -f docker-compose.full.yml --env-file deploy/.env.docker up -d --build

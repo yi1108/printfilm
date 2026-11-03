@@ -154,6 +154,9 @@ async def _load_startup_model_settings() -> None:
 
 @app.on_event("startup")
 async def on_startup() -> None:
+    """限时完成数据库和附属服务。任何一步失败或超时都继续监听，避免健康检查把预发判死。"""
+    import asyncio
+
     database_steps = (_load_startup_model_settings,)
     if settings.database_bootstrap_enabled:
         database_steps = (
@@ -166,23 +169,31 @@ async def on_startup() -> None:
         )
     else:
         logger.info("Database bootstrap disabled; loading model settings from the existing database")
-    await run_database_startup_steps(
-        database_steps,
-        dispose=engine.dispose,
-    )
+
+    async def run_step(label: str, awaitable, timeout: float) -> None:
+        """单步失败或超时后释放卡住的连接，不阻止后续启动。"""
+        try:
+            await asyncio.wait_for(awaitable, timeout)
+        except Exception:
+            logger.exception("%s失败或超时，API 继续监听", label)
+            try:
+                await engine.dispose()
+            except Exception:
+                logger.exception("释放数据库连接失败")
+
+    await run_step("数据库启动", run_database_startup_steps(database_steps, dispose=engine.dispose), 30)
     try:
         from app.services import oss as oss_svc
 
         oss_svc.ensure_browser_cors()
     except Exception:  # noqa: BLE001
-        pass
-    # 先验证已启用的 App 结构，避免缺少迁移时已经启动任务循环。
+        logger.exception("OSS CORS 设置失败")
     from app.marketplace.app_bootstrap import start_app_services
-    await start_app_services()
-    await start_task_runtime()
+    await run_step("App 服务启动", start_app_services(), 15)
+    await run_step("任务运行时启动", start_task_runtime(), 15)
     from app.marketplace.bootstrap import apply_marketplace_switch
     # 补列完成后再按系统设置建市场表并启动 Worker。关闭时不建表。
-    await apply_marketplace_switch()
+    await run_step("数字资产市场启动", apply_marketplace_switch(), 20)
 
 
 @app.on_event("shutdown")
@@ -217,6 +228,8 @@ async def _apply_schema_patches(engine_override: AsyncEngine | None = None) -> N
         # 现有 SQLite 测试库由 create_all 建表；以下补列只适用于 PostgreSQL。
         if conn.dialect.name != "postgresql":
             return
+        # 补列拿不到锁时尽快失败并在下次启动重试，避免一直占着启动过程。
+        await conn.execute(text("SET LOCAL lock_timeout = '5s'"))
         from app.team_schema import apply_team_schema_patches
 
         await apply_team_schema_patches(conn)
