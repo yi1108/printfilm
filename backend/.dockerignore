@@ -14,7 +14,6 @@ htmlcov
 static/generated
 static/voice_previews
 tests
-scripts
 *.md
 .git
 .gitignore
