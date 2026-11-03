@@ -138,20 +138,19 @@ def test_admin_setting_controls_app_switch(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_app_activation_fails_when_startup_migration_is_incomplete(monkeypatch):
-    """启动自动迁移后仍缺结构时，不能伪造 App 已就绪。"""
+async def test_incomplete_app_schema_does_not_stop_api_startup(monkeypatch):
+    """结构迁移失败时原 API 必须继续启动，否则预发健康检查会一直失败。"""
     from app.config import get_settings
     from app.marketplace import app_settings, apple_client
     monkeypatch.setattr(get_settings(), "marketplace_app_enabled", True)
     monkeypatch.setattr(app_settings, "get_app_settings", lambda: SimpleNamespace(enabled=False, apple_iap_enabled=False))
     monkeypatch.setattr(apple_client, "apple_configured", lambda: False)
 
-    async def missing():
-        return ["marketplace_coin_wallets"]
+    async def broken():
+        raise RuntimeError("App结构检查未通过：marketplace_coin_wallets")
 
-    monkeypatch.setattr(app_bootstrap, "ensure_schema", missing)
-    with pytest.raises(RuntimeError, match="自动迁移后仍不完整"):
-        await app_bootstrap.start_app_services()
+    monkeypatch.setattr(app_bootstrap, "ensure_schema", broken)
+    await app_bootstrap.start_app_services()
 
 
 def test_playback_access_log_never_contains_token_or_query():

@@ -88,16 +88,22 @@ def install(app: FastAPI) -> None:
 
 
 async def start_app_services() -> None:
-    """自动完成幂等增量迁移，再启动已配置的 Apple 通知和补偿运行时。"""
+    """尝试补齐已开启的 App 结构。迁移失败只记日志，不能让原 API 退出导致健康检查失败。"""
     from .app_settings import get_app_settings, is_app_enabled
     from .apple_client import apple_configured
     from .apple_runtime import start_apple_runtime
-    config = get_app_settings()
-    if is_app_enabled() or config.apple_iap_enabled or apple_configured():
-        missing = await ensure_schema()
-        if missing:
-            raise RuntimeError("App数据库结构自动迁移后仍不完整：" + ", ".join(missing))
-    await start_apple_runtime()
+    try:
+        config = get_app_settings()
+        if is_app_enabled() or config.apple_iap_enabled or apple_configured():
+            missing = await ensure_schema()
+            if missing:
+                logger.error("App 数据库结构未完整，App 接口暂不可用：%s", ", ".join(missing))
+    except Exception:
+        logger.exception("App 数据库结构迁移失败，原 API 继续启动")
+    try:
+        await start_apple_runtime()
+    except Exception:
+        logger.exception("Apple 通知运行时启动失败，原 API 继续启动")
 
 
 async def stop_app_services() -> None:
