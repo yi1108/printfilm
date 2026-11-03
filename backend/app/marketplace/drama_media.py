@@ -314,10 +314,14 @@ async def prepare_drama_video(snapshot: dict, dest_key: str, progress=None) -> d
             raise _error("SOURCE_NOT_READY", "完整成片超过市场视频大小限制")
         if result["duration"] > settings.max_duration_seconds:
             raise _error("SOURCE_NOT_READY", "完整成片超过市场视频时长限制")
+        try:
+            width, height = _dimensions(result)
+        except ValueError as exc:
+            raise _error("SOURCE_INCOMPATIBLE", "成片旋转角度不受支持，请先导出为标准横屏或竖屏视频") from exc
         digest = await _thread(fingerprint, output)
         await _thread(storage.upload, dest_key, output, "video/mp4")
         return {"size_bytes": size, "content_type": "video/mp4", "fingerprint": digest, "duration_seconds": result["duration"],
-                "width": result["width"], "height": result["height"]}
+                "width": width, "height": height}
 
 
 async def prepare_drama_cover(locator: str, dest_key: str, stamp: dict | None = None) -> dict:

@@ -13,13 +13,13 @@ router = APIRouter()
 
 def _notification_note(message: str, note: str) -> str:
     """省略空说明，避免向用户展示内部枚举或空分隔符。"""
-    return f"{message}说明：{note.strip()}" if note.strip() else message
+    from .notification_locale import note_notice
+    return note_notice(message, note)
 
 
 def _review_notification(kind: str, title: str, decision: str, reason: str, approved_next: str) -> str:
-    result = (f"{kind}《{title}》审核通过，{approved_next}。" if decision == "approved"
-              else f"{kind}《{title}》审核未通过，请根据审核说明修改后重新提交。")
-    return _notification_note(result, reason)
+    from .notification_locale import review_notice
+    return review_notice(kind, title, decision, reason, approved_next)
 
 
 @router.get(
@@ -30,7 +30,7 @@ def _review_notification(kind: str, title: str, decision: str, reason: str, appr
 )
 async def get_categories(db: DB, user: Admin):
     from .categories import category_config
-    return await category_config(db)
+    return await category_config(db, include_disabled=True)
 
 
 @router.put(
@@ -47,13 +47,18 @@ async def save_categories(body: CategoryInput, db: DB, user: Admin):
     item = await db.get(CategoryConfig, 1, with_for_update=True)
     if body.version != (item.version if item else 0):
         fail("分类配置已被修改，请重新加载后保存", 409)
+    from .categories import category_config, entries, merge_config
+    previous = entries(item)
     if item is None:
         item = CategoryConfig(id=1, version=0, names=[])
         db.add(item)
-    item.names, item.version = body.names, item.version + 1
+    item.items = merge_config(previous,
+                              [entry.model_dump() for entry in body.items] if body.items is not None else None, body.names)
+    item.names = [entry["name_zh"] for entry in item.items if entry["enabled"]]
+    item.version += 1
     event(db, user.id, "categories", 1, "updated", version=item.version)
     await db.commit()
-    return {"names": item.names, "version": item.version}
+    return await category_config(db, include_disabled=True)
 
 
 MODELS = {"works": Work, "rights": Rights, "cases": RegistrationCase, "recruits": Recruit,
@@ -510,7 +515,7 @@ async def resolve_report(report_id: int, body: ResolutionInput, db: DB, user: Ad
 async def get_support(db: DB, user: Admin):
     """管理配置不返回 OSS 对象位置。"""
     item = await db.get(Support, 1)
-    return data(item, "name", "wechat", "hours", "qr_asset_id", "enabled") if item else {"enabled": False}
+    return data(item, "name", "name_en", "wechat", "hours", "hours_en", "qr_asset_id", "enabled") if item else {"enabled": False}
 
 
 @router.put(

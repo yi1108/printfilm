@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func, literal, select, union_all
 
 from app.models import User
+from .categories import category_fields, category_filter, normalize_category_input
 from .dependencies import Actor, DB, Visitor
 from .previews import cancel_work_previews, prepare_preview, preview_ready, requires_preview
 from .models import Asset, Handoff, PlaybackJob, Publication, Recruit, RegistrationCase, RevenueConfig, Rights, Series, SeriesEpisode, Submission, Work
@@ -53,7 +54,7 @@ async def catalog_item(db, kind: str, item_id: int) -> dict:
     detail = await _series_data(db, series)
     owner = await db.get(User, series.owner_id)
     return {"kind": "series", "id": series.id, "title": series.title, "description": series.description,
-            "category": series.category, "sale_type": series.sale_type, "price_fen": series.copyright_price_fen,
+            **await category_fields(db, series), "category": series.category, "sale_type": series.sale_type, "price_fen": series.copyright_price_fen,
             "author": owner.nickname if owner else "创作者", "episode_count": detail["episode_count"],
             "free_episode_count": series.free_episode_count,
             "cover_asset_id": series.cover_asset_id, "created_at": series.created_at}
@@ -65,7 +66,7 @@ async def catalog_item(db, kind: str, item_id: int) -> dict:
     description='合并单视频与短剧系列后筛选、排序并分页；仅展示满足公开条件的内容。q 搜索标题，category 按分类筛选，价格单位为人民币分；sort 支持 latest、price_asc、price_desc。',
     response_description='作品卡片 items 与分页信息 meta，kind 区分 work 和 series。',
 )
-async def works(db: DB, q: str = Query("", max_length=100), category: str = Query("", max_length=60),
+async def works(db: DB, q: str = Query("", max_length=100), category: str = Query("", max_length=60), category_code: str = Query("", max_length=80),
                 min_price: int | None = Query(None, ge=0), max_price: int | None = Query(None, ge=0),
                 sort: str = "latest", page_number: int = Query(1, alias="page", ge=1), page_size: int = Query(20, ge=1, le=100)):
     """单视频和短剧共用作品广场，筛选后再分页。"""
@@ -79,9 +80,9 @@ async def works(db: DB, q: str = Query("", max_length=100), category: str = Quer
     if q:
         work_query = work_query.where(Work.title.ilike(f"%{q}%"))
         series_query = series_query.where(Series.title.ilike(f"%{q}%"))
-    if category:
-        work_query = work_query.where(Work.category == category)
-        series_query = series_query.where(Series.category == category)
+    if category or category_code:
+        work_query = work_query.where(await category_filter(db, Work, category, category_code))
+        series_query = series_query.where(await category_filter(db, Series, category, category_code))
     if min_price is not None:
         work_query = work_query.where(Work.price_fen >= min_price)
         series_query = series_query.where(Series.copyright_price_fen >= min_price)
@@ -120,8 +121,7 @@ async def work_detail(work_id: int, db: DB, user: Visitor):
 )
 async def create_work(body: WorkInput, db: DB, user: Actor):
     """文字草稿无需 OSS，绑定媒体时只能选择本人的 ready 资产。"""
-    from .categories import validate_category
-    await validate_category(db, body.category)
+    await normalize_category_input(db, body)
     if body.asset_id:
         await asset_owned_for_draft(db, body.asset_id, user)
     if body.cover_asset_id:
@@ -145,8 +145,7 @@ async def update_work(work_id: int, body: WorkUpdate, db: DB, user: Actor):
     ensure_kept(item)
     check_version(item, body.version)
     await _ensure_work_idle(db, item.id)
-    from .categories import validate_category
-    await validate_category(db, body.category, item.category)
+    await normalize_category_input(db, body, item)
     if body.asset_id:
         await asset_owned_for_draft(db, body.asset_id, user)
     if body.cover_asset_id:
@@ -536,15 +535,15 @@ async def get_case(rights_id: int, db: DB, user: Actor):
     description='仅展示审核通过且仍开放的需求。支持标题、分类和预算范围筛选，预算单位为人民币分；sort 支持 latest 和 deadline。',
     response_description='招募需求 items 与分页信息 meta。',
 )
-async def recruits(db: DB, q: str = Query("", max_length=100), category: str = Query("", max_length=60),
+async def recruits(db: DB, q: str = Query("", max_length=100), category: str = Query("", max_length=60), category_code: str = Query("", max_length=80),
                    min_budget: int | None = Query(None, ge=0), max_budget: int | None = Query(None, ge=0),
                    sort: str = "latest", page_number: int = Query(1, alias="page", ge=1), page_size: int = Query(20, ge=1, le=100)):
     """只展示审核通过且仍开放的需求。"""
     query = select(Recruit).where(*public_recruit_filters())
     if q:
         query = query.where(Recruit.title.ilike(f"%{q}%"))
-    if category:
-        query = query.where(Recruit.category == category)
+    if category or category_code:
+        query = query.where(await category_filter(db, Recruit, category, category_code))
     if min_budget is not None:
         query = query.where(Recruit.budget_fen >= min_budget)
     if max_budget is not None:
@@ -583,6 +582,7 @@ async def recruit_detail(post_id: int, db: DB, user: Visitor):
 )
 async def create_recruit(body: RecruitInput, db: DB, user: Actor):
     """没有参考图的文字需求不依赖 OSS。"""
+    await normalize_category_input(db, body)
     if body.deadline_at <= now():
         fail("截止时间必须晚于当前时间")
     for image in body.image_ids:
@@ -603,6 +603,7 @@ async def update_recruit(post_id: int, body: RecruitUpdate, db: DB, user: Actor)
     """曾有投稿后锁定实质条款；其他修改撤下并重新审核。"""
     item = await owned(db, Recruit, post_id, user)
     check_version(item, body.version)
+    await normalize_category_input(db, body, item)
     if item.state in ("closed", "expired"):
         fail("需求已结束，请重新发布")
     if body.deadline_at <= now():
@@ -631,6 +632,8 @@ async def submit_recruit(post_id: int, body: Version, db: DB, user: Actor):
     """需求审核独立于原项目发布流程。"""
     item = await owned(db, Recruit, post_id, user)
     check_version(item, body.version)
+    from .categories import resolve_category
+    await resolve_category(db, item.category, item.category_code, item.category, item.category_code)
     if item.blocked or item.state in ("closed", "expired") or item.deadline_at <= now():
         fail("需求已结束或被封禁")
     item.audit_status = "pending"

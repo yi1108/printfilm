@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { lazy, Suspense, useLayoutEffect, useSyncExternalStore } from 'react'
+import { useI18n } from './i18n'
 import DialogHost from './components/ui/DialogHost'
 import BillingAlertHost from './components/billing/BillingAlertHost'
 import { DramaGenQueuePanel } from './components/drama/DramaGenQueuePanel'
@@ -51,10 +52,11 @@ function PersonalBusinessOverlays() {
 
 /** 用户端路由及全局交互宿主，团队界面使用真实认证服务。 */
 export default function App() {
+  const { locale } = useI18n()
   return (
     <TeamPreviewProvider><BrowserRouter>
       <Routes>
-        <Route path="/marketplace/*" element={<Suspense fallback={<p>正在加载作品与招募…</p>}><Marketplace /></Suspense>} />
+        <Route path="/marketplace/*" element={<Suspense fallback={<p>{locale === 'en' ? 'Loading marketplace…' : '正在加载作品与招募…'}</p>}><Marketplace /></Suspense>} />
         <Route path="/" element={<HomePage />} />
         <Route path="/method" element={<MethodPage />} />
         <Route path="/auth" element={<AuthPage />} />

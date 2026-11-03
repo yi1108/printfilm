@@ -9,6 +9,7 @@ from sqlalchemy import and_, not_, or_, select
 
 from app.models_drama import DramaProject
 from app.models_teams import TeamMember
+from .categories import category_fields, category_filter, normalize_category_input
 from .dependencies import Actor, DB, Visitor, storage_ready
 from .models import Asset, ContentOrder, Entitlement, EpisodePreview, Handoff, PlaybackJob, Publication, RevenueConfig, Rights, Series, SeriesEpisode
 from .schemas import EpisodeInput, EpisodeUpdate, ImportEpisodesInput, SeriesInput, SeriesUpdate, Version
@@ -111,6 +112,7 @@ async def _episode_data(db, item: SeriesEpisode, *, private: bool = False) -> di
 async def _series_data(db, item: Series, *, private: bool = False) -> dict:
     episodes = (await db.execute(select(SeriesEpisode).where(SeriesEpisode.series_id == item.id).order_by(SeriesEpisode.episode_no))).scalars().all()
     result = data(item, "id", "title", "description", "category", "tags", "cover_asset_id", "sale_type", "copyright_price_fen", "free_episode_count", "created_at")
+    result.update(await category_fields(db, item))
     result["episode_count"] = len(episodes)
     result["episodes"] = [await _episode_data(db, episode, private=private) for episode in episodes]
     if private:
@@ -159,12 +161,12 @@ def public_series_filters():
     description='允许访客访问。按标题 q、分类 category 筛选已公开系列，按 ID 倒序分页；仅返回满足系列及分集公开条件的内容。',
     response_description='系列详情 items 与分页信息 meta。',
 )
-async def list_series(db: DB, q: str = Query("", max_length=100), category: str = Query("", max_length=60), page_number: int = Query(1, alias="page", ge=1), page_size: int = Query(20, ge=1, le=100)):
+async def list_series(db: DB, q: str = Query("", max_length=100), category: str = Query("", max_length=60), category_code: str = Query("", max_length=80), page_number: int = Query(1, alias="page", ge=1), page_size: int = Query(20, ge=1, le=100)):
     query = select(Series).where(*public_series_filters())
     if q:
         query = query.where(Series.title.ilike(f"%{q}%"))
-    if category:
-        query = query.where(Series.category == category)
+    if category or category_code:
+        query = query.where(await category_filter(db, Series, category, category_code))
     records, meta = await page(db, query.order_by(Series.id.desc()), page_number, page_size)
     return {"items": [await _series_data(db, row) for row in records], "meta": meta}
 
@@ -217,8 +219,7 @@ async def get_series(series_id: int, db: DB, user: Visitor):
     response_description='新建系列的草稿详情。',
 )
 async def create_series(body: SeriesInput, db: DB, user: Actor):
-    from .categories import validate_category
-    await validate_category(db, body.category)
+    await normalize_category_input(db, body)
     if body.cover_asset_id:
         await asset_owned(db, body.cover_asset_id, user, ("image",))
     values = body.model_dump()
@@ -241,8 +242,7 @@ async def update_series(series_id: int, body: SeriesUpdate, db: DB, user: Actor)
     ensure_kept(item)
     check_version(item, body.version)
     await ensure_series_idle(db, item.id)
-    from .categories import validate_category
-    await validate_category(db, body.category, item.category)
+    await normalize_category_input(db, body, item)
     if body.cover_asset_id:
         await asset_owned(db, body.cover_asset_id, user, ("image",))
     values = body.model_dump(exclude={"version"})

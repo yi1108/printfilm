@@ -1,3 +1,5 @@
+import { marketText as mt } from '../../features/marketplace/translate'
+import { useMarketplaceLocale } from '../../features/marketplace/useMarketplaceLocale'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api, defaultsFromTemplate } from '../../api'
@@ -126,6 +128,7 @@ function isProjectBusy(project: Project | null): boolean {
 }
 
 export default function StoryboardPage() {
+  useMarketplaceLocale()
   const { id } = useParams()
   const projectId = Number(id)
   const nav = useNavigate()
@@ -1047,7 +1050,7 @@ title="用当前镜头重新拼接"
                       预览成片
                     </button>
                     <button type="button" className="pf-btn pf-btn-ghost pf-btn-sm" onClick={() => nav(withReturn(`/marketplace/from-printfilm?project=${project.id}`, `${location.pathname}${location.search}`))}>
-                      发布到数字资产市场
+                      {mt("发布到数字资产市场")}
                     </button>
                   </>
                 ) : (

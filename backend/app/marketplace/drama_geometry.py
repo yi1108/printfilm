@@ -39,6 +39,26 @@ def display_ratio(info: dict) -> Fraction:
     return 1 / ratio if _quarter_turn(info["video"]) else ratio
 
 
+def stream_display_size(stream: dict) -> tuple[int, int]:
+    """把探测流换成播放时的宽高；不支持的旋转角退回编码尺寸，避免误判成竖屏。"""
+    width, height = int(stream.get("width") or 0), int(stream.get("height") or 0)
+    try:
+        return display_dimensions({"width": width, "height": height, "video": stream})
+    except ValueError:
+        return width, height
+
+
+def orientation_name(width: int | None, height: int | None) -> str | None:
+    """宽大于高为横版，高大于宽为竖版，相等为方形；未知尺寸不猜测。"""
+    if not width or not height or width < 1 or height < 1:
+        return None
+    if width > height:
+        return "landscape"
+    if height > width:
+        return "portrait"
+    return "square"
+
+
 def display_dimensions(info: dict) -> tuple[int, int]:
     """只扩大像素尺寸来还原显示画幅，最后应用旋转，不缩小源画面。"""
     width, height = info["width"], info["height"]

@@ -3,7 +3,7 @@ from fractions import Fraction
 
 import pytest
 
-from app.marketplace.drama_geometry import display_dimensions, display_ratio, fit_dimensions, validate_aspects
+from app.marketplace.drama_geometry import display_dimensions, display_ratio, fit_dimensions, orientation_name, stream_display_size, validate_aspects
 
 
 def _info(width, height, sar="1:1", rotation=0):
@@ -68,3 +68,19 @@ def test_subunit_sar_expands_height_without_lowering_source_resolution():
     info = _info(720, 480, "8:9", 90)
     assert display_dimensions(info) == (540, 720)
     assert display_ratio(info) == Fraction(3, 4)
+
+
+def test_playback_orientation_uses_display_size_after_rotation():
+    """横着编码、竖着播放的视频按显示画幅记为竖版，未知尺寸不猜测。"""
+    stream = {"width": 1920, "height": 1080, "sample_aspect_ratio": "1:1", "side_data_list": [{"rotation": 90}]}
+    assert stream_display_size(stream) == (1080, 1920)
+    assert orientation_name(*stream_display_size(stream)) == "portrait"
+    assert orientation_name(1920, 1080) == "landscape"
+    assert orientation_name(100, 100) == "square"
+    assert orientation_name(0, 0) is None
+    assert orientation_name(None, None) is None
+
+
+def test_unsupported_rotation_keeps_coded_size_instead_of_guessing_portrait():
+    stream = {"width": 1920, "height": 1080, "side_data_list": [{"rotation": 45}]}
+    assert stream_display_size(stream) == (1920, 1080)

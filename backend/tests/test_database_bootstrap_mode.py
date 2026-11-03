@@ -34,11 +34,15 @@ def _isolated_startup(monkeypatch, bootstrap_enabled):
         for name in (
             "init_db", "_apply_schema_patches", "_load_startup_model_settings",
             "seed_templates", "bootstrap_admins", "seed_agent_skills", "start_task_runtime",
+            "start_app_services", "apply_marketplace_switch",
         )
     }
     oss = ModuleType("app.services.oss")
     oss.ensure_browser_cors = Mock()
     monkeypatch.setattr(app.services, "oss", oss, raising=False)
+    from app.marketplace import app_bootstrap, bootstrap
+    monkeypatch.setattr(app_bootstrap, "start_app_services", callbacks["start_app_services"])
+    monkeypatch.setattr(bootstrap, "apply_marketplace_switch", callbacks["apply_marketplace_switch"])
     globals_ = {
         **callbacks,
         "settings": SimpleNamespace(database_bootstrap_enabled=bootstrap_enabled),
@@ -57,6 +61,8 @@ async def test_mode_controls_mutations_but_always_loads_cache_and_starts_runtime
 
     callbacks["_load_startup_model_settings"].assert_awaited_once()
     callbacks["start_task_runtime"].assert_awaited_once()
+    callbacks["start_app_services"].assert_awaited_once()
+    callbacks["apply_marketplace_switch"].assert_awaited_once()
     oss.ensure_browser_cors.assert_called_once()
     for name in ("init_db", "_apply_schema_patches", "seed_templates", "bootstrap_admins", "seed_agent_skills"):
         assert callbacks[name].await_count == int(enabled), name
@@ -71,3 +77,13 @@ async def test_existing_database_mode_still_propagates_model_cache_failures(monk
     assert caught.value is original
     callbacks["start_task_runtime"].assert_not_awaited()
     oss.ensure_browser_cors.assert_not_called()
+
+
+async def test_missing_enabled_app_schema_stops_before_starting_workers(monkeypatch):
+    """App迁移检查失败时不启动AI与市场循环，不执行任何真实启动操作。"""
+    startup, callbacks, _oss = _isolated_startup(monkeypatch, False)
+    callbacks["start_app_services"].side_effect = RuntimeError("App数据库结构未准备")
+    with pytest.raises(RuntimeError, match="App数据库结构未准备"):
+        await startup()
+    callbacks["start_task_runtime"].assert_not_awaited()
+    callbacks["apply_marketplace_switch"].assert_not_awaited()

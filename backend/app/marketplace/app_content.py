@@ -1,0 +1,240 @@
+"""面向 App 的版本化内容契约，保留现有 Web 接口含义。"""
+import asyncio
+import base64
+from datetime import datetime
+import hashlib
+import hmac
+import json
+
+from fastapi import APIRouter, HTTPException, Query
+from sqlalchemy import literal, select, tuple_, union_all
+
+from app.config import get_settings
+from app.models import User
+from . import storage
+from .app_access import (app_open, current_content, entitlement_filters, environment, error,
+    has_entitlement, purchased_content, require_app_open, series_query, work_query)
+from .app_media import media_for
+from .categories import category_fields, category_filter, category_config
+from .locale import localized
+from .dependencies import Actor, DB, Visitor
+from .models import Asset, Publication, Series, SeriesEpisode, Work
+from .service import data
+
+router = APIRouter()
+
+
+def encode_cursor(timestamp, kind, record_id):
+    """签名游标禁止拼接 SQL 条件，不依赖页码在新增内容时跳页。"""
+    body = json.dumps([timestamp.isoformat(), kind, record_id], separators=(",", ":")).encode()
+    signature = hmac.new(get_settings().secret_key.encode(), body, hashlib.sha256).digest()[:16]
+    return base64.urlsafe_b64encode(signature + body).decode().rstrip("=")
+
+
+def decode_cursor(value):
+    """所有无效或被修改游标均返回稳定业务错误。"""
+    try:
+        decoded = base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
+        signature, body = decoded[:16], decoded[16:]
+        if not hmac.compare_digest(signature, hmac.new(get_settings().secret_key.encode(), body, hashlib.sha256).digest()[:16]):
+            raise ValueError()
+        timestamp, kind, record_id = json.loads(body)
+        parsed = datetime.fromisoformat(timestamp)
+        if not parsed.tzinfo or kind not in ("work", "series", "publication", "episode") or type(record_id) is not int or record_id < 1:
+            raise ValueError()
+        return parsed, kind, record_id
+    except (ValueError, TypeError, json.JSONDecodeError):
+        error("MARKETPLACE_CURSOR_INVALID", "分页位置无效，请刷新列表", 422)
+
+
+async def cover_url(db, asset_id):
+    """封面只签已就绪对象；无存储配置时提供真实的空状态。"""
+    if not asset_id or not storage.configured():
+        return None
+    asset = await db.get(Asset, asset_id)
+    if not asset or asset.status != "ready":
+        return None
+    return await asyncio.to_thread(storage.signed, asset.object_key, asset.content_type)
+
+
+def author_card(user: User | None, owner_id: int) -> dict:
+    """列表和详情共用创作者卡片。只给昵称和头像地址，不返回邮箱。"""
+    return {"id": owner_id, "name": user.nickname if user else localized("创作者", "Creator"), "avatar_url": (user.avatar_url or "") if user else ""}
+
+
+def video_shape(asset) -> dict:
+    """只读已保存的显示宽高。没有记录或探测失败时返回空，不在请求里下载原片。"""
+    from .drama_geometry import orientation_name
+    width = int(asset.display_width or 0) if asset else 0
+    height = int(asset.display_height or 0) if asset else 0
+    if width < 1 or height < 1:
+        return {"display_width": None, "display_height": None, "orientation": None}
+    return {"display_width": width, "display_height": height, "orientation": orientation_name(width, height)}
+
+
+async def content_data(db, kind, item, parent, asset, publication, free, user=None):
+    """公开资料不泄露对象键、邮箱、版权附件或后台分成配置。"""
+    author = await db.get(User, item.owner_id)
+    entitled = bool(publication and user and await has_entitlement(db, user.id, publication.id))
+    mode = "free" if free else "entitled" if entitled else "preview"
+    media = await media_for(db, kind, item.id, item.version, "preview" if mode == "preview" else "full")
+    from .app_social import _stats
+    social = await _stats(db, "episode" if kind == "series_episode" else kind, item.id, user.id if user else None)
+    return {**await category_fields(db, parent), **data(item, "id", "title", "description", "version"), "content_type": kind,
+        "author": author_card(author, item.owner_id),
+        "creator": author_card(author, item.owner_id), "engagement": {k: social[k] for k in ("like_count", "comment_count", "favorite_count", "liked_by_me", "favorited_by_me")},
+        "social": {"comments_enabled": social["comments_enabled"]},
+        "category": parent.category, "tags": parent.tags, "sale_type": parent.sale_type,
+        "cover_url": await cover_url(db, item.cover_asset_id or (parent.cover_asset_id if kind == "series_episode" else None)),
+        "duration_seconds": asset.duration_seconds if asset else None, **video_shape(asset),
+        "series_id": item.series_id if kind == "series_episode" else None,
+        "episode_no": item.episode_no if kind == "series_episode" else None,
+        "publication_id": publication.id if publication else None, "is_free": free,
+        "unlock_coins": 0 if free else publication.unlock_price_fen if publication else item.unlock_price_fen,
+        "entitled": entitled, "access_mode": mode,
+        "playback_ready": bool(media and media.status == "done" and media.asset_id == item.asset_id),
+        "playback_status": media.status if media else "pending", "created_at": item.created_at}
+
+
+async def series_data(db, item, user=None):
+    """系列列表保持一张卡片，分集详情通过独立分页目录读取。"""
+    author = await db.get(User, item.owner_id)
+    from sqlalchemy import func
+    count = await db.scalar(select(func.count()).select_from(SeriesEpisode).where(SeriesEpisode.series_id == item.id))
+    first = await db.scalar(select(SeriesEpisode).where(SeriesEpisode.series_id == item.id).order_by(SeriesEpisode.episode_no).limit(1))
+    asset = await db.get(Asset, first.asset_id) if first and first.asset_id else None
+    from .app_social import _stats
+    social = await _stats(db, "series", item.id, user.id if user else None)
+    return {**await category_fields(db, item), **data(item, "id", "title", "description", "category", "tags", "version", "sale_type", "free_episode_count", "created_at"),
+        "content_type": "series", "episode_count": count,
+        "author": author_card(author, item.owner_id), "creator": author_card(author, item.owner_id),
+        "engagement": {k: social[k] for k in ("like_count", "comment_count", "favorite_count", "liked_by_me", "favorited_by_me")},
+        "social": {"comments_enabled": social["comments_enabled"]},
+        "cover_url": await cover_url(db, item.cover_asset_id), **video_shape(asset)}
+
+
+@router.get("/capabilities", response_model=dict)
+async def capabilities():
+    """配置可用不等于真实苹果购买或 OSS 联调已验收。"""
+    from .app_settings import get_app_settings
+    from .apple_client import apple_configured
+    config = get_app_settings()
+    from app.services.billing import wallet
+    return {"enabled": app_open(), "social_enabled": bool(config.social_enabled and app_open()), "comments_enabled": bool(config.comments_enabled and app_open()), "storage_configured": storage.configured(),
+        "apple_iap_enabled": bool(config.apple_iap_enabled), "environment": environment(),
+        "payments_configured": apple_configured(),
+        "purchasing_enabled": bool(wallet.enabled() and app_open() and config.apple_iap_enabled and apple_configured()),
+        "unified_wallet_enabled": wallet.enabled(), "wallet_type": "platform_balance",
+        "coin_value_fen": 1, "offline_download": False, "supported_locales": ["zh", "en"], "default_locale": "zh"}
+
+
+@router.get("/categories", response_model=dict)
+async def app_categories(db: DB):
+    """App 与 Web 共用分类代码和双语名称。"""
+    require_app_open()
+    return await category_config(db)
+
+
+@router.get("/feed", response_model=dict)
+async def feed(db: DB, user: Visitor, q: str = Query("", max_length=100), category: str = Query("", max_length=60), category_code: str = Query("", max_length=80),
+               content_type: str = Query("all", pattern="^(all|work|series)$"), cursor: str = Query("", max_length=1024),
+               limit: int = Query(20, ge=1, le=50)):
+    """SQL 层先筛审核、版权、封禁和作者屏蔽，再执行稳定游标分页。"""
+    require_app_open()
+    queries = []
+    for kind, model, query in (("work", Work, work_query(user.id if user else None)),
+                               ("series", Series, series_query(user.id if user else None))):
+        if content_type not in ("all", kind):
+            continue
+        if q:
+            query = query.where(model.title.ilike(f"%{q}%"))
+        if category or category_code:
+            query = query.where(await category_filter(db, model, category, category_code))
+        queries.append(query.with_only_columns(model.created_at.label("timestamp"), literal(kind).label("kind"), model.id.label("record_id")))
+    combined = union_all(*queries).subquery()
+    query = select(combined)
+    if cursor:
+        query = query.where(tuple_(combined.c.timestamp, combined.c.kind, combined.c.record_id) < decode_cursor(cursor))
+    rows = list((await db.execute(query.order_by(combined.c.timestamp.desc(), combined.c.kind.desc(), combined.c.record_id.desc()).limit(limit + 1))).all())
+    more, rows = len(rows) > limit, rows[:limit]
+    items = []
+    for row in rows:
+        if row.kind == "series":
+            item = await db.scalar(series_query(user.id if user else None).where(Series.id == row.record_id))
+            if item:
+                items.append(await series_data(db, item, user))
+        else:
+            try:
+                resolved = await current_content(db, "work", row.record_id, user.id if user else None)
+            except HTTPException as exc:
+                # 本页查询后恰好下架的条目跳过，不让整页发现接口失败。
+                if exc.status_code != 404:
+                    raise
+                continue
+            items.append(await content_data(db, "work", *resolved, user))
+    return {"items": items, "has_more": more, "next_cursor": encode_cursor(rows[-1].timestamp, rows[-1].kind, rows[-1].record_id) if more else None}
+
+
+@router.get("/works/{work_id}", response_model=dict)
+async def get_work(work_id: int, db: DB, user: Visitor):
+    """App 公开详情不复用可返回作者草稿的 Web 管理视图。"""
+    require_app_open()
+    return await content_data(db, "work", *await current_content(db, "work", work_id, user.id if user else None), user)
+
+
+@router.get("/series/{series_id}", response_model=dict)
+async def get_series(series_id: int, db: DB, user: Visitor):
+    """整部短剧保持原有统一审核规则。"""
+    require_app_open()
+    item = await db.scalar(series_query(user.id if user else None).where(Series.id == series_id))
+    if not item:
+        error("MARKETPLACE_CONTENT_UNAVAILABLE", "短剧不存在或暂不可访问", 404)
+    return await series_data(db, item, user)
+
+
+@router.get("/series/{series_id}/episodes", response_model=dict)
+async def episodes(series_id: int, db: DB, user: Visitor, cursor: str = Query("", max_length=1024), limit: int = Query(20, ge=1, le=50)):
+    """集号顺序分页，免费集明确标识，不按参考价推断。"""
+    await get_series(series_id, db, user)
+    query = select(SeriesEpisode).where(SeriesEpisode.series_id == series_id)
+    if cursor:
+        _, kind, episode_no = decode_cursor(cursor)
+        if kind != "episode":
+            error("MARKETPLACE_CURSOR_INVALID", "分集分页位置无效", 422)
+        query = query.where(SeriesEpisode.episode_no > episode_no)
+    rows = list((await db.scalars(query.order_by(SeriesEpisode.episode_no).limit(limit + 1))).all())
+    more, rows = len(rows) > limit, rows[:limit]
+    return {"items": [await content_data(db, "series_episode", *await current_content(db, "series_episode", item.id, user.id if user else None), user) for item in rows],
+        "has_more": more, "next_cursor": encode_cursor(rows[-1].created_at, "episode", rows[-1].episode_no) if more else None}
+
+
+@router.get("/me/entitlements", response_model=dict)
+async def entitlements(db: DB, user: Actor, cursor: str = Query("", max_length=1024), limit: int = Query(20, ge=1, le=50)):
+    """已购不受展示开关和作者屏蔽影响，仍展示历史版本及受限原因。"""
+    query = select(Publication).where(entitlement_filters(user.id))
+    if cursor:
+        _, kind, publication_id = decode_cursor(cursor)
+        if kind != "publication":
+            error("MARKETPLACE_CURSOR_INVALID", "已购分页位置无效", 422)
+        query = query.where(Publication.id < publication_id)
+    rows = list((await db.scalars(query.order_by(Publication.id.desc()).limit(limit + 1))).all())
+    more, rows = len(rows) > limit, rows[:limit]
+    items = []
+    for publication in rows:
+        item = await db.get(Work if publication.content_type == "work" else SeriesEpisode, publication.content_id)
+        reason = ""
+        try:
+            asset = await purchased_content(db, publication, user.id)
+        except HTTPException as exc:
+            reason = exc.detail.get("message", "暂不可播放") if isinstance(exc.detail, dict) else str(exc.detail)
+            asset = await db.get(Asset, publication.asset_id)
+        media = await media_for(db, publication.content_type, publication.content_id, publication.version, "full")
+        items.append({"publication_id": publication.id, "content_type": publication.content_type,
+            "content_id": publication.content_id, "version": publication.version, "title": item.title if item else localized("历史作品", "Historical video"),
+            "cover_url": await cover_url(db, publication.cover_asset_id), "duration_seconds": asset.duration_seconds if asset else None,
+            **video_shape(asset),
+            "series_id": item.series_id if isinstance(item, SeriesEpisode) else None,
+            "episode_no": item.episode_no if isinstance(item, SeriesEpisode) else None,
+            "playback_ready": bool(not reason and media and media.status == "done"), "restricted_reason": reason,
+            "permanent": True})
+    return {"items": items, "has_more": more, "next_cursor": encode_cursor(rows[-1].created_at, "publication", rows[-1].id) if more else None}

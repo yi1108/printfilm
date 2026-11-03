@@ -1,3 +1,5 @@
+import { useMarketplaceLocale } from './useMarketplaceLocale'
+import { marketText as mt } from './translate'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import AppShell from '../../components/layout/AppShell'
 import { Gate, NeedLogin } from './shared'
@@ -15,7 +17,8 @@ import './marketplace.css'
 
 // 独立下游路由壳；不替换原 studio、作品或个人设置页面。
 export default function Marketplace() {
-  return <div className="pf-market-shell"><AppShell wide><div className="pf-market"><Gate><Routes>
+  const locale = useMarketplaceLocale()
+  return <div className="pf-market-shell" lang={locale === 'en' ? 'en' : 'zh-CN'}><AppShell wide><div className="pf-market"><Gate><Routes>
     <Route index element={<Gallery key="works" />} /><Route path="recruits" element={<Gallery key="recruits" recruits />} />
     <Route path="series" element={<Navigate to="/marketplace" replace />} />
     <Route path="series/new" element={<Navigate to="/marketplace/works/new?type=series" replace />} />
@@ -33,6 +36,6 @@ export default function Marketplace() {
     <Route path="mine" element={<NeedLogin><Workspace /></NeedLogin>} />
     <Route path="authorization" element={<NeedLogin><AuthorizationPanel /></NeedLogin>} />
     <Route path="assets/:id/rights" element={<NeedLogin><RightsPage /></NeedLogin>} />
-    <Route path="*" element={<p>页面不存在</p>} />
+    <Route path="*" element={<p>{mt("页面不存在")}</p>} />
   </Routes></Gate></div></AppShell></div>
 }

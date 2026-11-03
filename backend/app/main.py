@@ -89,7 +89,8 @@ app.add_middleware(
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     # 业务可读请求日志（跳过静态资源；高频轮询默认不打）
-    path = request.url.path
+    from app.marketplace.app_logging import safe_request_path
+    path = safe_request_path(request.url.path)
     started = time.perf_counter()
     response = await call_next(request)
     elapsed_ms = (time.perf_counter() - started) * 1000
@@ -175,6 +176,9 @@ async def on_startup() -> None:
         oss_svc.ensure_browser_cors()
     except Exception:  # noqa: BLE001
         pass
+    # 先验证已启用的 App 结构，避免缺少迁移时已经启动任务循环。
+    from app.marketplace.app_bootstrap import start_app_services
+    await start_app_services()
     await start_task_runtime()
     from app.marketplace.bootstrap import apply_marketplace_switch
     # 补列完成后再按系统设置建市场表并启动 Worker。关闭时不建表。
@@ -187,6 +191,8 @@ async def on_shutdown() -> None:
     from app.database import dispose_engine
 
     from app.marketplace.runtime import stop_marketplace_runtime
+    from app.marketplace.app_bootstrap import stop_app_services
+    await stop_app_services()
     await stop_marketplace_runtime()
     await stop_task_runtime()
     await dispose_engine()
@@ -270,6 +276,11 @@ async def _apply_schema_patches(engine_override: AsyncEngine | None = None) -> N
             await conn.execute(text("ALTER TABLE users ADD COLUMN role VARCHAR(16) DEFAULT 'user'"))
         if "avatar_url" not in ucols:
             await conn.execute(text("ALTER TABLE users ADD COLUMN avatar_url VARCHAR(512) DEFAULT ''"))
+        asset_cols = await _pg_columns(conn, "marketplace_assets")
+        if asset_cols and "display_width" not in asset_cols:
+            await conn.execute(text("ALTER TABLE marketplace_assets ADD COLUMN display_width INTEGER"))
+        if asset_cols and "display_height" not in asset_cols:
+            await conn.execute(text("ALTER TABLE marketplace_assets ADD COLUMN display_height INTEGER"))
         if "phone" not in ucols:
             await conn.execute(text("ALTER TABLE users ADD COLUMN phone VARCHAR(32) DEFAULT ''"))
         if "billing_alert_last_milestone_fen" not in ucols:

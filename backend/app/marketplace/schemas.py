@@ -17,6 +17,7 @@ class WorkInput(Input):
     title: str = Field(min_length=1, max_length=200)
     description: str = Field(default="", max_length=5000)
     category: str = Field(default="其他", min_length=1, max_length=60)
+    category_code: str | None = Field(default=None, max_length=80, pattern=r"^[a-z][a-z0-9_]*$")
     tags: list[str] = Field(default_factory=list, max_length=10)
     price_fen: int = Field(ge=0, le=100_000_000)
     sale_type: Literal["free", "copyright_contact", "platform_unlock"] = "copyright_contact"
@@ -85,6 +86,7 @@ class RecruitInput(Input):
     title: str = Field(min_length=1, max_length=200)
     description: str = Field(min_length=1, max_length=5000)
     category: str = Field(default="其他", min_length=1, max_length=60)
+    category_code: str | None = Field(default=None, max_length=80, pattern=r"^[a-z][a-z0-9_]*$")
     budget_fen: int = Field(gt=0, le=100_000_000)
     wanted_count: int = Field(ge=1, le=10000)
     requirements: str = Field(min_length=1, max_length=3000)
@@ -132,23 +134,48 @@ class CaseReview(Version):
 
 class SupportInput(Input):
     name: str = Field(min_length=1, max_length=80)
+    name_en: str = Field(default="", max_length=160)
     wechat: str = Field(default="", max_length=100)
     hours: str = Field(default="", max_length=100)
+    hours_en: str = Field(default="", max_length=200)
     qr_asset_id: int | None = Field(default=None, gt=0)
     enabled: bool = False
 
 
+class CategoryEntryInput(Input):
+    """分类固定标识只创建一次，显示名称可编辑。"""
+    code: str = Field(min_length=1, max_length=80, pattern=r"^[a-z][a-z0-9_]*$")
+    name_zh: str = Field(min_length=1, max_length=60)
+    name_en: str = Field(default="", max_length=120)
+    enabled: bool = True
+
+
 class CategoryInput(Input):
     version: int = Field(ge=0)
-    names: list[str] = Field(min_length=1, max_length=30)
+    names: list[str] | None = Field(default=None, min_length=1, max_length=30)
+    items: list[CategoryEntryInput] | None = Field(default=None, min_length=1, max_length=100)
 
     @field_validator("names")
     @classmethod
     def validate_names(cls, value):
+        if value is None:
+            return value
         names = [name.strip() for name in value]
         if any(not name or len(name) > 60 for name in names) or len(set(names)) != len(names):
             raise ValueError("分类名称须为1至60字，且不能重复")
         return names
+
+    @model_validator(mode="after")
+    def validate_entries(self):
+        """只接受一种管理契约，限制启用分类数量并防止重复代码。"""
+        if (self.names is None) == (self.items is None):
+            raise ValueError("请提交分类名称或双语分类列表")
+        if self.items is not None:
+            if len({item.code for item in self.items}) != len(self.items) or len({item.name_zh for item in self.items}) != len(self.items):
+                raise ValueError("分类代码与中文名称不能重复")
+            if not 1 <= sum(item.enabled for item in self.items) <= 30:
+                raise ValueError("请启用1至30个分类")
+        return self
 
 
 class Target(Input):
@@ -170,6 +197,7 @@ class SeriesInput(Input):
     title: str = Field(min_length=1, max_length=200)
     description: str = Field(default="", max_length=5000)
     category: str = Field(default="其他", min_length=1, max_length=60)
+    category_code: str | None = Field(default=None, max_length=80, pattern=r"^[a-z][a-z0-9_]*$")
     tags: list[str] = Field(default_factory=list, max_length=10)
     cover_asset_id: int | None = Field(default=None, gt=0)
     sale_type: Literal["free", "copyright_contact", "platform_unlock"] = "copyright_contact"

@@ -1,3 +1,5 @@
+import { marketText as mt } from '../features/marketplace/translate'
+import { useMarketplaceLocale } from '../features/marketplace/useMarketplaceLocale'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api'
@@ -61,6 +63,7 @@ function canDownload(p: HistoryItem) {
 }
 
 export default function HistoryPage() {
+  useMarketplaceLocale()
   const nav = useNavigate()
   const location = useLocation()
   const { t, m, locale } = useI18n()
@@ -371,7 +374,7 @@ export default function HistoryPage() {
                     <button type="button" className="pf-btn-text" onClick={() => continueEdit(p)}><IconEdit size={14} />{t('history.continueEdit')}</button>
                     <button type="button" className="pf-btn-text" disabled={!p.final_video_url} onClick={() => p.final_video_url && setPreview({ url: api.assetUrl(p.final_video_url, p.updated_at), title: p.title, projectId: p.id })}><IconEye size={14} />{t('common.preview')}</button>
                     <button type="button" className="pf-btn-text" disabled={!canDownload(p) || busyId === p.id || packing} onClick={() => downloadOne(p)}><IconDownload size={14} />{busyId === p.id ? t('common.downloading') : t('common.download')}</button>
-                    <button type="button" className="pf-btn-text" disabled={!p.final_video_url} onClick={() => nav(withReturn(`/marketplace/from-printfilm?project=${p.id}`, `${location.pathname}${location.search}`))}><IconSend size={14} />发布到市场</button>
+                    <button type="button" className="pf-btn-text" disabled={!p.final_video_url} onClick={() => nav(withReturn(`/marketplace/from-printfilm?project=${p.id}`, `${location.pathname}${location.search}`))}><IconSend size={14} />{mt("发布到数字资产市场")}</button>
                   </>}
                 />
               })}

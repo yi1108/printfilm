@@ -6,6 +6,9 @@ from .config import is_marketplace_enabled
 
 def install(app: FastAPI) -> None:
     """始终挂上路由。关闭时业务接口返回未启用，能力接口仍可给菜单判断。"""
+    from .locale_middleware import install_locale
+    from .locale import locale_header
+    install_locale(app)
     @app.get(
         "/api/marketplace/capabilities", tags=["下游能力"], response_model=dict,
         summary='获取数字资产市场能力状态',
@@ -24,8 +27,10 @@ def install(app: FastAPI) -> None:
     from .dependencies import enabled
 
     for router in (api.router, uploads.router, workspace.router, media.router, authorization.router, series.router, commerce.router, handoff.router, drama_publish.router):
-        app.include_router(router, prefix="/api/marketplace", dependencies=[Depends(enabled)], tags=["下游作品与招募"])
+        app.include_router(router, prefix="/api/marketplace", dependencies=[Depends(enabled), Depends(locale_header)], tags=["下游作品与招募"])
     app.include_router(admin.router, prefix="/api/admin/marketplace", dependencies=[Depends(enabled)], tags=["下游运营"])
+    from .app_bootstrap import install as install_app
+    install_app(app)
 
 
 async def apply_marketplace_switch() -> None:
@@ -36,8 +41,9 @@ async def apply_marketplace_switch() -> None:
         return
     from app.database import engine
     from .models import MarketBase
+    from .app_schema import legacy_marketplace_tables
     async with engine.begin() as conn:
-        await conn.run_sync(MarketBase.metadata.create_all)
+        await conn.run_sync(lambda connection: MarketBase.metadata.create_all(connection, tables=legacy_marketplace_tables()))
     from app.database import AsyncSessionLocal
     from .previews import reconcile_preview_policy
     async with AsyncSessionLocal() as db:

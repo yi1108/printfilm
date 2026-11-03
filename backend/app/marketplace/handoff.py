@@ -150,6 +150,9 @@ async def _view(db, item: Handoff) -> dict:
                    authorization_ready=ready, error=item.error if item.status == "failed" else "",
                    work_id=item.target_id if item.target_kind == "work" else None,
                    episode_id=item.target_id if item.target_kind == "series_episode" else None)
+    from .locale_messages import translate_message
+    payload["label"] = translate_message(payload["label"])
+    payload["phase_label"] = translate_message(payload["phase_label"])
     return payload
 
 
@@ -230,6 +233,8 @@ async def work_from_printfilm(body: PrintfilmWorkInput, db: DB, user: Actor):
         return await _view(db, existing)
     work = Work(owner_id=user.id, title=_clip(project.title or "未命名作品", 200) or "未命名作品", description=_clip(project.source_text or "", 5000),
                 category=await _category(db, "科普"), price_fen=0, sale_type="copyright_contact", source="printfilm", audit_status="draft")
+    from .categories import resolve_category
+    work.category, work.category_code = await resolve_category(db, work.category)
     db.add(work)
     await db.flush()
     db.add(_handoff(user.id, key, "project_final", project.id, version, "work", work.id, None, locator, (project.cover_url or "").strip(), work.title))
@@ -502,6 +507,8 @@ async def _copy(handoff_id: int, token: str) -> None:
             return
         asset.fingerprint = str(result.get("fingerprint") or "")
         asset.duration_seconds = result.get("duration_seconds")
+        asset.display_width = result.get("display_width")
+        asset.display_height = result.get("display_height")
         asset.status, asset.error = "ready", ""
         item.source_fingerprint = asset.fingerprint
         cover_id = None
@@ -652,7 +659,8 @@ async def _finish_drama_copy(handoff_id, token, snapshot, owner_id, dest, cover_
         await _validate_drama_source(db, item)
         episode = await _drama_target(db, item)
         asset = Asset(owner_id=owner_id, kind="video", filename=f"{snapshot['title'][:180]}.mp4", object_key=dest,
-            status="ready", **{key: result[key] for key in ("size_bytes", "content_type", "fingerprint", "duration_seconds")})
+            status="ready", display_width=result.get("width"), display_height=result.get("height"),
+            **{key: result[key] for key in ("size_bytes", "content_type", "fingerprint", "duration_seconds")})
         db.add(asset)
         await db.flush()
         item.asset_id, item.source_fingerprint = asset.id, asset.fingerprint
