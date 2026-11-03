@@ -428,6 +428,8 @@ async def _apply_schema_patches(engine_override: AsyncEngine | None = None) -> N
             for column, definition in additions.items():
                 if column not in columns:
                     await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {definition}"))
+        from app.marketplace.locale_schema import ensure_locale_columns
+        await conn.run_sync(ensure_locale_columns)
 
 
 async def bootstrap_admins() -> None:

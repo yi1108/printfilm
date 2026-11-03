@@ -42,8 +42,11 @@ async def apply_marketplace_switch() -> None:
     from app.database import engine
     from .models import MarketBase
     from .app_schema import legacy_marketplace_tables
+    from .locale_schema import ensure_locale_columns
     async with engine.begin() as conn:
         await conn.run_sync(lambda connection: MarketBase.metadata.create_all(connection, tables=legacy_marketplace_tables()))
+        # 旧库没有双语列时，保存市场开关会在读取作品前补列，避免 category_code 不存在。
+        await conn.run_sync(ensure_locale_columns)
     from app.database import AsyncSessionLocal
     from .previews import reconcile_preview_policy
     async with AsyncSessionLocal() as db:

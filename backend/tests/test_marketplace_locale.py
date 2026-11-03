@@ -147,6 +147,20 @@ def test_history_custom_categories_and_alias_conflicts():
         merge_config(changed, [*changed, {'code':'another', 'name_zh':'历史自定义', 'name_en':'Other', 'enabled':True}], None)
 
 
+async def test_existing_works_table_gains_category_code_without_rewriting_rows(ctx):
+    """旧作品表缺分类编码时只补列，不改标题、版本和审核状态。"""
+    from app.marketplace.locale_schema import ensure_locale_columns
+    work = Work(owner_id=ctx.owner.id, title="保留历史标题", category="已移除分类", category_code="keep_me", price_fen=0, version=17, audit_status="approved")
+    ctx.db.add(work)
+    await ctx.db.flush()
+    connection = await ctx.db.connection()
+    await connection.execute(text("ALTER TABLE marketplace_works DROP COLUMN category_code"))
+    await connection.run_sync(ensure_locale_columns)
+    row = (await ctx.db.execute(text("SELECT category_code, version, title, audit_status FROM marketplace_works WHERE id=:id"), {"id": work.id})).mappings().one()
+    assert row["category_code"] is None
+    assert row["version"] == 17 and row["title"] == "保留历史标题" and row["audit_status"] == "approved"
+
+
 async def test_locale_migration_is_repeatable_and_preserves_versions(ctx):
     from app.marketplace.locale_schema import apply_schema, check_schema
     config = CategoryConfig(id=1, version=8, names=['短片'], items=[])

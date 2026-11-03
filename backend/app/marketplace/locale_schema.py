@@ -14,6 +14,21 @@ ADDITIONS = {
 }
 
 
+def ensure_locale_columns(connection) -> None:
+    """给已经存在的市场表补上双语列和分类索引。缺表时跳过，不回填历史分类。"""
+    inspector = inspect(connection)
+    available = set(inspector.get_table_names())
+    for table, definitions in ADDITIONS.items():
+        if table not in available:
+            continue
+        columns = {row["name"] for row in inspector.get_columns(table)}
+        for name, definition in definitions.items():
+            if name not in columns:
+                connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {definition}"))
+        if table in CONTENT_TABLES:
+            connection.execute(text(f"CREATE INDEX IF NOT EXISTS ix_{table}_category_code ON {table} (category_code)"))
+
+
 def check_schema(connection) -> list[str]:
     """只读检查双语依赖列与分类索引。"""
     inspector = inspect(connection)
