@@ -47,6 +47,7 @@ async def test_schema_patches_skip_postgres_ddl_for_sqlite(monkeypatch):
     media_patches = AsyncMock()
     monkeypatch.setattr(team_schema, "apply_team_schema_patches", team_patches)
     monkeypatch.setattr(media_schema, "apply_media_schema_patches", media_patches)
+    monkeypatch.setattr("app.payment_schema.apply_payment_schema_patches", AsyncMock())
     await main._apply_schema_patches(engine_override=engine)
     assert entered == [True]
     team_patches.assert_not_awaited()
@@ -66,6 +67,7 @@ async def test_schema_patches_use_requested_engine_without_replacing_global(monk
     monkeypatch.setattr(main, "_pg_columns", AsyncMock(return_value=set()))
     monkeypatch.setattr(team_schema, "apply_team_schema_patches", team_patches)
     monkeypatch.setattr(media_schema, "apply_media_schema_patches", media_patches)
+    monkeypatch.setattr("app.payment_schema.apply_payment_schema_patches", AsyncMock())
     await main._apply_schema_patches(engine_override=override if explicit else None)
     selected = override_connection if explicit else default_connection
     team_patches.assert_awaited_once_with(selected)
