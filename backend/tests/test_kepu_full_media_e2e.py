@@ -130,8 +130,16 @@ async def test_full_reference_images_to_native_audio_videos_and_playable_vertica
     assert 7.8 <= float(probe["format"]["duration"]) <= 8.5
     assert abs(float(visual["duration"]) - float(audio["duration"])) < 0.2
     assert not ffmpeg_compose.is_near_silent_audio(final)
+    try:
+        subprocess.run([ffmpeg, "-hide_banner", "-v", "error",
+                        "-f", "lavfi", "-i", "color=size=16x16:duration=0.1:rate=1",
+                        "-frames:v", "1", "-fps_mode", "passthrough", "-f", "null", "-"],
+                       capture_output=True, check=True, timeout=30)
+        fps_flag = "-fps_mode"
+    except Exception:
+        fps_flag = "-vsync"
     frames = _run([ffmpeg, "-v", "error", "-i", str(final), "-an", "-vf", "select='eq(n,0)+eq(n,25)'",
-                   "-fps_mode", "vfr", "-frames:v", "2", "-f", "framemd5", "-"])
+                   fps_flag, "vfr", "-frames:v", "2", "-f", "framemd5", "-"])
     hashes = [line.rsplit(",", 1)[1].strip() for line in frames.splitlines() if line and not line.startswith("#")]
     assert len(hashes) == 2 and hashes[0] != hashes[1]
     assert all(shot.audio_url is None for shot in shots)

@@ -5,11 +5,24 @@ from datetime import timedelta
 import hashlib
 import json
 import shutil
+import subprocess
 
 import pytest
 from sqlalchemy import text
 
 from app.config import get_settings
+
+
+def _independent_fps_flag(ffmpeg_path: str) -> str:
+    """直接对真实二进制做同步探针：FFmpeg 5.1 起支持 -fps_mode。"""
+    try:
+        subprocess.run([ffmpeg_path, "-hide_banner", "-v", "error",
+                        "-f", "lavfi", "-i", "color=size=16x16:duration=0.1:rate=1",
+                        "-frames:v", "1", "-fps_mode", "passthrough", "-f", "null", "-"],
+                       capture_output=True, check=True, timeout=30)
+        return "-fps_mode"
+    except Exception:
+        return "-vsync"
 from app.marketplace import preview_worker, storage, worker
 from app.marketplace.config import get_marketplace_settings
 from app.marketplace.models import Asset, EpisodePreview, Publication, Rights, Series, SeriesEpisode, Work, WorkPreview
@@ -32,7 +45,8 @@ async def test_real_short_preview_without_watermark(monkeypatch, tmp_path, mode,
     elif mode != "fallback":
         options += ["-g", "1", "-bf", "0"]
     if mode == "vfr":
-        options += ["-vf", "select=not(mod(n\\,2))+not(mod(n\\,3))", "-fps_mode", "vfr"]
+        options += ["-vf", "select=not(mod(n\\,2))+not(mod(n\\,3))",
+                    _independent_fps_flag(settings.ffmpeg_path), "vfr"]
     inputs = ["-f", "lavfi", "-i", f"color=c=blue:s={dimensions}:r=24"]
     if mode != "copy":
         inputs += ["-f", "lavfi", "-i", "sine=frequency=440"]
