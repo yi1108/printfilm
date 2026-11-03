@@ -226,7 +226,7 @@ MARKETPLACE_APPLE_ONLINE_CHECKS=true
 
 生产与Sandbox必须使用独立服务端部署、数据库、Redis及通知地址，仅增加`environment`字段不足以隔离共用的`users`余额。`MARKETPLACE_APPLE_ENVIRONMENT`由服务器配置，生产拒绝Sandbox资金。共同套餐和Apple固定映射分别在对应部署维护，真实可售状态及售价仍由App Store Connect和StoreKit决定。
 
-迁移前先备份数据库，在项目`backend`目录激活现有虚拟环境后执行：
+API 启动时会在同一个 PostgreSQL advisory lock 内自动执行数字资产 App 的幂等增量结构迁移，覆盖内容、播放、互动、Apple、钱包、退款和收益表。只新增缺失表、列和索引，不删除或改写历史数据；结构迁移失败时 API 不会通过健康检查。以下脚本保留给离线核验或故障恢复使用：
 
 ```powershell
 python -m pip install -r requirements-apple.txt

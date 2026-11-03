@@ -4,6 +4,21 @@ from sqlalchemy import inspect, text
 from .models import MarketBase
 
 
+# All App content, playback, social and financial tables share one
+# transaction-scoped lock.  Keeping the lock here also protects the explicit
+# migration script, so startup and manual recovery cannot race each other.
+APP_SCHEMA_LOCK = (18427, 73104)
+
+
+def acquire_schema_lock(connection) -> None:
+    """Serialize additive App DDL on PostgreSQL; remain usable with SQLite tests."""
+    if connection.dialect.name == "postgresql":
+        connection.execute(
+            text("SELECT pg_advisory_xact_lock(:namespace, :key)"),
+            {"namespace": APP_SCHEMA_LOCK[0], "key": APP_SCHEMA_LOCK[1]},
+        )
+
+
 def register_models():
     """显式注册全部 App 模型，避免运行时导入次序遗漏表。"""
     from . import app_models, app_media_models, apple_models, app_social_models
@@ -55,6 +70,7 @@ def check_schema(connection) -> list[str]:
 
 def apply_schema(connection) -> None:
     """显式创建新表及共同充值订单引用列，不回填或猜测历史商品映射。"""
+    acquire_schema_lock(connection)
     tables = register_models()
     available = set(inspect(connection).get_table_names())
     required = {"marketplace_assets", "marketplace_publications", "marketplace_content_orders", "marketplace_entitlements", "marketplace_revenue_ledger"}

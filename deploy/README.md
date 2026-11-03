@@ -112,6 +112,14 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env.prod down -v
 
 测试环境由 Jenkins 轮询 **GitHub 仓库 `yi1108/printfilm` 的 `dev` 分支**自动发布；日常测试发版提交并推送代码即可，不需要手动上传补丁或更新服务器容器。推送前用 `git remote -v` 确认目标；`origin` 指向该 GitHub 仓库时执行 `git push origin dev`，若 `origin` 指向 GitCC，则还需推送到对应 GitHub remote（例如 `git push github dev`）。推送后核对 Jenkins 构建版本与运行中的镜像标签一致。
 
+API 启动阶段会自动执行数字资产 App 的幂等增量结构迁移。迁移在 PostgreSQL advisory lock 内完成，覆盖内容、播放、点赞、收藏、评论、Apple、钱包、退款和收益表；只新增缺失表、列和索引，不删除或改写历史数据。迁移失败会使 API healthcheck 失败，发布不会继续启动 Web。Jenkins 不需要单独执行迁移命令。
+
+```sh
+docker compose -f docker-compose.full.yml --env-file deploy/.env.docker up -d --build
+```
+
+启动日志会记录结构迁移失败原因。`scripts.prepare_marketplace_app_schema` 仍保留用于离线核验和故障恢复，但不再是正常发布的必需手工步骤。统一钱包的余额数据迁移仍不在启动阶段执行。
+
 本地 API 联调连接共享测试数据库时，设置 `TASK_RUNTIME_ENABLED=false`，只保留测试服务器执行调度、轮询和孤儿恢复。已由服务器初始化的共享数据库还可设 `DATABASE_BOOTSTRAP_ENABLED=false`，本机只读取模型缓存，不再重复建表、补列、seed 或提升管理员。本地仍能创建和查询任务，执行与产物存储由测试服务器负责；本地页面应能访问服务器返回的媒体地址。独立本地数据库或实际执行节点保持两个开关为 `true`（默认）。不要让多个调试实例同时恢复同一队列。
 
 任务中心区分「待调度」（已到期）、「待激活」（尚无调度时间，可能等前置镜或额度）和「延时等待」。排查积压时一起查看调度最近成功时间、连续失败次数、数据库锁等待；增加并发无法解决调度停滞或锁等待。

@@ -121,15 +121,15 @@ async def test_apple_financial_runtime_survives_disabled_entry(monkeypatch):
     async def start():
         called.append("runtime")
 
-    monkeypatch.setattr(app_bootstrap, "verify_schema", ready)
+    monkeypatch.setattr(app_bootstrap, "ensure_schema", ready)
     monkeypatch.setattr(apple_runtime, "start_apple_runtime", start)
     await app_bootstrap.start_app_services()
     assert called == ["schema", "runtime"]
 
 
 @pytest.mark.asyncio
-async def test_app_activation_requires_explicit_migration(monkeypatch):
-    """结构缺失应中止开放，不自动生成财务表或伪造启动成功。"""
+async def test_app_activation_fails_when_startup_migration_is_incomplete(monkeypatch):
+    """启动自动迁移后仍缺结构时，不能伪造 App 已就绪。"""
     from app.marketplace import app_settings, apple_client
     monkeypatch.setattr(app_settings, "get_app_settings", lambda: SimpleNamespace(enabled=True, apple_iap_enabled=False))
     monkeypatch.setattr(apple_client, "apple_configured", lambda: False)
@@ -137,8 +137,8 @@ async def test_app_activation_requires_explicit_migration(monkeypatch):
     async def missing():
         return ["marketplace_coin_wallets"]
 
-    monkeypatch.setattr(app_bootstrap, "verify_schema", missing)
-    with pytest.raises(RuntimeError, match="prepare_marketplace_app_schema"):
+    monkeypatch.setattr(app_bootstrap, "ensure_schema", missing)
+    with pytest.raises(RuntimeError, match="自动迁移后仍不完整"):
         await app_bootstrap.start_app_services()
 
 

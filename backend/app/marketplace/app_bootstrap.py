@@ -4,7 +4,7 @@ import time
 
 from fastapi import Depends, FastAPI, Request
 
-from .app_schema import check_schema, register_models
+from .app_schema import acquire_schema_lock, apply_schema, check_schema, legacy_marketplace_tables, register_models
 from .coin_service import app_fail
 
 logger = logging.getLogger(__name__)
@@ -13,12 +13,46 @@ _schema_ready = False
 
 
 async def verify_schema() -> list[str]:
-    """只读检查独立增量结构；启动时不静默创建财务表。"""
+    """只读检查 App 内容、播放、互动及财务结构。"""
     global _schema_checked_at, _schema_ready
     from app.database import engine
     async with engine.connect() as connection:
         missing = await connection.run_sync(check_schema)
     _schema_checked_at, _schema_ready = time.monotonic(), not missing
+    return missing
+
+
+async def ensure_schema() -> list[str]:
+    """在 API 启动阶段幂等建立 App 结构并核验结果。
+
+    The transaction lock covers both the legacy marketplace tables required by
+    App foreign keys and all App content/social/financial tables.  Only
+    additive, checkfirst/IF NOT EXISTS operations are performed; no historical
+    rows, balances, orders, or columns are deleted or rewritten.
+    """
+    from app.database import engine
+    from .models import MarketBase
+
+    logger.info("Ensuring marketplace App schema (content, playback, social and finance)")
+    async with engine.begin() as connection:
+        await connection.run_sync(acquire_schema_lock)
+        # App tables reference the original marketplace tables.  Creating the
+        # missing legacy tables here makes first boot deterministic; the normal
+        # marketplace switch remains responsible for starting its worker.
+        await connection.run_sync(
+            lambda sync_connection: MarketBase.metadata.create_all(
+                sync_connection, tables=legacy_marketplace_tables()
+            )
+        )
+        await connection.run_sync(apply_schema)
+        missing = await connection.run_sync(check_schema)
+
+    global _schema_checked_at, _schema_ready
+    _schema_checked_at, _schema_ready = time.monotonic(), not missing
+    if missing:
+        logger.error("Marketplace App schema is incomplete after startup migration: %s", ", ".join(missing))
+    else:
+        logger.info("Marketplace App schema is ready")
     return missing
 
 
@@ -54,15 +88,15 @@ def install(app: FastAPI) -> None:
 
 
 async def start_app_services() -> None:
-    """功能开放前要求显式迁移；停新购仍启动已配置的通知和补偿。"""
+    """自动完成幂等增量迁移，再启动已配置的 Apple 通知和补偿运行时。"""
     from .app_settings import get_app_settings
     from .apple_client import apple_configured
     from .apple_runtime import start_apple_runtime
     config = get_app_settings()
     if config.enabled or config.apple_iap_enabled or apple_configured():
-        missing = await verify_schema()
+        missing = await ensure_schema()
         if missing:
-            raise RuntimeError("App数据库结构未准备，请先运行 scripts.prepare_marketplace_app_schema 并使用 --check 验证：" + ", ".join(missing))
+            raise RuntimeError("App数据库结构自动迁移后仍不完整：" + ", ".join(missing))
     await start_apple_runtime()
 
 
