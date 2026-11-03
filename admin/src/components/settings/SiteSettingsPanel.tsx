@@ -21,6 +21,7 @@ export function SiteSettingsPanel() {
         ffprobe_path: form.ffprobe_path,
         marketplace_enabled: form.marketplace_enabled,
         marketplace_app_enabled: form.marketplace_app_enabled,
+        marketplace_max_duration_seconds: form.marketplace_max_duration_seconds,
       },
       "站点配置已保存",
     );
@@ -155,6 +156,20 @@ export function SiteSettingsPanel() {
               onCheckedChange={(value) => patchField("marketplace_app_enabled", value)}
             />
           </div>
+          <LabeledControl
+            label="完整视频最长时长"
+            hint="单位为秒。默认 1800，即 30 分钟。上传、合成和 App 完整播放共用。试看仍最多 15 秒，且不超过原片时长的 30%。"
+          >
+            <input
+              className="settings-input"
+              type="number"
+              min={1}
+              max={86400}
+              step={1}
+              value={form.marketplace_max_duration_seconds}
+              onChange={(e) => patchField("marketplace_max_duration_seconds", Number(e.target.value))}
+            />
+          </LabeledControl>
         </SettingsPanel>
       </div>
     </SettingsTabShell>

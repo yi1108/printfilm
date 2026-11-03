@@ -102,6 +102,7 @@ export type AdminModelSettings = {
   ffprobe_path: string;
   marketplace_enabled: boolean;
   marketplace_app_enabled: boolean;
+  marketplace_max_duration_seconds: number;
   source: string;
   updated_at?: string | null;
   readiness: ModelCapabilityReadiness[];

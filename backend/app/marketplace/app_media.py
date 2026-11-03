@@ -14,7 +14,7 @@ from app.config import get_settings
 from app.database import AsyncSessionLocal
 from . import storage
 from .app_media_models import AppMedia
-from .config import get_marketplace_settings
+from .config import get_marketplace_settings, video_duration_limit
 from .models import Asset, Series, SeriesEpisode, Work
 from .service import now
 
@@ -105,7 +105,7 @@ async def render(snapshot):
         if not video or not 0 < int(video.get("width", 0)) * int(video.get("height", 0)) <= 50_000_000:
             raise ValueError("源视频尺寸无效")
         duration = _duration(probe)
-        maximum = min(15.0, float(snapshot["duration_seconds"] or 0) * .3) if snapshot["variant"] == "preview" else get_marketplace_settings().max_duration_seconds
+        maximum = min(15.0, float(snapshot["duration_seconds"] or 0) * .3) if snapshot["variant"] == "preview" else video_duration_limit()
         if not 0 < duration <= maximum:
             raise ValueError("源视频时长不符合播放用途")
         output = root / "hls"

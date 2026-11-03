@@ -127,6 +127,14 @@ async def test_apple_financial_runtime_survives_disabled_entry(monkeypatch):
     assert called == ["schema", "runtime"]
 
 
+def test_admin_duration_limit_follows_system_settings(monkeypatch):
+    """完整片时长上限以后台系统设置为准，不继续使用市场配置缓存。"""
+    from app.config import get_settings
+    from app.marketplace.config import video_duration_limit
+    monkeypatch.setattr(get_settings(), "marketplace_max_duration_seconds", 3600)
+    assert video_duration_limit() == 3600
+
+
 def test_admin_setting_controls_app_switch(monkeypatch):
     """系统设置里的开关决定 App 是否开放，不读取容器里的市场总开关。"""
     from app.config import get_settings

@@ -17,7 +17,7 @@ from sqlalchemy import and_, or_, select, update
 from app.config import get_settings
 from app.database import AsyncSessionLocal, engine
 from . import storage
-from .config import get_marketplace_settings, is_marketplace_enabled
+from .config import get_marketplace_settings, is_marketplace_enabled, video_duration_limit
 from .models import Asset, MarketBase, MediaJob, PlaybackJob, Publication, Recruit, Series, SeriesEpisode, Upload, Work
 from .service import now, notify
 
@@ -156,7 +156,7 @@ async def process_asset(asset: dict) -> dict:
         if not any(name in format_name.split(",") for name in ("mov", "mp4", "matroska", "webm")):
             raise ValueError("只支持 MP4、MOV、WebM 视频")
         duration = float(probe.get("format", {}).get("duration", 0))
-        if not 0 < duration <= settings.max_duration_seconds:
+        if not 0 < duration <= video_duration_limit():
             raise ValueError("视频时长无效或超过30分钟限制")
         # Upload processing only validates the source and records metadata.
         # Free works play the original object, while paid works create their
