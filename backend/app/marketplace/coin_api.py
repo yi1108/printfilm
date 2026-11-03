@@ -29,9 +29,9 @@ def current_environment() -> str:
 
 def require_new_unlock() -> None:
     """暂停新业务不阻断已有充值确认、钱包查询及权益播放。"""
-    from .app_settings import get_app_settings
+    from .app_settings import is_app_enabled
     from .config import is_marketplace_enabled
-    if not get_app_settings().enabled or not is_marketplace_enabled():
+    if not is_app_enabled() or not is_marketplace_enabled():
         app_fail("MARKETPLACE_APP_UNAVAILABLE", "App内容服务暂未开放。", 503)
 
 

@@ -3,17 +3,17 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class MarketplaceAppSettings(BaseSettings):
-    """只读取 MARKETPLACE_ 渠道配置；共用资金内核由 UNIFIED_WALLET_ENABLED 控制。"""
+    """Apple 等渠道仍使用 MARKETPLACE_ 前缀。App 总开关只认 MARKETPLACE_APP_ENABLED，避免和市场总开关 MARKETPLACE_ENABLED 重名。没有 .env 文件时读取进程环境变量，缺文件不影响启动。"""
     model_config = SettingsConfigDict(
-        env_prefix="MARKETPLACE_", extra="ignore", populate_by_name=True,
+        env_prefix="MARKETPLACE_", extra="ignore",
         env_file=Path(__file__).resolve().parents[2] / ".env", env_file_encoding="utf-8",
     )
-    enabled: bool = Field(False, validation_alias="MARKETPLACE_APP_ENABLED")
+    enabled: bool = Field(False, validation_alias=AliasChoices("MARKETPLACE_APP_ENABLED", "enabled"))
     social_enabled: bool = True
     comments_enabled: bool = True
     apple_iap_enabled: bool = False
@@ -46,3 +46,9 @@ class MarketplaceAppSettings(BaseSettings):
 def get_app_settings() -> MarketplaceAppSettings:
     """配置默认关闭；生产密钥只存在服务端环境或私密文件中。"""
     return MarketplaceAppSettings()
+
+
+def is_app_enabled() -> bool:
+    """App 视频开关以系统设置里保存的值为准；还没保存过时回落到 MARKETPLACE_APP_ENABLED。"""
+    from app.config import get_settings
+    return bool(get_settings().marketplace_app_enabled)

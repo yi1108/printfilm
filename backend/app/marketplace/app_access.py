@@ -15,8 +15,8 @@ def error(code: str, message: str, status: int = 400):
 
 def app_open() -> bool:
     """入口关闭只影响新发现和新消费，不用于吞掉已付款交易。"""
-    from .app_settings import get_app_settings
-    return bool(is_marketplace_enabled() and get_app_settings().enabled)
+    from .app_settings import is_app_enabled
+    return bool(is_marketplace_enabled() and is_app_enabled())
 
 
 def require_app_open():

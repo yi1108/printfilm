@@ -101,6 +101,7 @@ export type AdminModelSettings = {
   ffmpeg_path: string;
   ffprobe_path: string;
   marketplace_enabled: boolean;
+  marketplace_app_enabled: boolean;
   source: string;
   updated_at?: string | null;
   readiness: ModelCapabilityReadiness[];

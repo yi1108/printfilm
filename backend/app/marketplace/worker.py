@@ -452,8 +452,8 @@ async def main() -> None:
         from .app_schema import legacy_marketplace_tables
         async with engine.begin() as conn:
             await conn.run_sync(lambda connection: MarketBase.metadata.create_all(connection, tables=legacy_marketplace_tables()))
-        from .app_settings import get_app_settings
-        if get_app_settings().enabled:
+        from .app_settings import is_app_enabled
+        if is_app_enabled():
             from .app_bootstrap import verify_schema
             if await verify_schema():
                 raise RuntimeError("App数据库结构未准备，请先执行 App 显式增量迁移并检查。")

@@ -111,15 +111,16 @@ async def listing(db, model, fields, environment, page, page_size, status="", us
 @router.get("/summary", response_model=dict)
 async def summary(db: DB, user: Admin, environment: Environment = "Production"):
     """配置可用不等于真实联调成功；只报告非敏感状态。"""
-    from .app_settings import get_app_settings
+    from .app_settings import get_app_settings, is_app_enabled
     from .apple_models import AppleNotification
     from .apple_client import apple_configured
     from .app_finance import eligible_condition
     from app.services.billing import wallet
     config = get_app_settings()
+    app_enabled = is_app_enabled()
     visible_balance = (await db.execute(select(func.coalesce(func.sum(User.balance_fen), 0)))).scalar_one() if environment == config.apple_environment else None
     if not wallet.enabled():
-        return {"environment": environment, "app_enabled": config.enabled, "iap_enabled": False,
+        return {"environment": environment, "app_enabled": app_enabled, "iap_enabled": False,
                 "unified_wallet_enabled": False, "wallet_balance_fen": visible_balance,
                 "wallet_balance_coins": visible_balance, "topup_count": 0,
                 "pending_notifications": 0, "payout_due_fen": None, "creator_debt_fen": 0,
@@ -131,7 +132,7 @@ async def summary(db: DB, user: Admin, environment: Environment = "Production"):
         owner_due.c.amount - func.coalesce(CreatorAccount.debt_fen, 0))), 0)).select_from(owner_due).outerjoin(
         CreatorAccount, (CreatorAccount.owner_id == owner_due.c.owner_id) & (CreatorAccount.environment == environment)))).scalar_one()
     debt = (await db.execute(select(func.coalesce(func.sum(CreatorAccount.debt_fen), 0)).where(CreatorAccount.environment == environment))).scalar_one()
-    return {"environment": environment, "app_enabled": config.enabled, "iap_enabled": config.apple_iap_enabled,
+    return {"environment": environment, "app_enabled": app_enabled, "iap_enabled": config.apple_iap_enabled,
             "unified_wallet_enabled": True, "wallet_balance_fen": visible_balance, "wallet_balance_coins": visible_balance,
             "topup_count": (await db.execute(select(func.count()).select_from(AppleTransaction).where(AppleTransaction.environment == environment))).scalar_one(),
             "pending_notifications": (await db.execute(select(func.count()).select_from(AppleNotification).where(AppleNotification.environment == environment, AppleNotification.status.in_(("pending", "running", "failed"))))).scalar_one(),

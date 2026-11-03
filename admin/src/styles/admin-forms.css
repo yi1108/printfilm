@@ -39,6 +39,7 @@
 .settings-page textarea.settings-input { height: auto; min-height: 100px; padding: 11px 12px; }
 .settings-page .settings-subsection-title { margin: 26px 0 13px; font-size: 13px; color: var(--admin-text); font-weight: 650; }
 .settings-page .settings-toggle-row { padding: 14px 16px; gap: 18px; border: 1px solid var(--admin-border); border-radius: 10px; background: #f8faf5; }
+.settings-page .settings-panel-body .settings-toggle-row + .settings-toggle-row { margin-top: 8px; }
 .settings-page .settings-toggle-row strong { font-size: 13px; line-height: 1.5; }
 .settings-page .settings-toggle-row span { font-size: 12px; line-height: 1.6; }
 .settings-page .settings-panel-footnote { margin: 18px 0 0; font-size: 12px; line-height: 1.75; }

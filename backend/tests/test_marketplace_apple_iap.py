@@ -46,6 +46,22 @@ def signed_payload(**changes):
             **changes}
 
 
+def test_marketplace_switch_does_not_enable_app(monkeypatch):
+    """预发可以只有市场开关、没有 .env。不能因此在启动时做 App 建表。"""
+    monkeypatch.setenv("MARKETPLACE_ENABLED", "true")
+    monkeypatch.delenv("MARKETPLACE_APP_ENABLED", raising=False)
+    cfg = MarketplaceAppSettings(_env_file=None)
+    assert cfg.enabled is False
+
+
+def test_app_switch_reads_its_own_variable(monkeypatch):
+    """显式打开 App 时仍以 MARKETPLACE_APP_ENABLED 为准，市场开关取反也不覆盖。"""
+    monkeypatch.setenv("MARKETPLACE_ENABLED", "false")
+    monkeypatch.setenv("MARKETPLACE_APP_ENABLED", "true")
+    cfg = MarketplaceAppSettings(_env_file=None)
+    assert cfg.enabled is True
+
+
 def test_blank_configuration_is_safe(apple_cfg):
     """默认关闭、空AppID和密钥都不能被误报为支付可用。"""
     blank = MarketplaceAppSettings(_env_file=None, apple_app_id="")

@@ -89,11 +89,11 @@ def install(app: FastAPI) -> None:
 
 async def start_app_services() -> None:
     """自动完成幂等增量迁移，再启动已配置的 Apple 通知和补偿运行时。"""
-    from .app_settings import get_app_settings
+    from .app_settings import get_app_settings, is_app_enabled
     from .apple_client import apple_configured
     from .apple_runtime import start_apple_runtime
     config = get_app_settings()
-    if config.enabled or config.apple_iap_enabled or apple_configured():
+    if is_app_enabled() or config.apple_iap_enabled or apple_configured():
         missing = await ensure_schema()
         if missing:
             raise RuntimeError("App数据库结构自动迁移后仍不完整：" + ", ".join(missing))

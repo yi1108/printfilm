@@ -20,6 +20,7 @@ export function SiteSettingsPanel() {
         ffmpeg_path: form.ffmpeg_path,
         ffprobe_path: form.ffprobe_path,
         marketplace_enabled: form.marketplace_enabled,
+        marketplace_app_enabled: form.marketplace_app_enabled,
       },
       "站点配置已保存",
     );
@@ -63,6 +64,13 @@ export function SiteSettingsPanel() {
             id: "marketplace",
             label: "数字资产市场",
             ready: form.marketplace_enabled,
+            readyText: "已启用",
+            pendingText: "未启用",
+          },
+          {
+            id: "marketplace-app",
+            label: "App 视频",
+            ready: form.marketplace_app_enabled,
             readyText: "已启用",
             pendingText: "未启用",
           },
@@ -135,6 +143,16 @@ export function SiteSettingsPanel() {
             <Switch
               checked={form.marketplace_enabled}
               onCheckedChange={(value) => patchField("marketplace_enabled", value)}
+            />
+          </div>
+          <div className="settings-toggle-row">
+            <div>
+              <strong>启用 App 视频服务</strong>
+              <span>保存后开放 App 视频列表和播放。在这里开关即可，不需要改容器环境变量。需要同时启用数字资产市场。</span>
+            </div>
+            <Switch
+              checked={form.marketplace_app_enabled}
+              onCheckedChange={(value) => patchField("marketplace_app_enabled", value)}
             />
           </div>
         </SettingsPanel>

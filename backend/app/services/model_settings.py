@@ -670,6 +670,15 @@ async def patch_admin_model_settings(
         current[field] = value
         applied.append(field)
 
+    turning_app_on = current.get("marketplace_app_enabled") is True and "marketplace_app_enabled" in applied
+    if turning_app_on:
+        from app.marketplace.app_bootstrap import ensure_schema
+        try:
+            missing = await ensure_schema()
+        except RuntimeError as exc:
+            raise ValueError(str(exc)) from exc
+        if missing:
+            raise ValueError("App 数据库结构未准备好：" + "，".join(missing))
     config["flat"] = _encrypt_flat_config(current)
     app_row.config_json = config
     await db.commit()

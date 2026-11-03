@@ -127,11 +127,23 @@ async def test_apple_financial_runtime_survives_disabled_entry(monkeypatch):
     assert called == ["schema", "runtime"]
 
 
+def test_admin_setting_controls_app_switch(monkeypatch):
+    """系统设置里的开关决定 App 是否开放，不读取容器里的市场总开关。"""
+    from app.config import get_settings
+    from app.marketplace.app_settings import is_app_enabled
+    monkeypatch.setattr(get_settings(), "marketplace_app_enabled", False)
+    assert is_app_enabled() is False
+    monkeypatch.setattr(get_settings(), "marketplace_app_enabled", True)
+    assert is_app_enabled() is True
+
+
 @pytest.mark.asyncio
 async def test_app_activation_fails_when_startup_migration_is_incomplete(monkeypatch):
     """启动自动迁移后仍缺结构时，不能伪造 App 已就绪。"""
+    from app.config import get_settings
     from app.marketplace import app_settings, apple_client
-    monkeypatch.setattr(app_settings, "get_app_settings", lambda: SimpleNamespace(enabled=True, apple_iap_enabled=False))
+    monkeypatch.setattr(get_settings(), "marketplace_app_enabled", True)
+    monkeypatch.setattr(app_settings, "get_app_settings", lambda: SimpleNamespace(enabled=False, apple_iap_enabled=False))
     monkeypatch.setattr(apple_client, "apple_configured", lambda: False)
 
     async def missing():

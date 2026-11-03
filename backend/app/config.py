@@ -169,6 +169,8 @@ class Settings(BaseSettings):
     ffprobe_path: str = "ffprobe"
     # 数字资产市场。环境变量 MARKETPLACE_ENABLED；管理端保存后以数据库为准。
     marketplace_enabled: bool = False
+    # App 视频。环境变量 MARKETPLACE_APP_ENABLED 只作为尚未保存时的初始值；管理端保存后以数据库为准。
+    marketplace_app_enabled: bool = False
 
     tos_endpoint: str = ""
     tos_bucket: str = ""

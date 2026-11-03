@@ -45,7 +45,8 @@ def purchasing_enabled() -> bool:
     """只约束新购买，不约束已经产生真实付款的履约。"""
     cfg = get_app_settings()
     from app.services.billing import wallet
-    return bool(wallet.enabled() and cfg.enabled and is_marketplace_enabled()
+    from .app_settings import is_app_enabled
+    return bool(wallet.enabled() and is_app_enabled() and is_marketplace_enabled()
                 and cfg.apple_iap_enabled and apple_client.apple_configured())
 
 

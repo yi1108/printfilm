@@ -22,7 +22,7 @@ JSON业务前缀为`/api/marketplace/app/v1`，所有接口通过HTTPS访问。�
 
 | 配置 | 作用 | 关闭时行为 |
 | --- | --- | --- |
-| `MARKETPLACE_APP_ENABLED` | App 内容、播放和支付总开关 | 返回 `MARKETPLACE_APP_UNAVAILABLE`；不影响原 Web 市场接口 |
+| 系统设置 → 站点工具 → 启用 App 视频服务 | App 内容、播放和支付总开关。保存后写入数据库，预发不需要容器环境变量 | 返回 `MARKETPLACE_APP_UNAVAILABLE`；不影响原 Web 市场接口。未保存过时默认关闭，启动不做 App 建表。`MARKETPLACE_APP_ENABLED` 只在还没保存过时作为初始值 |
 | `MARKETPLACE_SOCIAL_ENABLED` | 点赞、收藏、评论、举报和互动统计 | 互动接口返回 `MARKETPLACE_SOCIAL_UNAVAILABLE`；内容详情和播放仍可用 |
 | `MARKETPLACE_COMMENTS_ENABLED` | 全局评论能力 | 点赞和收藏仍可用；评论和回复返回 `MARKETPLACE_COMMENTS_DISABLED`，已有评论不删除 |
 

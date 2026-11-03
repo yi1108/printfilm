@@ -134,6 +134,7 @@ class AdminModelSettingsOut(BaseModel):
     ffmpeg_path: str = Field(default="ffmpeg", description="FFmpeg 可执行文件路径或命令名称")
     ffprobe_path: str = Field(default="ffprobe", description="FFprobe 可执行文件路径或命令名称")
     marketplace_enabled: bool = Field(default=False, description="是否启用数字资产市场；管理端保存后以数据库配置为准")
+    marketplace_app_enabled: bool = Field(default=False, description="是否启用 App 视频服务；在系统设置中保存后以数据库配置为准，不需要容器环境变量")
 
     source: str = Field(default="env", description="配置来源：db 表示已有数据库配置，env 表示环境变量或默认配置")
     updated_at: datetime | None = Field(default=None, description="数据库配置的最近更新时间；尚无时间记录时为 null")
@@ -252,6 +253,7 @@ class AdminModelSettingsPatch(BaseModel):
     ffmpeg_path: str | None = Field(default=None, description="FFmpeg 可执行文件路径或命令名称；省略或 null 时不修改")
     ffprobe_path: str | None = Field(default=None, description="FFprobe 可执行文件路径或命令名称；省略或 null 时不修改")
     marketplace_enabled: bool | None = Field(default=None, description="是否启用数字资产市场；管理端保存后以数据库配置为准；省略或 null 时不修改")
+    marketplace_app_enabled: bool | None = Field(default=None, description="是否启用 App 视频服务；在系统设置中保存后以数据库配置为准；省略或 null 时不修改")
 
 
 class AdminModelSettingsSaveOut(BaseModel):
@@ -357,6 +359,7 @@ def model_config_field_names() -> tuple[str, ...]:
         "ffmpeg_path",
         "ffprobe_path",
         "marketplace_enabled",
+        "marketplace_app_enabled",
     )
 
 
