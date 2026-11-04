@@ -1,9 +1,9 @@
 """只使用 Apple 官方服务器库验签和查询，不接受客户端声称的付款结果。"""
 import asyncio
+import logging
 from datetime import datetime, timezone
 from enum import Enum
 from functools import lru_cache
-from pathlib import Path
 from typing import Any
 import uuid
 
@@ -11,6 +11,35 @@ from fastapi import HTTPException
 
 from .app_settings import get_app_settings
 from .coin_service import app_fail
+
+logger = logging.getLogger(__name__)
+
+
+class _InitializationError(Exception):
+    """Only controlled diagnostic fields; never retain SDK exception text."""
+
+    def __init__(self, stage: str, error: Exception):
+        self.stage = stage
+        self.error_type = type(error).__name__
+        self.reason = _initialization_reason(error)
+        super().__init__(stage, self.error_type, self.reason)
+
+
+def _initialization_reason(error: Exception) -> str:
+    """SDK error messages may contain credentials/paths; use a fixed vocabulary."""
+    if isinstance(error, ModuleNotFoundError):
+        return "dependency_missing"
+    if isinstance(error, ImportError):
+        return "dependency_import_failed"
+    if isinstance(error, PermissionError):
+        return "file_access_denied"
+    if isinstance(error, OSError):
+        return "file_or_system_error"
+    if isinstance(error, TypeError):
+        return "invalid_argument_type"
+    if isinstance(error, ValueError):
+        return "invalid_argument_value"
+    return "initialization_failed"
 
 
 def _scalar(value):
@@ -56,13 +85,20 @@ def _official_objects(environment: str, bundle_id: str, app_id: int | None,
                       issuer_id: str, key_id: str, private_key: str,
                       roots: tuple[bytes, ...], online: bool):
     """服务器从可信证书建立验证器；SDK 请求自带30秒超时。"""
-    from appstoreserverlibrary.api_client import AppStoreServerAPIClient
-    from appstoreserverlibrary.models.Environment import Environment
-    from appstoreserverlibrary.signed_data_verifier import SignedDataVerifier
-    env = Environment(environment)
-    verifier = SignedDataVerifier(list(roots), online, env, bundle_id, app_id)
-    client = AppStoreServerAPIClient(private_key, key_id, issuer_id, bundle_id, env)
-    return verifier, client
+    stage = "sdk_import"
+    try:
+        from appstoreserverlibrary.api_client import AppStoreServerAPIClient
+        from appstoreserverlibrary.models.Environment import Environment
+        from appstoreserverlibrary.signed_data_verifier import SignedDataVerifier
+        stage = "environment"
+        env = Environment(environment)
+        stage = "verifier"
+        verifier = SignedDataVerifier(list(roots), online, env, bundle_id, app_id)
+        stage = "api_client"
+        client = AppStoreServerAPIClient(private_key.encode("utf-8"), key_id, issuer_id, bundle_id, env)
+        return verifier, client
+    except Exception as exc:
+        raise _InitializationError(stage, exc) from None
 
 
 def _objects():
@@ -76,6 +112,11 @@ def _objects():
                                  cfg.apple_issuer_id, cfg.apple_key_id, private_key,
                                  roots, cfg.apple_online_checks)
     except Exception as exc:
+        diagnostic = exc if isinstance(exc, _InitializationError) else _InitializationError("credential_material", exc)
+        # No exception text/traceback: SDK errors can echo private keys or paths.
+        environment = cfg.apple_environment if cfg.apple_environment in ("Production", "Sandbox") else "invalid"
+        logger.error("Apple SDK初始化失败 stage=%s environment=%s error_type=%s reason=%s",
+                     diagnostic.stage, environment, diagnostic.error_type, diagnostic.reason)
         app_fail("MARKETPLACE_PAYMENT_UNAVAILABLE", "苹果内购服务器配置不可用，请联系管理员。", 503)
 
 

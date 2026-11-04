@@ -14,6 +14,8 @@
 
 四档商品映射在下方“Apple 内购商品配置”逐档登记。启用新购前仍须完成统一余额核对、Apple 商品配置及真实 Sandbox/TestFlight 验收。美元财务汇率继续在运营后台维护。
 
+如果验单返回“苹果内购服务器配置不可用”，后端 `app.marketplace.apple_client` 会记录 `Apple SDK初始化失败`。`stage` 区分 `credential_material`（读取/解析私钥与证书）、`sdk_import`（依赖加载）、`environment`（环境参数）、`verifier`（验签器）及 `api_client`（服务器 API 客户端）；同时记录环境、异常类型和固定原因码。日志不包含 SDK 原始异常消息、堆栈、私钥、交易签名、账号令牌或文件路径。提供该行日志即可继续定位初始化问题；API 响应仍保留安全的统一错误提示。
+
 - `topup_10` / `com.deep.printfilm.credits.topup_10`：CNY 10000 分，USD 1499 美分，到账 10000 分额度。
 - `topup_49` / `com.deep.printfilm.credits.topup_49`：CNY 49000 分，USD 6999 美分，到账 49000 分额度。
 - `topup_99` / `com.deep.printfilm.credits.topup_99`：CNY 99000 分，USD 13999 美分，到账 104000 分额度。
