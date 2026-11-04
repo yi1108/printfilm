@@ -5,6 +5,7 @@ import json
 import re
 import secrets
 import time
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Request
 from fastapi.responses import PlainTextResponse, RedirectResponse, Response
@@ -19,6 +20,15 @@ from .app_media import enqueue
 from .app_media_models import AppMedia
 from .dependencies import DB, Visitor, storage_ready
 from .models import Publication
+
+def playback_base(request: Request) -> str:
+    """播放地址必须是手机打得开的主机。公网基址仍是本机回环时，改用这次请求的地址。"""
+    configured = (get_settings().public_base_url or "").rstrip("/")
+    host = (urlparse(configured).hostname or "").lower()
+    if host not in {"", "localhost", "127.0.0.1", "0.0.0.0", "::1"}:
+        return configured
+    return str(request.base_url).rstrip("/")
+
 
 router = APIRouter()
 SESSION_IDLE_SECONDS = 1800
@@ -173,7 +183,7 @@ async def create_session(body: PlaybackInput, request: Request, db: DB, user: Vi
         "asset_id": asset.id, "version": item.version, "access_mode": mode, "media_id": media.id,
         "created_at": started, "expires_at": started + max_seconds, "segments": segments}
     await put_session(token, value)
-    base = get_settings().public_base_url.rstrip("/")
+    base = playback_base(request)
     return {"session_id": token, "playback_url": f"{base}/api/marketplace/app/v1/playback-sessions/{token}/index.m3u8",
         "format": "hls", "access_mode": mode, "publication_id": value["publication_id"],
         "expires_in": idle_seconds, "max_lifetime_seconds": max_seconds}

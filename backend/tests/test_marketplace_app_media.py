@@ -111,3 +111,68 @@ async def test_standalone_market_worker_cannot_create_app_financial_tables(monke
         await worker.main()
         assert lifecycle == ["verify", "loop", "dispose"]
     assert created and not app_tables.intersection(created)
+
+
+def test_preview_limit_uses_fifteen_seconds_when_duration_is_missing():
+    """作品时长没记上时，试看按 15 秒，不再把上限算成 0。"""
+    assert app_media.preview_playback_limit(None) == 15
+    assert app_media.preview_playback_limit(0) == 15
+    assert app_media.preview_playback_limit(100) == 15
+    assert app_media.preview_playback_limit(10) == 3
+
+
+def test_media_duration_ignores_an_inflated_audio_stream():
+    """音轨报出超长时长时，仍按容器里的几分钟计算。"""
+    probe = {"format": {"duration": "300.0"}, "streams": [
+        {"codec_type": "video", "duration": "300.2"},
+        {"codec_type": "audio", "duration": "99999"},
+    ]}
+    assert app_media.media_duration(probe) == 300
+
+
+def test_loopback_playback_address_follows_the_phone_request(monkeypatch):
+    """公网基址仍是本机时，播放地址改用手机这次请求的主机。"""
+    from app.config import get_settings
+    from app.marketplace.app_playback import playback_base
+    request = SimpleNamespace(base_url="http://192.168.110.37:8000/")
+    monkeypatch.setattr(get_settings(), "public_base_url", "http://127.0.0.1:8000")
+    assert playback_base(request) == "http://192.168.110.37:8000"
+    monkeypatch.setattr(get_settings(), "public_base_url", "https://www.example.com")
+    assert playback_base(request) == "https://www.example.com"
+
+
+def test_false_duration_failures_can_requeue_but_confirmed_over_limit_cannot():
+    """5 分钟片子被旧文案判超限后可以重跑。新的超限文案停住。"""
+    assert app_media.playback_error_can_requeue("播放派生物时长校验失败")
+    assert app_media.playback_error_can_requeue("完整视频时长 99999.0 秒，超过当前上限 7200 秒")
+    assert not app_media.playback_error_can_requeue("完整视频超过播放上限：源片 10800.0 秒，当前上限 7200 秒")
+
+
+@pytest.mark.asyncio
+async def test_overlong_preview_is_trimmed_to_the_allowed_duration(tmp_path, monkeypatch):
+    """长于试看上限的源片被截断后封装，不因时长直接失败。"""
+    settings = get_settings()
+    try:
+        ffmpeg = worker.resolve_tool(settings.ffmpeg_path)
+        worker.resolve_tool(settings.ffprobe_path)
+    except FileNotFoundError:
+        pytest.skip("本环境没有 FFmpeg/ffprobe，须在媒体联调环境补验")
+    source = tmp_path / "input.mp4"
+    await worker.command(ffmpeg, "-y", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=10",
+        "-t", "4", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(source), timeout=60)
+    uploaded = {}
+
+    def download(key, target):
+        shutil.copyfile(source, target)
+
+    def upload(key, path, content_type):
+        uploaded[key] = Path(path).read_bytes()
+
+    monkeypatch.setattr(worker, "cache_root", lambda: tmp_path)
+    monkeypatch.setattr(app_media.storage, "download", download)
+    monkeypatch.setattr(app_media.storage, "upload", upload)
+    key = await app_media.render({"job_id": 7, "token": "c" * 32, "variant": "preview", "source_key": "marketplace/previews/input.mp4",
+        "filename": source.name, "size_bytes": source.stat().st_size, "fingerprint": "", "duration_seconds": 10})
+    playlist = uploaded[key].decode()
+    assert "#EXTINF" in playlist
+    assert "segment-" in playlist
