@@ -50,7 +50,7 @@ async def lock_creator(db, owner_id: int, environment: str) -> CreatorAccount:
 
 async def apply_apple_transaction(db, txn: dict) -> AppleTransaction:
     """已验签的每笔真实付款，对应一笔共同充值订单和一个资金来源。"""
-    from .apple_recharge import product_snapshot, recharge_order_for_transaction
+    from .apple_recharge import product_snapshot, recharge_order_for_transaction, expected_prices
     environment, transaction_id = txn["environment"], str(txn["transaction_id"])
     await lock_wallet(db, txn["user_id"], environment)
     existing = await db.scalar(select(AppleTransaction).where(AppleTransaction.environment == environment,
@@ -67,8 +67,10 @@ async def apply_apple_transaction(db, txn: dict) -> AppleTransaction:
     if not product:
         app_fail("MARKETPLACE_IAP_PRODUCT_UNKNOWN", "充值商品尚未登记，请联系客服核对，交易不会被标记到账。", 409)
     product_snapshot(product)
+    from .apple_fx import value_transaction
+    txn = await value_transaction(db, txn)
     amount = txn["amount_fen"]
-    if (txn.get("currency") != "CNY" or type(amount) is not int or amount < 0
+    if (txn.get("currency") not in ("CNY", "USD") or type(amount) is not int or amount < 0
             or txn.get("status", "paid") not in ("paid", "refunded")):
         app_fail("MARKETPLACE_IAP_TRANSACTION_INVALID", "交易金额、币种或状态不正确。")
     refunded = txn.get("status") == "refunded"
@@ -76,16 +78,20 @@ async def apply_apple_transaction(db, txn: dict) -> AppleTransaction:
     item = AppleTransaction(environment=environment, transaction_id=transaction_id, recharge_order_id=order.id,
         original_transaction_id=str(txn.get("original_transaction_id", transaction_id)),
         user_id=txn["user_id"], product_id=product.product_id, coins=order.credit_fen, amount_fen=amount,
-        currency="CNY", app_account_token=txn["app_account_token"], status="refunded" if refunded else "paid",
+        currency=txn["currency"], payment_amount_minor=txn["payment_amount_minor"],
+        apple_price_milliunits=txn.get("apple_price_milliunits", txn["payment_amount_minor"] * 10),
+        storefront=txn.get("storefront"), fx_snapshot=txn["fx_snapshot"], valuation_status=txn["valuation_status"],
+        app_account_token=txn["app_account_token"], status="refunded" if refunded else "paid",
         revision=0, signed_at=txn["signed_at"], revoked_at=txn.get("revoked_at"), raw_payload=txn.get("raw_payload", {}),
-        anomaly=PRICE_DIFFERENCE_ANOMALY if amount != product.price_fen else "")
+        anomaly=PRICE_DIFFERENCE_ANOMALY if txn["payment_amount_minor"] != expected_prices(product).get(txn["currency"]) else "")
     db.add(item)
     await db.flush()
     db.add(AppleTransactionRevision(transaction_id=item.id, revision=0, status=item.status,
         delta_gross_fen=0 if refunded else amount))
     source_ref = f"{environment}:{transaction_id}"
-    await funds_call(wallet.credit(db, item.user_id, item.coins, source_type="apple_transaction",
+    lot = await funds_call(wallet.credit(db, item.user_id, item.coins, source_type="apple_transaction",
         source_ref=source_ref, amount_fen=amount, environment=environment, note=f"Apple充值 {order.out_trade_no}"))
+    lot.settlement_status = "pending_fx" if item.valuation_status == "pending" else "pending"
     if refunded:
         # 首次得知即已退款，同事务登记再失效，外部永远看不到可消费到账。
         await funds_call(wallet.revoke_source(db, item.user_id, "apple_transaction", source_ref, environment=environment))

@@ -1,4 +1,8 @@
 {
+  "请提供充值操作编号。": "Provide an idempotency key for this purchase.",
+  "商品价格和到账额度必须与共同套餐一致。": "The product price and credit must match the shared package.",
+  "汇率须大于0且最多六位小数。": "The exchange rate must be positive with at most six decimal places.",
+  "该交易已完成核算，不能覆盖原汇率。": "This transaction has been valued; its exchange rate cannot be replaced.",
   "网络连接失败，请检查网络后重试。": "Network connection failed. Check your connection and try again.",
   "授权函暂时无法打开": "The authorization letter is temporarily unavailable.",
   "取消未确认，请到我的文件检查状态；重新选择相同文件可恢复上传。": "Cancellation could not be confirmed. Check your files; select the same file to resume the upload.",

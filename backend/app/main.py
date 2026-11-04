@@ -158,15 +158,14 @@ async def on_startup() -> None:
     import asyncio
 
     database_steps = (_load_startup_model_settings,)
+    seed_steps: tuple = ()
     if settings.database_bootstrap_enabled:
         database_steps = (
             init_db,
             _apply_schema_patches,
             _load_startup_model_settings,
-            seed_templates,
-            bootstrap_admins,
-            seed_agent_skills,
         )
+        seed_steps = (seed_templates, bootstrap_admins, seed_agent_skills)
     else:
         logger.info("Database bootstrap disabled; loading model settings from the existing database")
 
@@ -181,7 +180,9 @@ async def on_startup() -> None:
             except Exception:
                 logger.exception("释放数据库连接失败")
 
-    await run_step("数据库启动", run_database_startup_steps(database_steps, dispose=engine.dispose), 30)
+    await run_step("数据库启动", run_database_startup_steps(database_steps, dispose=engine.dispose), 60)
+    if seed_steps:
+        await run_step("模板与管理员初始化", run_database_startup_steps(seed_steps, dispose=engine.dispose), 600)
     try:
         from app.services import oss as oss_svc
 

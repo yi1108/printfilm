@@ -33,7 +33,7 @@ async def reconcile(db, body, operator_id: int) -> AppleSettlement:
     rows = list((await db.execute(select(AppleTransaction).where(AppleTransaction.id.in_(requested)).order_by(AppleTransaction.id).with_for_update())).scalars())
     # 已验签实付是现金成本；参考价差保留提示，并由本次真实报表精确对账。
     # 其他异常仍须先排查，不允许凭一条备注批量忽略。
-    if len(rows) != len(requested) or any(row.environment != body.environment or row.settlement_status != "pending"
+    if len(rows) != len(requested) or any(row.environment != body.environment or row.settlement_status != "pending" or row.valuation_status != "valued"
             or row.anomaly not in ("", PRICE_DIFFERENCE_ANOMALY) for row in rows):
         app_fail("MARKETPLACE_SETTLEMENT_INVALID", "交易不存在、环境不符、存在异常或已经对账，请重新核对。", 409)
     revisions = list((await db.execute(select(AppleTransactionRevision).where(

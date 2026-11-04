@@ -1,5 +1,7 @@
 # App视频接口与Apple内购接入
 
+固定人民币/美元档位、统一余额接口、外币核算及 StoreKit 2 示例见 [IOS_RECHARGE.md](IOS_RECHARGE.md)。Apple 充值独立于视频市场开关，支持 CNY/USD；本文早期仅人民币约定以该更新为准。
+
 本模块提供App内容、HLS播放、Apple消耗型内购充值、余额解锁及人工财务运营。Web与iOS共用同一个PrintFilm账号、充值套餐和平台余额：Web易支付充值可在App解锁视频，Apple充值可在Web用于AI生成。唯一消费余额仍为`users.balance_fen/frozen_fen`，不再写入旧独立观影币钱包；资金来源、退款与迁移规则以[统一余额说明](UNIFIED_WALLET.md)为准。本仓库不包含完整iOS播放页面。
 
 ## 业务规则

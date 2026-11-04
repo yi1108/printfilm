@@ -216,7 +216,7 @@ async def test_one_blocked_maintenance_operation_does_not_skip_others(monkeypatc
     monkeypatch.setattr(scheduler, "_MAINTENANCE_TIMEOUT_SEC", 0.001)
     monkeypatch.setattr(scheduler.asyncio, "sleep", AsyncMock())
     await scheduler._maintenance_loop()
-    assert visited == ["orphan_recovery", "sequential_queue", "stale_fragments", "billing_reconcile"]
+    assert visited == ["orphan_recovery", "sequential_queue", "stale_fragments", "billing_reconcile", "wallet_refunds"]
 
 
 @pytest.mark.asyncio

@@ -1,4 +1,4 @@
-"""统一钱包只能显式迁移，启动和读取接口均不创建财务表。"""
+"""统一钱包增量结构；与 App 启动共用锁，不迁移历史余额。"""
 from sqlalchemy import inspect
 
 from app.models_wallet import WalletBase
@@ -40,6 +40,8 @@ def check_schema(connection):
 
 def apply_schema(connection):
     """仅新增独立表，不自动创建历史来源或合并余额。"""
+    from app.marketplace.app_schema import acquire_schema_lock
+    acquire_schema_lock(connection)
     register_models()
     WalletBase.metadata.create_all(connection)
     missing = check_schema(connection)

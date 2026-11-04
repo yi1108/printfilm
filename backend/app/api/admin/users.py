@@ -98,6 +98,18 @@ async def patch_user(
         delta = target - current
 
     if delta is not None and delta != 0:
+        from app.services.billing import wallet
+        if wallet.enabled():
+            import uuid
+            from app.marketplace.coin_service import funds_call
+            ref = f"admin:{admin.id}:{uuid.uuid4().hex}"
+            if delta > 0:
+                await funds_call(wallet.credit(db, user.id, delta, source_type="admin_grant", source_ref=ref, note=body.balance_note or "admin_adjust"))
+            else:
+                await funds_call(wallet.consume(db, user.id, -delta, business_type="admin_adjustment", business_ref=ref))
+            await db.commit()
+            await db.refresh(user)
+            return AdminUserOut.model_validate(user)
         target = current + delta
         if target < 0:
             raise HTTPException(status_code=400, detail="余额不能减为负数")

@@ -68,11 +68,14 @@ async def apply_verified_transaction(db, txn: dict, *, expected_user_id: int | N
 
 def transaction_response(item: AppleTransaction) -> dict:
     """回传已持久化履约状态；finish可用于退款终态，但不伪称已到账。"""
+    from .locale import localized
     return {"transaction_id": item.transaction_id, "environment": item.environment,
             "order_id": item.recharge_order_id,
             "status": item.status, "coins": item.coins, "amount_fen": item.amount_fen,
             "currency": item.currency, "credited": item.status == "paid", "finish_transaction": True,
-            "message": "平台余额充值已确认。" if item.status == "paid" else "该笔充值已退款，未发放可用平台余额。"}
+            "payment_amount_minor": item.payment_amount_minor, "credit_currency": "CNY",
+            "valuation_status": item.valuation_status,
+            "message": localized("平台余额充值已确认。", "Platform credit confirmed.") if item.status == "paid" else localized("该笔充值已退款，未发放可用平台余额。", "This purchase was refunded; no available platform credit was granted.")}
 
 
 async def persist_notification(db, payload: dict) -> bool:

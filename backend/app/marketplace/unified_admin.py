@@ -80,9 +80,13 @@ async def review_web_funding(db, body, operator_id):
             app_fail("MARKETPLACE_IDEMPOTENCY_CONFLICT", "本次对账编号已用于其他资金记录。", 409)
         return prior
     order = await db.scalar(select(Order).where(Order.out_trade_no == lot.source_ref))
-    if (not order or order.pay_type not in ("alipay", "wxpay") or order.status != "paid"
+    cash = order.amount_fen if order else None
+    if order and order.payment_currency and order.payment_currency != "cny":
+        from .apple_fx import cny_amount
+        cash = cny_amount(order.payment_amount_minor, order.payment_exchange_rate)
+    if (not order or order.pay_type not in ("alipay", "wxpay", "stripe") or order.status != "paid"
             or order.user_id != lot.user_id or order.credit_fen != lot.total_units or not lot.active
-            or lot.settlement_status == "reconciled" or order.amount_fen != lot.total_amount_fen):
+            or lot.settlement_status == "reconciled" or cash != lot.total_amount_fen):
         app_fail("WALLET_REVIEW_SOURCE_INVALID", "来源未付款、已失效、已对账或金额不一致，请人工核对。", 409)
     if body.received_fen != lot.total_amount_fen-body.channel_fee_fen-body.tax_fen:
         app_fail("WALLET_REVIEW_AMOUNT_MISMATCH", "净到账必须等于真实付款减渠道费和税费。", 409)

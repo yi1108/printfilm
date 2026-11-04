@@ -23,7 +23,7 @@ async def revoke_source(db, user_id, source_type, source_ref, environment=None):
             "duplicate": True}
     removed = ranges.units(lot.available_ranges)
     lot.active, lot.revision = False, lot.revision + 1
-    lot.settlement_status = "pending"
+    lot.settlement_status = "pending_fx" if lot.settlement_status == "pending_fx" else "pending"
     lot.void_ranges = ranges.normalize(lot.total_units, lot.void_ranges + lot.available_ranges)
     lot.available_ranges = []
     await post(db, user, -removed, "source_refund", f"source:{lot.id}:refund:{lot.revision}")
@@ -66,7 +66,7 @@ async def reverse_source(db, user_id, source_type, source_ref, environment=None)
     if lot.active:
         return {"lot_id": lot.id, "duplicate": True, "restored_units": 0}
     lot.active, lot.revision = True, lot.revision + 1
-    lot.settlement_status = "pending"
+    lot.settlement_status = "pending_fx" if lot.settlement_status == "pending_fx" else "pending"
     restored = ranges.units(lot.void_ranges)
     lot.available_ranges = ranges.normalize(lot.total_units, lot.available_ranges + lot.void_ranges)
     lot.void_ranges = []

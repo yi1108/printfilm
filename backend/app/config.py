@@ -1,5 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
+from pydantic import Field
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -8,6 +10,14 @@ _ENV_FILE = _BACKEND_DIR / ".env"
 
 
 class Settings(BaseSettings):
+    apple_environment: Literal["Production", "Sandbox"] = Field("Production", validation_alias="MARKETPLACE_APPLE_ENVIRONMENT")
+    apple_iap_enabled: bool = Field(False, validation_alias="MARKETPLACE_APPLE_IAP_ENABLED")
+    apple_bundle_id: str = Field("", validation_alias="MARKETPLACE_APPLE_BUNDLE_ID")
+    apple_app_id: int = 0
+    apple_issuer_id: str = Field("", validation_alias="MARKETPLACE_APPLE_ISSUER_ID")
+    apple_key_id: str = Field("", validation_alias="MARKETPLACE_APPLE_KEY_ID")
+    apple_private_key: str = ""
+    apple_root_certificates: str = ""
     model_config = SettingsConfigDict(
         env_file=str(_ENV_FILE) if _ENV_FILE.is_file() else ".env",
         env_file_encoding="utf-8",
@@ -109,6 +119,7 @@ class Settings(BaseSettings):
 
     # Token 计费：用户扣费 = TokenFree 官方成本（billing_markup 保留兼容，不再乘）
     billing_enabled: bool = False
+    unified_wallet_enabled: bool = False
     billing_markup: float = 1.0
     # token / 视频时长估价缓冲；按张生图官价不再乘此系数（否则 5 元赠金冻不住一张图）
     billing_estimate_buffer: float = 1.2
@@ -218,6 +229,10 @@ def get_settings() -> Settings:
 
 def reload_settings() -> Settings:
     get_settings.cache_clear()
+    from app.marketplace.app_settings import get_app_settings
+    get_app_settings.cache_clear()
+    from app.marketplace.apple_client import _official_objects
+    _official_objects.cache_clear()
     try:
         from app.services.oss import reset_oss_client
 

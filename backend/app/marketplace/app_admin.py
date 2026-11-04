@@ -35,6 +35,7 @@ class ProductInput(BaseModel):
     coins: int = Field(gt=0, le=100_000_000, strict=True)
     price_fen: int = Field(gt=0, le=100_000_000, strict=True)
     enabled: bool = False
+    expected_prices: dict[str, int] | None = None
 
 class SettlementInput(BaseModel):
     """管理员逐批确认苹果财务报告，不提供无凭据的调账入口。"""
@@ -142,13 +143,18 @@ async def summary(db: DB, user: Admin, environment: Environment = "Production"):
 
 @router.get("/products", response_model=dict)
 async def products(db: DB, user: Admin, environment: Environment = "Production", page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100)):
-    return await listing(db, AppleProduct, "id product_id sku_id sku_snapshot coins price_fen enabled created_at", environment, page, page_size)
+    return await listing(db, AppleProduct, "id product_id sku_id sku_snapshot coins price_fen expected_prices enabled created_at", environment, page, page_size)
 
 
 @router.put("/products", response_model=dict)
 async def save_product(body: ProductInput, db: DB, user: Admin):
     """只维护本地商品映射，不冒充已在苹果创建或审核商品。"""
     from .coin_service import lock_creator
+    from app.services.billing.pricing import topup_prices
+    snapshot = _sku_snapshot(body.sku_id)
+    prices = topup_prices(snapshot)
+    if body.price_fen != snapshot["amount_fen"] or body.coins != snapshot["credit_fen"] or (body.expected_prices is not None and body.expected_prices != prices):
+        app_fail("MARKETPLACE_IAP_PRODUCT_BINDING_REQUIRED", "商品价格和到账额度必须与共同套餐一致。", 409)
     await lock_creator(db, 0, "Production")
     if body.enabled and await db.scalar(select(AppleProduct.id).where(
             AppleProduct.sku_id == body.sku_id, AppleProduct.enabled.is_(True),
@@ -166,16 +172,62 @@ async def save_product(body: ProductInput, db: DB, user: Admin):
                 app_fail("MARKETPLACE_IAP_PRODUCT_BINDING_REQUIRED", "商品额度与Web套餐不一致，请创建新的苹果商品。", 409)
             item.sku_id, item.sku_snapshot = body.sku_id, snapshot
         item.enabled = body.enabled
+        if item.expected_prices and item.expected_prices != prices:
+            app_fail("MARKETPLACE_IAP_PRODUCT_IMMUTABLE", "商品价格快照不可改写，请创建新商品。", 409)
+        item.expected_prices = prices
     else:
         snapshot = _sku_snapshot(body.sku_id)
         if snapshot["credit_fen"] != body.coins:
             app_fail("MARKETPLACE_IAP_PRODUCT_BINDING_REQUIRED", "商品额度与Web套餐不一致，赠额须与共同套餐相同。", 409)
-        item = AppleProduct(**body.model_dump(), sku_snapshot=snapshot)
+        item = AppleProduct(**body.model_dump(exclude={"expected_prices"}), sku_snapshot=snapshot, expected_prices=prices)
         db.add(item)
     await db.flush()
     event(db, user.id, "apple_product", item.id, "configured", "更新商品映射；苹果可售状态须独立验证")
     await db.commit()
-    return view(item, "id product_id sku_id sku_snapshot coins price_fen enabled created_at")
+    return view(item, "id product_id sku_id sku_snapshot coins price_fen expected_prices enabled created_at")
+
+
+@router.get("/product-presets", response_model=dict)
+async def product_presets(user: Admin):
+    from app.services.billing.pricing import SKUS, topup_prices
+    return {"items": [{**sku, "product_id": f'com.deep.printfilm.credits.{sku["id"]}',
+        "coins": sku["credit_fen"], "price_fen": sku["amount_fen"], "expected_prices": topup_prices(sku)} for sku in SKUS]}
+
+
+class ExchangeRateInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    cny_per_unit: str = Field(min_length=1, max_length=32)
+    source: str = Field(min_length=1, max_length=500)
+
+
+@router.get("/exchange-rates", response_model=dict)
+async def exchange_rates(db: DB, user: Admin):
+    from .app_models import AppleExchangeRate
+    rows = (await db.execute(select(AppleExchangeRate).order_by(AppleExchangeRate.id.desc()).limit(100))).scalars()
+    return {"items": [view(row, "id currency cny_per_unit source operator_id created_at") for row in rows]}
+
+
+@router.post("/exchange-rates", response_model=dict)
+async def create_exchange_rate(body: ExchangeRateInput, db: DB, user: Admin):
+    from .app_models import AppleExchangeRate
+    from .apple_fx import rate_text
+    item = AppleExchangeRate(currency="USD", cny_per_unit=rate_text(body.cny_per_unit), source=body.source, operator_id=user.id)
+    db.add(item)
+    await db.commit()
+    return view(item, "id currency cny_per_unit source created_at")
+
+
+class ValuationInput(BaseModel):
+    rate_id: int = Field(gt=0)
+
+
+@router.post("/transactions/{transaction_id}/valuation", response_model=dict)
+async def value_receipt(transaction_id: int, body: ValuationInput, db: DB, user: Admin):
+    from .apple_fx import finalize_valuation
+    from .apple_service import transaction_response
+    item = await finalize_valuation(db, transaction_id, body.rate_id, user.id)
+    await db.commit()
+    return transaction_response(item)
 
 
 @router.post("/settlements", response_model=dict)
@@ -220,7 +272,13 @@ async def revenue(db: DB, user: Admin, environment: Environment = "Production", 
     eligible = set((await db.execute(select(RevenueLedger.id).join(CoinUnlock, CoinUnlock.order_id == RevenueLedger.order_id).where(
         *conditions, RevenueLedger.id.in_([row.id for row, _ in rows]), *eligible_condition()))).scalars())
     total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
-    return {"items": [{**view(row, "id owner_id publication_id gross_fen creator_fen platform_fen settlement_status created_at"), "environment": item.environment, "eligible": row.id in eligible} for row, item in rows], "meta": {"page": page, "page_size": page_size, "total": total}}
+    from app.models_wallet import WalletAllocation
+    pending = set((await db.execute(select(WalletAllocation.business_ref).join(WalletFundingLot,
+        WalletFundingLot.id == WalletAllocation.lot_id).where(WalletAllocation.business_type == "video_unlock",
+        WalletAllocation.business_ref.in_([str(item.id) for _, item in rows]),
+        WalletFundingLot.settlement_status == "pending_fx"))).scalars())
+    return {"items": [{**view(row, "id owner_id publication_id gross_fen creator_fen platform_fen settlement_status created_at"), "environment": item.environment, "eligible": row.id in eligible,
+        "valuation_status": "pending_fx" if str(item.id) in pending else "valued"} for row, item in rows], "meta": {"page": page, "page_size": page_size, "total": total}}
 
 
 @router.get("/{kind}", response_model=dict)
@@ -232,7 +290,7 @@ async def records(kind: str, db: DB, user: Admin, environment: Environment = "Pr
         from .unified_admin import records as unified_records
         return await unified_records(db, kind, environment, page, page_size, status, user_id)
     choices = {
-        "transactions": (AppleTransaction, "id user_id environment transaction_id product_id coins amount_fen status settlement_status anomaly created_at"),
+        "transactions": (AppleTransaction, "id user_id environment transaction_id product_id coins amount_fen currency payment_amount_minor storefront valuation_status fx_snapshot status settlement_status anomaly created_at"),
         "notifications": (AppleNotification, "id environment notification_uuid notification_type transaction_id status attempts error created_at"),
         "wallets": (WalletFundingLot, "id user_id source_type source_ref total_units total_amount_fen active settlement_status created_at"),
         "wallet-entries": (WalletEvent, "id user_id kind delta_fen frozen_delta_fen balance_after frozen_after reference created_at"),

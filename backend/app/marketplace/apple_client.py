@@ -41,18 +41,8 @@ def _json_value(value: Any):
 
 def apple_configured() -> bool:
     """配置完整仅代表可以验签，不等同于真实支付已联调。"""
-    cfg = get_app_settings()
-    paths = cfg.certificate_paths()
-    if not (cfg.apple_bundle_id and cfg.apple_issuer_id and cfg.apple_key_id
-            and cfg.apple_private_key_path and Path(cfg.apple_private_key_path).is_file()
-            and paths and all(path.is_file() for path in paths)
-            and (cfg.apple_environment != "Production" or cfg.apple_app_id)):
-        return False
-    try:
-        import appstoreserverlibrary  # noqa: F401
-    except ImportError:
-        return False
-    return True
+    from .apple_configuration import configuration_status
+    return configuration_status(get_app_settings())["configured"]
 
 
 def require_apple_configured() -> None:
@@ -63,15 +53,15 @@ def require_apple_configured() -> None:
 
 @lru_cache(maxsize=4)
 def _official_objects(environment: str, bundle_id: str, app_id: int | None,
-                      issuer_id: str, key_id: str, key_path: str,
-                      root_paths: tuple[str, ...], online: bool):
+                      issuer_id: str, key_id: str, private_key: str,
+                      roots: tuple[bytes, ...], online: bool):
     """服务器从可信证书建立验证器；SDK 请求自带30秒超时。"""
     from appstoreserverlibrary.api_client import AppStoreServerAPIClient
     from appstoreserverlibrary.models.Environment import Environment
     from appstoreserverlibrary.signed_data_verifier import SignedDataVerifier
     env = Environment(environment)
-    verifier = SignedDataVerifier([Path(path).read_bytes() for path in root_paths], online, env, bundle_id, app_id)
-    client = AppStoreServerAPIClient(Path(key_path).read_bytes(), key_id, issuer_id, bundle_id, env)
+    verifier = SignedDataVerifier(list(roots), online, env, bundle_id, app_id)
+    client = AppStoreServerAPIClient(private_key, key_id, issuer_id, bundle_id, env)
     return verifier, client
 
 
@@ -80,9 +70,11 @@ def _objects():
     require_apple_configured()
     cfg = get_app_settings()
     try:
+        from .apple_configuration import material
+        private_key, roots = material(cfg)
         return _official_objects(cfg.apple_environment, cfg.apple_bundle_id, cfg.apple_app_id,
-                                 cfg.apple_issuer_id, cfg.apple_key_id, cfg.apple_private_key_path,
-                                 tuple(str(path) for path in cfg.certificate_paths()), cfg.apple_online_checks)
+                                 cfg.apple_issuer_id, cfg.apple_key_id, private_key,
+                                 roots, cfg.apple_online_checks)
     except Exception as exc:
         app_fail("MARKETPLACE_PAYMENT_UNAVAILABLE", "苹果内购服务器配置不可用，请联系管理员。", 503)
 
@@ -107,7 +99,9 @@ def normalize_transaction(decoded) -> dict:
     env = _scalar(_field(decoded, "environment"))
     if (_field(decoded, "bundleId") != cfg.apple_bundle_id or env != cfg.apple_environment
             or _scalar(_field(decoded, "type")) != "Consumable" or type(quantity) is not int or quantity != 1
-            or _field(decoded, "currency") != "CNY" or _field(decoded, "storefront") != "CHN"
+            or _field(decoded, "currency") not in ("CNY", "USD")
+            or not _field(decoded, "storefront")
+            or (_field(decoded, "currency") == "CNY" and _field(decoded, "storefront") != "CHN")
             or type(price) is not int or price < 0 or price % 10):
         app_fail("MARKETPLACE_IAP_TRANSACTION_INVALID", "苹果交易的应用、地区、币种、类型或金额不正确。")
     try:
@@ -121,7 +115,9 @@ def normalize_transaction(decoded) -> dict:
     revoked = _millisecond_date(_field(decoded, "revocationDate"))
     return {"environment": env, "transaction_id": transaction_id,
             "original_transaction_id": str(_field(decoded, "originalTransactionId") or transaction_id),
-            "product_id": product_id, "amount_fen": price // 10, "currency": "CNY",
+            "product_id": product_id, "amount_fen": price // 10 if _field(decoded, "currency") == "CNY" else 0,
+            "payment_amount_minor": price // 10, "apple_price_milliunits": price,
+            "currency": _field(decoded, "currency"), "storefront": _field(decoded, "storefront"),
             "app_account_token": token, "status": "refunded" if revoked else "paid",
             "signed_at": _millisecond_date(_field(decoded, "signedDate"), required=True),
             "revoked_at": revoked, "raw_payload": payload}

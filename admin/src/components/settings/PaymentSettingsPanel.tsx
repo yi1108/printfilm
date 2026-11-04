@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { useAdminModelSettings } from "@/hooks/useAdminModelSettings";
 import { stripeRateInputError, stripeSettingsPatch, stripeSettingsReady } from "@/lib/stripeSettings";
 import { MediaPriceSettings } from "./MediaPriceSettings";
+import { AppleProductSettings } from "./AppleProductSettings";
+import { AppleConnectionSettings } from "./AppleConnectionSettings";
 
 const RATE_FIELDS = [
   { key: "billing_llm_per_m", label: "文字 LLM", unit: "元 / 百万 Token" },
@@ -76,6 +78,7 @@ export function PaymentSettingsPanel() {
       epay_notify_url: form.epay_notify_url.trim(),
       epay_return_url: form.epay_return_url.trim(),
       billing_enabled: form.billing_enabled,
+      unified_wallet_enabled: form.unified_wallet_enabled,
       billing_markup: 1.0,
       billing_estimate_buffer: form.billing_estimate_buffer,
       billing_seedance_video0: form.billing_seedance_video0,
@@ -201,6 +204,7 @@ export function PaymentSettingsPanel() {
         <div className="settings-toggle-row">
           <div><strong>启用余额计费</strong><span>开启后按规则扣除用户余额；关闭后生成不扣余额。</span></div>
           <Switch aria-label="启用余额计费" checked={form.billing_enabled} onCheckedChange={(value) => patchField("billing_enabled", value)} />
+          <label>启用统一钱包（须先核对历史资金来源）<Switch aria-label="启用统一钱包" checked={form.unified_wallet_enabled} onCheckedChange={(value) => patchField("unified_wallet_enabled", value)} /></label>
         </div>
         <div className="settings-field-grid mt-5">
           <LabeledControl label="注册赠送金额（分）" required hint={moneyHint("billing_signup_grant_fen")}>
@@ -279,6 +283,8 @@ export function PaymentSettingsPanel() {
         </SettingsPanel>
       </details>
     </SettingsTabShell>
+    <AppleConnectionSettings />
+    <AppleProductSettings />
     <MediaPriceSettings />
   </div>;
 }

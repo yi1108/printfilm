@@ -48,17 +48,22 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)) ->
     if existing:
         raise HTTPException(status_code=400, detail="邮箱已注册")
     grant = int(settings.billing_signup_grant_fen or 0)
+    from app.services.billing import wallet
     user = User(
         email=body.email.lower(),
         nickname=body.nickname,
         hashed_password=hash_password(body.password),
         quota_left=settings.new_user_quota,
-        balance_fen=grant,
+        balance_fen=0 if wallet.enabled() else grant,
         plan="free",
     )
     db.add(user)
     await db.flush()
-    if grant > 0:
+    if wallet.enabled():
+        await wallet.initialize_account(db, user)
+        if grant > 0:
+            await wallet.credit(db, user.id, grant, source_type="signup_grant", source_ref=str(user.id), note="signup_grant")
+    elif grant > 0:
         db.add(
             WalletLedger(
                 user_id=user.id,

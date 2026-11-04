@@ -4,6 +4,7 @@ import { PaginationBar } from '@/components/PaginationBar'
 import { request, type Item, type Listing } from './api'
 import { appAmountFen, appMoney, appPanels, appRecordFields, appRecordIds, type AppPanel } from './appPresentation'
 import FundingReviewForm from './FundingReviewForm'
+import AppleValuationForm from './AppleValuationForm'
 
 const base = '/api/admin/marketplace/app'
 const stateOptions: Partial<Record<AppPanel, Array<[string, string]>>> = {
@@ -78,6 +79,7 @@ export default function AppOperations({ revision = 0 }: { revision?: number }) {
     {summary && <p className="market-ops-context">App开放：{summary.app_enabled ? '已开启' : '已关闭'} · 苹果新购：{summary.iap_enabled ? '已开启' : '已关闭'} · 生产配置检查：{summary.production_ready ? '配置完整（仍需真实联调）' : '未就绪'} · 创作者历史退款待抵扣：{appMoney(summary.creator_debt_fen)}</p>}
     <nav className="flex flex-wrap gap-2" aria-label="App运营分类">{Object.entries(appPanels).map(([key, label]) => <button type="button" key={key} aria-pressed={panel === key} className={panel === key ? 'market-ops-approve' : ''} onClick={() => changePanel(key as AppPanel)}>{label}</button>)}</nav>
     {panel === 'products' && <ProductForm key={`${editing?.id ?? 'new'}-${editing?.enabled}`} item={editing} onSaved={() => { setEditing(null); setRefresh(value => value + 1) }} onCancel={() => setEditing(null)} />}
+    {panel === 'transactions' && <AppleValuationForm onSaved={() => setRefresh(value => value + 1)} />}
     {panel === 'funding-reviews' && <FundingReviewForm environment={environment} onSaved={() => setRefresh(value => value + 1)} />}
     {panel === 'settlements' && <FinanceForm key={`settlement-${environment}`} kind="settlement" environment={environment} onSaved={() => setRefresh(value => value + 1)} />}
     {panel === 'payouts' && <FinanceForm key={`payout-${environment}`} kind="payout" environment={environment} onSaved={() => setRefresh(value => value + 1)} />}
@@ -93,6 +95,11 @@ export default function AppOperations({ revision = 0 }: { revision?: number }) {
 
 /** 商品只保存苹果编号和固定币数；真实售价由StoreKit展示。 */
 function ProductForm({ item, onSaved, onCancel }: { item: Item | null; onSaved: () => void; onCancel: () => void }) {
+  const [presets, setPresets] = useState<Array<Record<string, unknown>>>([])
+  const [skuId, setSkuId] = useState(String(item?.sku_id || 'topup_10'))
+  useEffect(() => { let active = true; request<{items: Array<Record<string, unknown>>}>(`${base}/product-presets`).then(result => { if (active) setPresets(result.items) }).catch(cause => { if (active) setError((cause as Error).message) }); return () => { active = false } }, [])
+  useEffect(() => { setSkuId(String(item?.sku_id || 'topup_10')) }, [item])
+  const preset = presets.find(row => row.id === skuId)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -100,10 +107,10 @@ function ProductForm({ item, onSaved, onCancel }: { item: Item | null; onSaved: 
     event.preventDefault(); setBusy(true); setError(''); setMessage('')
     const form = new FormData(event.currentTarget)
     try {
-      const coins = Number(form.get('coins'))
-      const price = appAmountFen(form.get('price'), false)
+      const coins = Number(preset?.credit_fen)
+      const price = Number(preset?.amount_fen)
       if (!Number.isSafeInteger(coins) || coins <= 0) throw new Error('请填写共同套餐的到账额度，包含套餐赠送的额度。')
-      await request(`${base}/products`, 'PUT', { product_id: String(form.get('product_id')).trim(), sku_id: String(form.get('sku_id')).trim(), coins, price_fen: price, enabled: form.get('enabled') === 'on' })
+      await request(`${base}/products`, 'PUT', { product_id: String(item?.product_id || preset?.product_id), sku_id: skuId, coins, price_fen: price, expected_prices: preset?.expected_prices, enabled: form.get('enabled') === 'on' })
       setMessage('商品配置已保存。商品还须在App Store Connect完成配置并可售后，App才能发起真实购买。'); onSaved()
     } catch (cause) { setError((cause as Error).message) } finally { setBusy(false) }
   }
@@ -111,12 +118,12 @@ function ProductForm({ item, onSaved, onCancel }: { item: Item | null; onSaved: 
     <h3>{item ? '编辑苹果充值商品' : '绑定苹果充值商品'}</h3>
     <p>绑定App Store Connect中的真实消耗型商品及共同充值套餐，到账额度包含套餐赠额。已绑定商品只可启停；实际付款以苹果验签交易为准，参考价不作为到账凭证。</p>
     <div className="grid gap-4 md:grid-cols-4">
-      <label>苹果商品编号<input name="product_id" required maxLength={200} readOnly={Boolean(item)} defaultValue={String(item?.product_id || '')} placeholder="填写App Store Connect中的商品编号" /></label>
-      <label>共同套餐编号<input name="sku_id" required maxLength={64} readOnly={Boolean(item?.sku_id)} defaultValue={String(item?.sku_id || 'topup_10')} placeholder="例如 topup_10" /></label>
-      <label>到账额度（分）<input name="coins" type="number" required min="1" step="1" readOnly={Boolean(item)} defaultValue={typeof item?.coins === 'number' ? item.coins : ''} /></label>
-      <label>苹果参考价（元）<input name="price" required type="number" min="0.01" step="0.01" readOnly={Boolean(item)} defaultValue={typeof item?.price_fen === 'number' ? item.price_fen / 100 : ''} /></label>
+      <label>共同套餐<select value={skuId} disabled={Boolean(item?.sku_id)} onChange={event => setSkuId(event.target.value)}>{presets.map(row => <option key={String(row.id)} value={String(row.id)}>{String(row.name)} · {String(row.id)}</option>)}</select></label>
+      <label>苹果商品编号<input readOnly value={String(item?.product_id || preset?.product_id || '')} /></label>
+      <label>到账人民币额度<input readOnly value={preset ? appMoney(preset.credit_fen) : '加载中'} /></label>
+      <label>预期售价<input readOnly value={preset ? `CNY ${Number(preset.amount_fen) / 100} / USD ${Number((preset.expected_prices as Record<string, number>)?.USD) / 100}` : '加载中'} /></label>
     </div>
-    <label><input type="checkbox" name="enabled" defaultChecked={Boolean(item?.enabled)} /> 允许新购（仍受苹果配置和App开关控制）</label>
+    <label><input type="checkbox" name="enabled" defaultChecked={Boolean(item?.enabled)} /> 允许新购（须完成苹果配置和统一余额核对）</label>
     <div className="flex gap-3"><button type="submit" disabled={busy}>{busy ? '保存中…' : '保存商品配置'}</button>{item && <button type="button" onClick={onCancel}>取消编辑</button>}</div>
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
   </form>

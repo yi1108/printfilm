@@ -17,6 +17,7 @@ class AppleProduct(Record, MarketBase):
     coins: Mapped[int] = mapped_column(BigInteger)
     price_fen: Mapped[int] = mapped_column(BigInteger)
     enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    expected_prices: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     __table_args__ = (CheckConstraint("coins > 0 AND price_fen > 0"),)
 
 
@@ -33,6 +34,11 @@ class AppleTransaction(Record, MarketBase):
     coins: Mapped[int] = mapped_column(BigInteger)
     amount_fen: Mapped[int] = mapped_column(BigInteger)
     currency: Mapped[str] = mapped_column(String(3), default="CNY")
+    payment_amount_minor: Mapped[int | None] = mapped_column(BigInteger)
+    apple_price_milliunits: Mapped[int | None] = mapped_column(BigInteger)
+    storefront: Mapped[str | None] = mapped_column(String(8))
+    fx_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    valuation_status: Mapped[str] = mapped_column(String(24), default="valued")
     status: Mapped[str] = mapped_column(String(24), default="paid", index=True)
     revision: Mapped[int] = mapped_column(Integer, default=0)
     signed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -41,6 +47,15 @@ class AppleTransaction(Record, MarketBase):
     anomaly: Mapped[str] = mapped_column(Text, default="")
     settlement_status: Mapped[str] = mapped_column(String(24), default="pending", index=True)
     __table_args__ = (UniqueConstraint("environment", "transaction_id"), CheckConstraint("coins > 0 AND amount_fen >= 0"))
+
+
+class AppleExchangeRate(Record, MarketBase):
+    """Append-only accounting FX versions; retail prices and credits never use this rate."""
+    __tablename__ = "marketplace_apple_exchange_rates"
+    currency: Mapped[str] = mapped_column(String(3), default="USD")
+    cny_per_unit: Mapped[str] = mapped_column(String(32))
+    source: Mapped[str] = mapped_column(String(500))
+    operator_id: Mapped[int] = mapped_column(Integer)
 
 
 class AppleTransactionRevision(Record, MarketBase):

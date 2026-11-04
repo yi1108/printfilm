@@ -13,6 +13,11 @@ from .coin_service import app_fail, check_environment
 from .service import now
 
 
+def expected_prices(product: AppleProduct) -> dict:
+    # Old mappings retain their CNY price; USD needs an explicit admin binding.
+    return product.expected_prices or {"CNY": product.price_fen}
+
+
 def product_snapshot(product: AppleProduct) -> dict:
     """商品绑定的是已冻结的共同套餐；旧未绑定商品必须人工核对。"""
     snapshot = product.sku_snapshot or {}
@@ -43,11 +48,17 @@ async def list_recharge_products(db) -> list[dict]:
     seen = set()
     for product in rows:
         snapshot = product_snapshot(product)
+        from .locale import current_locale
+        english_names = {"topup_10": "Starter credit", "topup_49": "Basic credit", "topup_99": "Plus credit", "topup_199": "Professional credit"}
+        if current_locale.get() == "en" and product.sku_id in english_names:
+            snapshot = {**snapshot, "name": english_names[product.sku_id]}
         if product.sku_id in seen:
             app_fail("MARKETPLACE_IAP_PRODUCT_CONFLICT", "同一套餐存在多个启用商品，请联系管理员核对。", 503)
         seen.add(product.sku_id)
         result.append({**snapshot, "product_id": product.product_id,
-                       "coins": product.coins, "reference_price_fen": product.price_fen})
+                       "coins": product.coins, "reference_price_fen": product.price_fen,
+                       "credit_currency": "CNY", "bonus_fen": max(0, product.coins - snapshot["amount_fen"]),
+                       "expected_prices": expected_prices(product)})
     return result
 
 
@@ -87,6 +98,7 @@ async def create_recharge_intent(db, user_id: int, environment: str, product_id:
             "credit_fen": order.credit_fen, "coins": order.credit_fen,
             "price_fen": order.amount_fen, "amount_fen": order.amount_fen,
             "currency": "CNY", "app_account_token": token.token,
+            "credit_currency": "CNY", "expected_prices": expected_prices(product),
             "environment": environment, "expires_at": intent.expires_at}
 
 
@@ -116,6 +128,9 @@ async def recharge_order_for_transaction(db, txn: dict, product: AppleProduct) -
     if intent and not intent.fulfilled_transaction_id:
         intent.fulfilled_transaction_id = str(txn["transaction_id"])
     order.amount_fen = txn["amount_fen"]
+    order.payment_currency = txn["currency"].lower()
+    order.payment_amount_minor = txn.get("payment_amount_minor", txn["amount_fen"])
+    order.payment_exchange_rate = txn.get("fx_snapshot", {}).get("cny_per_unit")
     order.trade_no = str(txn["transaction_id"])
     order.status = "refunded" if txn.get("status") == "refunded" else "paid"
     order.paid_at = now()

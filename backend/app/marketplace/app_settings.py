@@ -23,6 +23,8 @@ class MarketplaceAppSettings(BaseSettings):
     apple_issuer_id: str = ""
     apple_key_id: str = ""
     apple_private_key_path: str = ""
+    apple_private_key: str = ""
+    apple_root_certificates: str = ""
     # 多个 Apple Root CA DER 文件使用分号分隔；不得使用客户端提交的证书。
     apple_root_cert_paths: str = ""
     apple_online_checks: bool = True
@@ -45,7 +47,18 @@ class MarketplaceAppSettings(BaseSettings):
 @lru_cache
 def get_app_settings() -> MarketplaceAppSettings:
     """配置默认关闭；生产密钥只存在服务端环境或私密文件中。"""
-    return MarketplaceAppSettings()
+    from app.services.model_settings import get_overlay_dict
+    config = MarketplaceAppSettings()
+    overlay = {key: value for key, value in get_overlay_dict().items()
+               if key.startswith("apple_") and key in MarketplaceAppSettings.model_fields}
+    if "apple_app_id" in overlay:
+        overlay["apple_app_id"] = overlay["apple_app_id"] or None
+    # An explicit cleared database credential must not revive a legacy file.
+    if "apple_private_key" in overlay:
+        overlay["apple_private_key_path"] = ""
+    if "apple_root_certificates" in overlay:
+        overlay["apple_root_cert_paths"] = ""
+    return config.model_copy(update=overlay)
 
 
 def is_app_enabled() -> bool:

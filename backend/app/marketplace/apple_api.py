@@ -45,8 +45,7 @@ def purchasing_enabled() -> bool:
     """只约束新购买，不约束已经产生真实付款的履约。"""
     cfg = get_app_settings()
     from app.services.billing import wallet
-    from .app_settings import is_app_enabled
-    return bool(wallet.enabled() and is_app_enabled() and is_marketplace_enabled()
+    return bool(wallet.enabled()
                 and cfg.apple_iap_enabled and apple_client.apple_configured())
 
 
@@ -57,7 +56,7 @@ async def coin_products(db: DB):
     from .apple_recharge import list_recharge_products
     products = await list_recharge_products(db) if enabled else []
     return {"purchasing_enabled": enabled, "environment": get_app_settings().apple_environment,
-            "currency": "CNY", "coins_per_yuan": 100,
+            "currency": "CNY", "credit_currency": "CNY", "supported_payment_currencies": ["CNY", "USD"], "coins_per_yuan": 100,
             "items": [{**row, "sku_id": row["id"], "price_fen": row["reference_price_fen"]} for row in products]}
 
 

@@ -45,6 +45,8 @@ async def ensure_schema() -> list[str]:
             )
         )
         await connection.run_sync(apply_schema)
+        from app.services.billing.wallet_schema import apply_schema as apply_wallet_schema
+        await connection.run_sync(apply_wallet_schema)
         missing = await connection.run_sync(check_schema)
 
     global _schema_checked_at, _schema_ready
@@ -92,9 +94,10 @@ async def start_app_services() -> None:
     from .app_settings import get_app_settings, is_app_enabled
     from .apple_client import apple_configured
     from .apple_runtime import start_apple_runtime
+    from app.services.billing import wallet
     try:
         config = get_app_settings()
-        if is_app_enabled() or config.apple_iap_enabled or apple_configured():
+        if is_app_enabled() or config.apple_iap_enabled or apple_configured() or wallet.enabled():
             missing = await ensure_schema()
             if missing:
                 logger.error("App 数据库结构未完整，App 接口暂不可用：%s", ", ".join(missing))

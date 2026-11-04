@@ -75,7 +75,7 @@ def test_blank_configuration_is_safe(apple_cfg):
 
 @pytest.mark.parametrize("changes", [
     {"bundleId": "other.app"}, {"environment": "Sandbox"}, {"type": "Non-Consumable"},
-    {"quantity": 2}, {"quantity": True}, {"currency": "USD"}, {"storefront": "USA"},
+    {"quantity": 2}, {"quantity": True}, {"currency": "EUR"}, {"storefront": "USA"},
     {"price": 6001}, {"price": True}, {"price": -10}, {"appAccountToken": "not-a-uuid"},
 ])
 def test_transaction_boundary_rejects_wrong_app_environment_or_amount(apple_cfg, changes):

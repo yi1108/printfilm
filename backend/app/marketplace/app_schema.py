@@ -82,8 +82,12 @@ def apply_schema(connection) -> None:
         "marketplace_apple_products": {
             "sku_id": "VARCHAR(64) NOT NULL DEFAULT ''",
             "sku_snapshot": "JSON NOT NULL DEFAULT '{}'",
+            "expected_prices": "JSON NOT NULL DEFAULT '{}'",
         },
-        "marketplace_apple_transactions": {"recharge_order_id": "INTEGER"},
+        "marketplace_apple_transactions": {"recharge_order_id": "INTEGER",
+            "payment_amount_minor": "BIGINT", "apple_price_milliunits": "BIGINT",
+            "storefront": "VARCHAR(8)", "fx_snapshot": "JSON NOT NULL DEFAULT '{}'",
+            "valuation_status": "VARCHAR(24) NOT NULL DEFAULT 'valued'"},
         "marketplace_apple_purchase_intents": {
             "recharge_order_id": "INTEGER",
             "fulfilled_transaction_id": "VARCHAR(100)",

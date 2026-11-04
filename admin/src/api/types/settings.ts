@@ -61,6 +61,15 @@ export type AdminModelSettings = {
   epay_return_url: string;
   has_epay_key: boolean;
   stripe_enabled: boolean;
+  apple_iap_enabled: boolean;
+  apple_environment: "Production" | "Sandbox";
+  apple_bundle_id: string;
+  apple_app_id: number;
+  apple_issuer_id: string;
+  apple_key_id: string;
+  apple_private_key: string;
+  has_apple_private_key: boolean;
+  apple_root_certificates: string;
   stripe_secret_key: string;
   has_stripe_secret_key: boolean;
   stripe_webhook_secret: string;
@@ -72,6 +81,7 @@ export type AdminModelSettings = {
   stripe_ready: boolean;
   stripe_webhook_url: string;
   billing_enabled: boolean;
+  unified_wallet_enabled: boolean;
   billing_markup: number;
   billing_estimate_buffer: number;
   billing_seedance_video0: number;

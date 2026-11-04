@@ -1,6 +1,58 @@
 {
   "components": {
     "schemas": {
+      "CommentInput": {
+        "properties": {
+          "parent_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "text": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "CommentInput",
+        "type": "object"
+      },
+      "CommentModerationInput": {
+        "properties": {
+          "action": {
+            "enum": [
+              "hide",
+              "restore",
+              "delete"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "reason"
+        ],
+        "title": "CommentModerationInput",
+        "type": "object"
+      },
       "ConsumptionConsentInput": {
         "additionalProperties": false,
         "description": "允许用户独立决定退款时是否提供消费信息，不能强制换取购买资格。",
@@ -18,10 +70,34 @@
       },
       "CreateOrderBody": {
         "properties": {
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 8,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idempotency Key"
+          },
+          "language": {
+            "default": "zh",
+            "enum": [
+              "zh",
+              "en"
+            ],
+            "title": "Language",
+            "type": "string"
+          },
           "pay_type": {
             "enum": [
               "alipay",
-              "wxpay"
+              "wxpay",
+              "stripe",
+              "apple_iap"
             ],
             "title": "Pay Type",
             "type": "string"
@@ -36,6 +112,29 @@
           "pay_type"
         ],
         "title": "CreateOrderBody",
+        "type": "object"
+      },
+      "ExchangeRateInput": {
+        "additionalProperties": false,
+        "properties": {
+          "cny_per_unit": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Cny Per Unit",
+            "type": "string"
+          },
+          "source": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cny_per_unit",
+          "source"
+        ],
+        "title": "ExchangeRateInput",
         "type": "object"
       },
       "FundingReviewInput": {
@@ -229,6 +328,20 @@
             "title": "Enabled",
             "type": "boolean"
           },
+          "expected_prices": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Prices"
+          },
           "price_fen": {
             "exclusiveMinimum": 0.0,
             "maximum": 100000000.0,
@@ -280,55 +393,6 @@
           "idempotency_key"
         ],
         "title": "PurchaseIntentInput",
-        "type": "object"
-      },
-      "ReportInput": {
-        "additionalProperties": false,
-        "properties": {
-          "contact": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Contact",
-            "type": "string"
-          },
-          "evidence_ids": {
-            "items": {
-              "type": "integer"
-            },
-            "maxItems": 10,
-            "title": "Evidence Ids",
-            "type": "array"
-          },
-          "statement": {
-            "maxLength": 5000,
-            "minLength": 10,
-            "title": "Statement",
-            "type": "string"
-          },
-          "target_id": {
-            "exclusiveMinimum": 0.0,
-            "title": "Target Id",
-            "type": "integer"
-          },
-          "target_type": {
-            "enum": [
-              "work",
-              "recruit",
-              "submission",
-              "series_episode",
-              "case"
-            ],
-            "title": "Target Type",
-            "type": "string"
-          }
-        },
-        "required": [
-          "target_type",
-          "target_id",
-          "statement",
-          "contact"
-        ],
-        "title": "ReportInput",
         "type": "object"
       },
       "SettlementInput": {
@@ -397,6 +461,19 @@
         "title": "SettlementInput",
         "type": "object"
       },
+      "SocialSettingInput": {
+        "properties": {
+          "comments_enabled": {
+            "title": "Comments Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "comments_enabled"
+        ],
+        "title": "SocialSettingInput",
+        "type": "object"
+      },
       "UnlockInput": {
         "additionalProperties": false,
         "description": "价格由用户确认但必须与服务器冻结版本一致。",
@@ -459,6 +536,20 @@
         "title": "ValidationError",
         "type": "object"
       },
+      "ValuationInput": {
+        "properties": {
+          "rate_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Rate Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rate_id"
+        ],
+        "title": "ValuationInput",
+        "type": "object"
+      },
       "VerifyInput": {
         "additionalProperties": false,
         "description": "回传 StoreKit 2 的原始 JWS，不能提交用户编号认领交易。",
@@ -487,6 +578,70 @@
         ],
         "title": "VerifyInput",
         "type": "object"
+      },
+      "app__marketplace__app_social__ReportInput": {
+        "properties": {
+          "reason": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "ReportInput",
+        "type": "object"
+      },
+      "app__marketplace__schemas__ReportInput": {
+        "additionalProperties": false,
+        "properties": {
+          "contact": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Contact",
+            "type": "string"
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 10,
+            "title": "Evidence Ids",
+            "type": "array"
+          },
+          "statement": {
+            "maxLength": 5000,
+            "minLength": 10,
+            "title": "Statement",
+            "type": "string"
+          },
+          "target_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Target Id",
+            "type": "integer"
+          },
+          "target_type": {
+            "enum": [
+              "work",
+              "recruit",
+              "submission",
+              "series_episode",
+              "case"
+            ],
+            "title": "Target Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_type",
+          "target_id",
+          "statement",
+          "contact"
+        ],
+        "title": "ReportInput",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -505,6 +660,80 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/admin/marketplace/app/exchange-rates": {
+      "get": {
+        "operationId": "exchange_rates_api_admin_marketplace_app_exchange_rates_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Exchange Rates Api Admin Marketplace App Exchange Rates Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Exchange Rates",
+        "tags": [
+          "App运营与财务"
+        ]
+      },
+      "post": {
+        "operationId": "create_exchange_rate_api_admin_marketplace_app_exchange_rates_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExchangeRateInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Exchange Rate Api Admin Marketplace App Exchange Rates Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Exchange Rate",
+        "tags": [
+          "App运营与财务"
+        ]
+      }
+    },
     "/api/admin/marketplace/app/funding-reviews": {
       "post": {
         "description": "登记Web资金来源实收核对，不复用Apple通知修改付款结果。",
@@ -698,6 +927,34 @@
           }
         ],
         "summary": "Record Payout",
+        "tags": [
+          "App运营与财务"
+        ]
+      }
+    },
+    "/api/admin/marketplace/app/product-presets": {
+      "get": {
+        "operationId": "product_presets_api_admin_marketplace_app_product_presets_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Product Presets Api Admin Marketplace App Product Presets Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Product Presets",
         "tags": [
           "App运营与财务"
         ]
@@ -988,6 +1245,211 @@
         ]
       }
     },
+    "/api/admin/marketplace/app/social/comments": {
+      "get": {
+        "operationId": "social_comments_api_admin_marketplace_app_social_comments_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Status",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Social Comments Api Admin Marketplace App Social Comments Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Social Comments",
+        "tags": [
+          "App运营与财务"
+        ]
+      }
+    },
+    "/api/admin/marketplace/app/social/comments/{comment_id}/moderate": {
+      "post": {
+        "operationId": "moderate_comment_api_admin_marketplace_app_social_comments__comment_id__moderate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "comment_id",
+            "required": true,
+            "schema": {
+              "title": "Comment Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommentModerationInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Moderate Comment Api Admin Marketplace App Social Comments  Comment Id  Moderate Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Moderate Comment",
+        "tags": [
+          "App运营与财务"
+        ]
+      }
+    },
+    "/api/admin/marketplace/app/social/stats": {
+      "get": {
+        "operationId": "social_stats_api_admin_marketplace_app_social_stats_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "target_type",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Target Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Social Stats Api Admin Marketplace App Social Stats Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Social Stats",
+        "tags": [
+          "App运营与财务"
+        ]
+      }
+    },
     "/api/admin/marketplace/app/summary": {
       "get": {
         "description": "配置可用不等于真实联调成功；只报告非敏感状态。",
@@ -1038,6 +1500,65 @@
           }
         ],
         "summary": "Summary",
+        "tags": [
+          "App运营与财务"
+        ]
+      }
+    },
+    "/api/admin/marketplace/app/transactions/{transaction_id}/valuation": {
+      "post": {
+        "operationId": "value_receipt_api_admin_marketplace_app_transactions__transaction_id__valuation_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transaction_id",
+            "required": true,
+            "schema": {
+              "title": "Transaction Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValuationInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Value Receipt Api Admin Marketplace App Transactions  Transaction Id  Valuation Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Value Receipt",
         "tags": [
           "App运营与财务"
         ]
@@ -1306,7 +1827,7 @@
         ]
       },
       "post": {
-        "description": "需要登录，选择充值套餐及支付宝或微信支付方式创建待支付订单，返回二维码、支付链接和订单有效期。创建订单不会立即增加余额，实际到账由支付回调确认。",
+        "description": "需要登录，选择充值套餐及支付宝、微信或已启用的 Stripe 支付方式，返回二维码或收银台链接和订单有效期。创建订单不会立即增加余额，实际到账由支付回调确认。",
         "operationId": "create_order_api_billing_orders_post",
         "requestBody": {
           "content": {
@@ -1358,6 +1879,36 @@
       "get": {
         "description": "无需登录，返回可购买的充值套餐、支持的支付方式及计费倍率。",
         "operationId": "list_skus_api_billing_skus_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "language",
+            "required": false,
+            "schema": {
+              "default": "zh",
+              "enum": [
+                "zh",
+                "en"
+              ],
+              "title": "Language",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "channel",
+            "required": false,
+            "schema": {
+              "default": "web",
+              "enum": [
+                "web",
+                "apple_iap"
+              ],
+              "title": "Channel",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -1370,6 +1921,16 @@
               }
             },
             "description": "充值套餐与支付方式"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "获取充值套餐",
@@ -1674,6 +2235,336 @@
           }
         },
         "summary": "Coin Products",
+        "tags": [
+          "App视频与观影币"
+        ]
+      }
+    },
+    "/api/marketplace/app/v1/comments/{comment_id}": {
+      "delete": {
+        "operationId": "delete_comment_api_marketplace_app_v1_comments__comment_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "comment_id",
+            "required": true,
+            "schema": {
+              "title": "Comment Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+            "in": "header",
+            "name": "accept-language",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+              "title": "Accept-Language"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Comment",
+        "tags": [
+          "App视频与观影币"
+        ]
+      }
+    },
+    "/api/marketplace/app/v1/comments/{comment_id}/replies": {
+      "get": {
+        "description": "回复按需分页，支持多级树但不一次展开整棵树。",
+        "operationId": "comment_replies_api_marketplace_app_v1_comments__comment_id__replies_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "comment_id",
+            "required": true,
+            "schema": {
+              "title": "Comment Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Cursor",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+            "in": "header",
+            "name": "accept-language",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+              "title": "Accept-Language"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Comment Replies",
+        "tags": [
+          "App视频与观影币"
+        ]
+      }
+    },
+    "/api/marketplace/app/v1/comments/{comment_id}/reports": {
+      "post": {
+        "operationId": "report_comment_api_marketplace_app_v1_comments__comment_id__reports_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "comment_id",
+            "required": true,
+            "schema": {
+              "title": "Comment Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+            "in": "header",
+            "name": "accept-language",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+              "title": "Accept-Language"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__marketplace__app_social__ReportInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Report Comment",
         "tags": [
           "App视频与观影币"
         ]
@@ -2598,6 +3489,256 @@
         ]
       }
     },
+    "/api/marketplace/app/v1/me/favorites": {
+      "get": {
+        "operationId": "my_favorites_api_marketplace_app_v1_me_favorites_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "target_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "work",
+                    "works",
+                    "series",
+                    "episode",
+                    "episodes"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+            "in": "header",
+            "name": "accept-language",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+              "title": "Accept-Language"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "My Favorites",
+        "tags": [
+          "App视频与观影币"
+        ]
+      }
+    },
+    "/api/marketplace/app/v1/me/liked-content": {
+      "get": {
+        "operationId": "my_likes_api_marketplace_app_v1_me_liked_content_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "target_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "work",
+                    "works",
+                    "series",
+                    "episode",
+                    "episodes"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+            "in": "header",
+            "name": "accept-language",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+              "title": "Accept-Language"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "My Likes",
+        "tags": [
+          "App视频与观影币"
+        ]
+      }
+    },
     "/api/marketplace/app/v1/me/unlock-orders": {
       "get": {
         "description": "保留撤销的购买历史，界面按有效权益决定能否播放。",
@@ -3242,7 +4383,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ReportInput"
+                "$ref": "#/components/schemas/app__marketplace__schemas__ReportInput"
               }
             }
           },
@@ -3754,6 +4895,862 @@
           }
         ],
         "summary": "Get Work",
+        "tags": [
+          "App视频与观影币"
+        ]
+      }
+    },
+    "/api/marketplace/app/v1/{target_type}/{target_id}/comments": {
+      "get": {
+        "operationId": "comments_api_marketplace_app_v1__target_type___target_id__comments_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_type",
+            "required": true,
+            "schema": {
+              "enum": [
+                "work",
+                "works",
+                "series",
+                "episode",
+                "episodes"
+              ],
+              "title": "Target Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target_id",
+            "required": true,
+            "schema": {
+              "title": "Target Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "hot",
+              "enum": [
+                "hot",
+                "latest"
+              ],
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Cursor",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+            "in": "header",
+            "name": "accept-language",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+              "title": "Accept-Language"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Comments",
+        "tags": [
+          "App视频与观影币"
+        ]
+      },
+      "post": {
+        "operationId": "create_comment_api_marketplace_app_v1__target_type___target_id__comments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_type",
+            "required": true,
+            "schema": {
+              "enum": [
+                "work",
+                "works",
+                "series",
+                "episode",
+                "episodes"
+              ],
+              "title": "Target Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target_id",
+            "required": true,
+            "schema": {
+              "title": "Target Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+            "in": "header",
+            "name": "accept-language",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+              "title": "Accept-Language"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommentInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Comment",
+        "tags": [
+          "App视频与观影币"
+        ]
+      }
+    },
+    "/api/marketplace/app/v1/{target_type}/{target_id}/favorite": {
+      "delete": {
+        "operationId": "unfavorite_api_marketplace_app_v1__target_type___target_id__favorite_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_type",
+            "required": true,
+            "schema": {
+              "enum": [
+                "work",
+                "works",
+                "series",
+                "episode",
+                "episodes"
+              ],
+              "title": "Target Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target_id",
+            "required": true,
+            "schema": {
+              "title": "Target Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+            "in": "header",
+            "name": "accept-language",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+              "title": "Accept-Language"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Unfavorite",
+        "tags": [
+          "App视频与观影币"
+        ]
+      },
+      "put": {
+        "operationId": "favorite_api_marketplace_app_v1__target_type___target_id__favorite_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_type",
+            "required": true,
+            "schema": {
+              "enum": [
+                "work",
+                "works",
+                "series",
+                "episode",
+                "episodes"
+              ],
+              "title": "Target Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target_id",
+            "required": true,
+            "schema": {
+              "title": "Target Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+            "in": "header",
+            "name": "accept-language",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+              "title": "Accept-Language"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Favorite",
+        "tags": [
+          "App视频与观影币"
+        ]
+      }
+    },
+    "/api/marketplace/app/v1/{target_type}/{target_id}/like": {
+      "delete": {
+        "operationId": "unlike_api_marketplace_app_v1__target_type___target_id__like_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_type",
+            "required": true,
+            "schema": {
+              "enum": [
+                "work",
+                "works",
+                "series",
+                "episode",
+                "episodes"
+              ],
+              "title": "Target Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target_id",
+            "required": true,
+            "schema": {
+              "title": "Target Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+            "in": "header",
+            "name": "accept-language",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+              "title": "Accept-Language"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Unlike",
+        "tags": [
+          "App视频与观影币"
+        ]
+      },
+      "put": {
+        "operationId": "like_api_marketplace_app_v1__target_type___target_id__like_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_type",
+            "required": true,
+            "schema": {
+              "enum": [
+                "work",
+                "works",
+                "series",
+                "episode",
+                "episodes"
+              ],
+              "title": "Target Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target_id",
+            "required": true,
+            "schema": {
+              "title": "Target Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+            "in": "header",
+            "name": "accept-language",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+              "title": "Accept-Language"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Like",
+        "tags": [
+          "App视频与观影币"
+        ]
+      }
+    },
+    "/api/marketplace/app/v1/{target_type}/{target_id}/social-settings": {
+      "put": {
+        "description": "创作者控制评论开关；不改变已保存评论。",
+        "operationId": "update_social_settings_api_marketplace_app_v1__target_type___target_id__social_settings_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_type",
+            "required": true,
+            "schema": {
+              "enum": [
+                "work",
+                "works",
+                "series",
+                "episode",
+                "episodes"
+              ],
+              "title": "Target Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target_id",
+            "required": true,
+            "schema": {
+              "title": "Target Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+            "in": "header",
+            "name": "accept-language",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+              "title": "Accept-Language"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SocialSettingInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Social Settings",
         "tags": [
           "App视频与观影币"
         ]
