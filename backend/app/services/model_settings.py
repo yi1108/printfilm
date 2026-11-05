@@ -693,6 +693,11 @@ async def patch_admin_model_settings(
         current[field] = value
         applied.append(field)
 
+    from app.marketplace.sharing_config import validate_android_association
+    (current["marketplace_share_android_package_name"],
+     current["marketplace_share_android_sha256_fingerprints"]) = validate_android_association(
+        current.get("marketplace_share_android_package_name", ""),
+        current.get("marketplace_share_android_sha256_fingerprints", ""))
     if current.get("marketplace_sharing_enabled"):
         from app.marketplace.sharing_config import validate_share_origin
         current["marketplace_share_base_url"] = validate_share_origin(current.get("marketplace_share_base_url", ""))

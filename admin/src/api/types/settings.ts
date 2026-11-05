@@ -116,6 +116,8 @@ export type AdminModelSettings = {
   marketplace_sharing_enabled: boolean;
   marketplace_share_base_url: string;
   marketplace_share_apple_team_id: string;
+  marketplace_share_android_package_name: string;
+  marketplace_share_android_sha256_fingerprints: string;
   marketplace_max_duration_seconds: number;
   source: string;
   updated_at?: string | null;

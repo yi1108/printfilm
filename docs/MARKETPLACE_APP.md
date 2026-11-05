@@ -285,3 +285,7 @@ python -m scripts.export_marketplace_app_openapi
 # 中英文接口约定
 
 App 请求使用 `Accept-Language: zh-CN` 或 `en-US`，缺省中文；读取 `Content-Language` 并按语言缓存。新增 `GET /api/marketplace/app/v1/categories`，列表支持 `category_code` 筛选（优先于旧 `category`）。业务代码不翻译，显示采用 `category_label`、`content_type_label`、`sale_type_label`、`access_mode_label` 等字段。人民币金额、权益和发布版本不随语言变化。完整契约、迁移和示例见 [MARKETPLACE_LOCALE.md](MARKETPLACE_LOCALE.md)。
+
+# Android 分享接入补充
+
+Android 与 iOS 共用作品分享、内容和播放接口；系统分享、App Links 配置和安卓事件上报口径见 [ANDROID_SHARING.md](ANDROID_SHARING.md)。后台可配置包名及多个签名证书 SHA-256 指纹，域名验证文件为 `/.well-known/assetlinks.json`。Android 不能把选中分享应用当作发送成功，首期仅复制成功计入可确认的真实分享。

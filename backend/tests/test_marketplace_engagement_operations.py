@@ -181,6 +181,39 @@ async def test_missing_share_configuration_does_not_create_fake_sessions(ctx):
 
 
 @pytest.mark.asyncio
+async def test_android_association_and_sharing_do_not_require_apple(ctx):
+    ctx.config.share_apple_team_id = ""
+    ctx.config.share_bundle_id = ""
+    ctx.config.share_android_package_name = "com.example.video"
+    fingerprint = ":".join(["AB"] * 32)
+    ctx.config.share_android_sha256_fingerprints = fingerprint
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=http_app(ctx)), base_url="https://share.example.com") as client:
+        response = await client.get("/.well-known/assetlinks.json")
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/json"
+        assert response.headers["cache-control"] == "no-store"
+        assert response.json() == [{"relation": ["delegate_permission/common.handle_all_urls"], "target": {
+            "namespace": "android_app", "package_name": "com.example.video", "sha256_cert_fingerprints": [fingerprint]}}]
+        assert (await client.get("/.well-known/apple-app-site-association")).status_code == 503
+    result = await app_sharing.create_share_session("works", ctx.work.id, app_sharing.ShareInput(), ctx.db, ctx.user)
+    assert result["url"].startswith("https://share.example.com/s/")
+
+
+@pytest.mark.asyncio
+async def test_android_missing_or_invalid_configuration_never_publishes_association(ctx):
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=http_app(ctx)), base_url="https://share.example.com") as client:
+        assert (await client.get("/.well-known/assetlinks.json")).status_code == 503
+        ctx.config.share_android_package_name = "com.example.video"
+        ctx.config.share_android_sha256_fingerprints = "not-a-fingerprint"
+        assert (await client.get("/.well-known/assetlinks.json")).status_code == 503
+        ctx.config.share_android_sha256_fingerprints = ":".join(["AA"] * 32) + "\n" + ":".join(["BB"] * 32)
+        ctx.config.sharing_enabled = False
+        response = await client.get("/.well-known/assetlinks.json")
+        assert response.status_code == 200  # 停新分享不撤销已安装应用的域名关联。
+        assert len(response.json()[0]["target"]["sha256_cert_fingerprints"]) == 2
+
+
+@pytest.mark.asyncio
 async def test_reconciliation_only_rewrites_real_counts(ctx):
     await engagement.initialize_target(ctx.db, "work", ctx.work.id)
     baseline = await engagement.baseline_for(ctx.db, "work", ctx.work.id)

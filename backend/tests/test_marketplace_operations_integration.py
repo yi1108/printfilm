@@ -25,7 +25,7 @@ def test_new_operations_routes_are_mounted_on_the_real_installation():
     ):
         assert path in paths
     routes = {route.path for route in app.routes}
-    assert {"/s/{public_id}", "/.well-known/apple-app-site-association"} <= routes
+    assert {"/s/{public_id}", "/.well-known/apple-app-site-association", "/.well-known/assetlinks.json"} <= routes
 
 
 def test_additive_schema_upgrades_an_old_stats_table_twice_without_losing_counts():
@@ -56,11 +56,15 @@ def test_system_configuration_is_used_without_environment_changes(monkeypatch):
     monkeypatch.setattr(settings, "marketplace_sharing_enabled", True)
     monkeypatch.setattr(settings, "marketplace_share_base_url", "https://share.example.com")
     monkeypatch.setattr(settings, "marketplace_share_apple_team_id", "TEAM123456")
+    monkeypatch.setattr(settings, "marketplace_share_android_package_name", "com.example.video")
+    monkeypatch.setattr(settings, "marketplace_share_android_sha256_fingerprints", ":".join(["AB"] * 32))
     app_settings.get_app_settings.cache_clear()
     value = app_settings.get_app_settings()
     assert value.social_initialization_enabled and value.sharing_enabled
     assert value.share_base_url == "https://share.example.com"
     assert value.share_apple_team_id == "TEAM123456"
+    assert value.share_android_package_name == "com.example.video"
+    assert value.share_android_sha256_fingerprints == ":".join(["AB"] * 32)
     app_settings.get_app_settings.cache_clear()
 
 

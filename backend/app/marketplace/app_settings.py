@@ -20,6 +20,8 @@ class MarketplaceAppSettings(BaseSettings):
     sharing_enabled: bool = False
     share_base_url: str = ""
     share_apple_team_id: str = ""
+    share_android_package_name: str = ""
+    share_android_sha256_fingerprints: str = ""
     share_bundle_id: str = ""
     apple_iap_enabled: bool = False
     apple_environment: Literal["Production", "Sandbox"] = "Production"
@@ -70,6 +72,8 @@ def get_app_settings() -> MarketplaceAppSettings:
         "sharing_enabled": system.marketplace_sharing_enabled,
         "share_base_url": system.marketplace_share_base_url,
         "share_apple_team_id": system.marketplace_share_apple_team_id,
+        "share_android_package_name": system.marketplace_share_android_package_name,
+        "share_android_sha256_fingerprints": system.marketplace_share_android_sha256_fingerprints,
         "share_bundle_id": overlay.get("apple_bundle_id", config.apple_bundle_id),
     })
     return config.model_copy(update=overlay)

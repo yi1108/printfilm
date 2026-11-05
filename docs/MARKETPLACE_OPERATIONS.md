@@ -10,6 +10,8 @@
 - `marketplace_sharing_enabled`：默认关闭，控制新分享会话和完成事件。
 - `marketplace_share_base_url`：公网 HTTPS 根域名，例如 `https://www.example.com`；禁止 localhost、私网 IP、非 HTTPS、子路径、用户名密码、查询参数及非443端口。
 - `marketplace_share_apple_team_id`：Apple Developer Team ID；Bundle ID 复用现有 `apple_bundle_id`。
+- `marketplace_share_android_package_name`：Android 应用包名。
+- `marketplace_share_android_sha256_fingerprints`：实际安装包的签名证书 SHA-256 指纹，每行一条，支持签名轮换。两项安卓配置须一起填写或清空，与 Apple 配置互不依赖。
 
 无需修改 `.env`。首次部署 API 自动使用现有统一数据库锁增量建表、补 `share_count` 列和检查结构，不重算历史余额或购买记录。迁移失败会记录原因并保护相关接口，原 API 继续运行；修复数据库后重启重试。
 
@@ -110,7 +112,7 @@ POST /api/marketplace/app/v1/episodes/456/share-sessions
 
 ### Universal Links 和代理
 
-分享域名必须同时承载 Web 站点，并把 `/s/`、`/.well-known/apple-app-site-association` 代理到 API。仓库 `frontend/nginx.conf` 和本地部署示例已补齐；外层反向代理也必须放行。AASA 返回JSON，禁止跳转到SPA或登录页。
+分享域名必须同时承载 Web 站点，并把 `/s/`、`/.well-known/apple-app-site-association`、`/.well-known/assetlinks.json` 代理到 API。仓库 `frontend/nginx.conf` 和本地部署示例已补齐；外层反向代理也必须放行。关联文件返回JSON，禁止跳转到SPA或登录页。Android 具体配置、Manifest、分享计数边界和真机验收见 [安卓接入说明](ANDROID_SHARING.md)。安卓无需配置 Apple 信息；普通分享链接只要求有效分享域名，两个平台的关联文件分别校验各自配置。
 
 分享会话令牌与播放令牌均须从普通日志中去除。后端及仓库Nginx示例已处理 `/api/marketplace/app/v1/share-sessions/`，外层代理、CDN和客户端错误上报也应隐藏令牌路径；公开的 `/s/{public_id}` 是作品链接，可以正常记录访问，但打开链接不增加分享数。
 

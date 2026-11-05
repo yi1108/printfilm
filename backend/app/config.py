@@ -186,6 +186,8 @@ class Settings(BaseSettings):
     marketplace_sharing_enabled: bool = False
     marketplace_share_base_url: str = ""
     marketplace_share_apple_team_id: str = ""
+    marketplace_share_android_package_name: str = ""
+    marketplace_share_android_sha256_fingerprints: str = ""
     # 完整视频最长秒数。环境变量 MARKETPLACE_MAX_DURATION_SECONDS；管理端保存后以数据库为准。
     marketplace_max_duration_seconds: int = 1800
 

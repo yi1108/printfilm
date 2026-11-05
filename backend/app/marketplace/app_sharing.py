@@ -7,7 +7,7 @@ from typing import Literal
 import uuid
 
 from fastapi import APIRouter
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select, text
 
@@ -60,8 +60,6 @@ def sharing_configuration():
         error("MARKETPLACE_SHARE_UNAVAILABLE", localized("请先在系统管理中配置有效的 HTTPS 分享域名。", "Configure a valid HTTPS sharing domain in system settings."), 503)
     team = getattr(config, "share_apple_team_id", "")
     bundle = getattr(config, "share_bundle_id", "") or getattr(config, "apple_bundle_id", "")
-    if not team or not bundle:
-        error("MARKETPLACE_SHARE_UNAVAILABLE", localized("请先在系统管理中补齐 Apple 分享关联配置。", "Complete the Apple sharing association settings first."), 503)
     return origin, team, bundle
 
 
@@ -173,4 +171,25 @@ async def open_shared_content(public_id: str, db: DB):
 @public_router.get("/.well-known/apple-app-site-association", include_in_schema=False)
 async def apple_association():
     _, team, bundle = sharing_configuration()
-    return {"applinks": {"apps": [], "details": [{"appID": f"{team}.{bundle}", "paths": ["/s/*"]}]}}
+    if not team or not bundle:
+        error("MARKETPLACE_SHARE_UNAVAILABLE", localized("请先在系统管理中补齐 Apple 分享关联配置。", "Complete the Apple sharing association settings first."), 503)
+    return JSONResponse({"applinks": {"apps": [], "details": [{"appID": f"{team}.{bundle}", "paths": ["/s/*"]}]}}, headers={"Cache-Control": "no-store"})
+
+
+@public_router.get("/.well-known/assetlinks.json", include_in_schema=False)
+async def android_association():
+    sharing_configuration()
+    from .sharing_config import validate_android_association
+    config = get_app_settings()
+    try:
+        package, fingerprints = validate_android_association(
+            getattr(config, "share_android_package_name", ""),
+            getattr(config, "share_android_sha256_fingerprints", ""))
+        if not package:
+            raise ValueError("Missing Android association")
+    except (ValueError, TypeError):
+        error("MARKETPLACE_SHARE_UNAVAILABLE", localized("请先在系统管理中补齐 Android 包名及签名证书 SHA-256 指纹。", "Configure the Android package name and signing certificate SHA-256 fingerprints in system settings."), 503)
+    return JSONResponse([{"relation": ["delegate_permission/common.handle_all_urls"], "target": {
+        "namespace": "android_app", "package_name": package,
+        "sha256_cert_fingerprints": fingerprints.splitlines(),
+    }}], headers={"Cache-Control": "no-store"})

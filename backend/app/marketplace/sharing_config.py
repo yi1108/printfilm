@@ -1,6 +1,25 @@
 """Validate a public share origin without network requests or secret material."""
 from ipaddress import ip_address
 from urllib.parse import urlsplit
+import re
+
+
+def validate_android_association(package: str, fingerprints: str) -> tuple[str, str]:
+    package = package.strip()
+    if package and not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+", package):
+        raise ValueError("Android 包名格式无效，例如 com.example.app。")
+    values = []
+    for value in re.split(r"[\r\n,;]+", fingerprints):
+        value = value.strip().upper()
+        if not value:
+            continue
+        if not re.fullmatch(r"(?:[0-9A-F]{2}:){31}[0-9A-F]{2}", value):
+            raise ValueError("Android SHA-256 指纹必须是32组冒号分隔的十六进制字节。")
+        if value not in values:
+            values.append(value)
+    if bool(package) != bool(values):
+        raise ValueError("Android 包名和签名证书 SHA-256 指纹必须一起填写或一起清空。")
+    return package, "\n".join(values)
 
 
 def validate_share_origin(value: str) -> str:
