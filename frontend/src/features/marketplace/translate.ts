@@ -6,7 +6,7 @@ import d from './locale-text-3.ts'
 import e from './locale-text-4.ts'
 import server from './locale-server.json' with { type: 'json' }
 
-export const marketplaceEnglish: Record<string, string> = { ...server, ...a, ...b, ...c, ...d, ...e }
+export const marketplaceEnglish: Record<string, string> = { "观众解锁价（积分）": "Unlock price (Points)", "本集观众解锁价（积分）": "Episode unlock price (Points)", "请输入有效的整数积分": "Enter a valid whole number of Points", ...server, ...a, ...b, ...c, ...d, ...e }
 const reverse = new Map(Object.entries(marketplaceEnglish).map(([zh, en]) => [en, zh]))
 
 /** 仅翻译系统词典中的文字；不用于标题、简介、昵称和人工审核理由。 */

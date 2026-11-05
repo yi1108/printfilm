@@ -29,10 +29,11 @@ test('分集表单错误保留集号位置和实际字数限制', () => {
   ], 422), '分集的第 3 项的标题：不能超过 200 个字')
 })
 
-test('价格限制从接口整数分转换为用户填写的元，不误报价格上限', () => {
+test('解锁价限制显示整数积分，版权参考价仍显示元', () => {
+  assert.equal(explainMarketplaceError([{ type: 'less_than_equal', loc: ['body', 'copyright_price_fen'], ctx: { le: 100000000 } }], 422), '参考价：不能超过 ¥1000000.00')
   assert.equal(explainMarketplaceError([
     { type: 'less_than_equal', loc: ['body', 'unlock_price_fen'], msg: 'Input should be less than or equal to 100000000', ctx: { le: 100000000 } },
-  ], 422), '观众解锁价：不能超过 ¥1000000.00')
+  ], 422), '观众解锁价：不能超过 100,000,000 积分')
 })
 
 test('中文业务校验保留原因为主，整数与确认选项分别提示', () => {

@@ -54,7 +54,7 @@ export function AppleProductSettings() {
         <h4 className="font-medium">{product.id} · {item ? item.enabled ? '已允许新购' : '已停用' : '未登记'}</h4>
         <p className="text-sm break-all">{product.product_id}</p>
         <p className="text-sm">售价：¥{(product.expected_prices.CNY / 100).toFixed(2)} / ${(product.expected_prices.USD / 100).toFixed(2)}</p>
-        <p className="text-sm">到账：{product.credit_fen.toLocaleString('zh-CN')} 分额度（含赠额 {(product.credit_fen - product.amount_fen).toLocaleString('zh-CN')} 分）</p>
+        <p className="text-sm">到账：{product.credit_fen.toLocaleString('zh-CN')} 积分（含赠额 {(product.credit_fen - product.amount_fen).toLocaleString('zh-CN')} 积分）</p>
         <div className="flex flex-wrap gap-2">
           {!item && <Button type="button" variant="outline" disabled={Boolean(busy) || Boolean(error)} onClick={() => void save(product, false)}>登记商品（暂不启用）</Button>}
           {item && <Button type="button" variant="outline" disabled={Boolean(busy)} onClick={() => void save(product, !item.enabled)}>{busy === product.id ? '保存中…' : item.enabled ? '停止该档新购' : '允许该档新购'}</Button>}

@@ -15,7 +15,7 @@ import { TeamQueryFeedback } from "./TeamQueryFeedback";
 import { teamDate, teamRoleLabels } from "@/lib/teamLabels";
 import { useAdminTeamQuery } from "@/hooks/useAdminTeamQuery";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
-import { fenToYuan } from "@/lib/utils";
+import { points } from "@/lib/points";
 
 /** 分页查看在队/已退出成员，支持按月份回看预算与实际消费。 */
 export function TeamMembersTable({ teamId }: { teamId: number }) {
@@ -47,8 +47,8 @@ export function TeamMembersTable({ teamId }: { teamId: number }) {
       <TableCell><div className="font-semibold">{member.nickname || "—"}</div><div className="mt-1 text-xs text-[var(--admin-muted)]">{member.email} · #{member.user_id}</div></TableCell>
       <TableCell><Badge variant={member.role === "owner" ? "success" : "info"}>{teamRoleLabels[member.role]}</Badge></TableCell>
       <TableCell><Badge variant={member.active ? "success" : "default"}>{member.active ? "在队" : "已退出"}</Badge></TableCell>
-      <TableCell className="tabular-nums">{member.monthly_limit_fen === null ? "不限额" : `¥${fenToYuan(member.monthly_limit_fen)}`}</TableCell>
-      <TableCell className="tabular-nums"><div>¥{fenToYuan(member.spent_fen)}</div><div className="mt-1 text-xs text-[var(--admin-muted)]">预留 ¥{fenToYuan(member.reserved_fen)}</div></TableCell>
+      <TableCell className="tabular-nums">{member.monthly_limit_fen === null ? "不限额" : `${points(member.monthly_limit_fen)}`}</TableCell>
+      <TableCell className="tabular-nums"><div>{points(member.spent_fen)}</div><div className="mt-1 text-xs text-[var(--admin-muted)]">预留 {points(member.reserved_fen)}</div></TableCell>
       <TableCell className="whitespace-nowrap text-xs">{teamDate(member.joined_at)}</TableCell>
       <TableCell>{member.active && <Button type="button" variant="ghost" size="sm" onClick={() => setTarget(member)}>设置额度</Button>}<Button type="button" asChild variant="outline" size="sm"><Link to={`/teams/${teamId}?tab=usage&member_id=${member.user_id}`}>消费记录</Link></Button></TableCell>
     </TableRow>)}</TableBody></Table>}

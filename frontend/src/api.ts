@@ -265,6 +265,9 @@ export type UsageChargeList = {
 }
 
 export type Wallet = {
+  debt_fen?: number
+  spendable_fen?: number
+  pending_commitment_fen?: number
   balance_fen: number
   frozen_fen: number
   balance_yuan: number

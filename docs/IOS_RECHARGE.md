@@ -1,6 +1,12 @@
+# 积分展示约定 / Points display
+
+平台额度：1 元额度 = 100 积分。余额、冻结、欠费、消费、到账及赠额的整数 *_fen 和兼容 coins 字段直接作为积分显示，不乘除 100（10000 → 10,000 Points；25 → 25 积分）。视频解锁价格同理。iOS 页面由客户端团队同步修改。
+
+充值实付、Apple 原币金额、版权参考价、创作者收益、渠道成本和打款仍使用货币。credit_currency=CNY 保留原协议含义。四档到账为 10,000 / 49,000 / 104,000 / 220,000 积分，支付售价不变。后端、历史数据、退款和扣费不变，无需迁移。未知历史人工文本不改写。
+
 # iOS / Web 统一余额充值接入
 
-平台余额单位为人民币分额度。`coins` 是兼容别名，1 币 = 1 分额度；USD 是付款币种，不是余额币种。充值不产生创作者收益，余额消费时才按实际资金来源分摊。
+平台余额单位为人民币积分。`coins` 是兼容别名，1 币 = 1 积分；USD 是付款币种，不是余额币种。充值不产生创作者收益，余额消费时才按实际资金来源分摊。
 
 ## 商品与价格
 
@@ -16,10 +22,10 @@
 
 如果验单返回“苹果内购服务器配置不可用”，后端 `app.marketplace.apple_client` 会记录 `Apple SDK初始化失败`。`stage` 区分 `credential_material`（读取/解析私钥与证书）、`sdk_import`（依赖加载）、`environment`（环境参数）、`verifier`（验签器）及 `api_client`（服务器 API 客户端）；同时记录环境、异常类型和固定原因码。日志不包含 SDK 原始异常消息、堆栈、私钥、交易签名、账号令牌或文件路径。提供该行日志即可继续定位初始化问题；API 响应仍保留安全的统一错误提示。
 
-- `topup_10` / `com.deep.printfilm.credits.topup_10`：CNY 10000 分，USD 1499 美分，到账 10000 分额度。
-- `topup_49` / `com.deep.printfilm.credits.topup_49`：CNY 49000 分，USD 6999 美分，到账 49000 分额度。
-- `topup_99` / `com.deep.printfilm.credits.topup_99`：CNY 99000 分，USD 13999 美分，到账 104000 分额度。
-- `topup_199` / `com.deep.printfilm.credits.topup_199`：CNY 199000 分，USD 27999 美分，到账 220000 分额度。
+- `topup_10` / `com.deep.printfilm.credits.topup_10`：CNY 10000 分，USD 1499 美分，到账 10000 积分。
+- `topup_49` / `com.deep.printfilm.credits.topup_49`：CNY 49000 分，USD 6999 美分，到账 49000 积分。
+- `topup_99` / `com.deep.printfilm.credits.topup_99`：CNY 99000 分，USD 13999 美分，到账 104000 积分。
+- `topup_199` / `com.deep.printfilm.credits.topup_199`：CNY 199000 分，USD 27999 美分，到账 220000 积分。
 
 人民币和美元均为固定零售价。美元财务汇率只决定收入核算，不决定商品价格、到账或赠额。Stripe 同一套餐采用上述美元档位，其余币种及非套餐报价保留原逻辑。已有订单价格不会随新配置变化。
 
@@ -28,7 +34,7 @@
 所有接口使用 HTTPS；登录接口复用现有账号，Bearer Token 放在 Keychain。语言使用 `Accept-Language: zh-CN` 或 `en-US`。禁止在日志中输出 Token、JWS、Apple 密钥。
 
 1. `GET /api/billing/skus?channel=apple_iap`。检查 `purchasing_enabled`，获取 `skus`。每项包含 `id`、`product_id`、`amount_fen`（人民币基准）、`credit_fen`、`bonus_fen`、`credit_currency=CNY` 和 `expected_prices`（CNY/USD 整数最小单位）。商品未配置时不伪造可购商品。
-2. 向 StoreKit 请求这些 Product ID。仅展示真实存在的消耗型商品；币种须为 CNY/USD，`Product.price * 100` 必须等于对应预期价格。展示 `Product.displayPrice`；额度另标“人民币平台额度 / CNY platform credit”。价格不匹配时禁用该档购买，提示刷新或稍后重试。后台保存映射不等于 Apple 商品已经审核可售。
+2. 向 StoreKit 请求这些 Product ID。仅展示真实存在的消耗型商品；币种须为 CNY/USD，`Product.price * 100` 必须等于对应预期价格。展示 `Product.displayPrice`；额度另标“平台积分额度 / CNY platform credit”。价格不匹配时禁用该档购买，提示刷新或稍后重试。后台保存映射不等于 Apple 商品已经审核可售。
 3. 登录后 `POST /api/billing/orders`，提交 `{"sku_id":"topup_10","pay_type":"apple_iap","idempotency_key":"UUID"}`。响应含 `intent_id`、`order_id`、`out_trade_no`、`product_id`、`app_account_token`、`credit_fen`、`expected_prices`。同一次购买请求必须持久保存并复用幂等键，创建意向失败不能重新生成键盲目购买。新一次用户确认购买使用新键。
 4. `product.purchase(options: [.appAccountToken(token)])`。再次比较意向价格和 StoreKit 价格。取消不显示成功，`.pending` 提示等待 Apple 批准。
 5. 将 StoreKit 原始 `jwsRepresentation` 提交到 `POST /api/billing/apple/transactions/verify`，请求 `{"signed_transaction_info":"<JWS>","intent_id":123}`。未完成交易恢复可以省略 `intent_id`，账号归属仍由服务端稳定 Token 验证。不能由客户端提交价格、到账额度或用户编号。

@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
-import { isBillingError, PRICING_PATH } from '../../lib/billingError'
+import { isBillingError, billingPointsMessage, PRICING_PATH } from '../../lib/billingError'
 import { workspaceScope } from '../../features/teams/workspaceScope'
 import { formatCopyrightError, formatGenerationErrorMessage } from '../../lib/generationError'
 
@@ -34,7 +34,7 @@ export default function BillingErrorNotice({
   }
   return (
     <Tag className={className} style={style} role={inline ? undefined : 'alert'}>
-      {text}{' '}
+      {billingPointsMessage(text)}{' '}
       <Link to={workspaceScope.teamId === null ? PRICING_PATH : `/teams/${workspaceScope.teamId}?tab=billing`} className="pf-link pf-billing-topup-link">
         {workspaceScope.teamId === null ? linkText : '查看团队用量 →'}
       </Link>

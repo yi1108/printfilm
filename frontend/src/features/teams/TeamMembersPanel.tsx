@@ -1,3 +1,4 @@
+import { points, parsePoints } from '../../lib/points'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Check, Copy, Mail, Search, ShieldCheck, SlidersHorizontal, UserPlus, Users, X } from 'lucide-react'
 import Button from '../../components/ui/Button'
@@ -14,7 +15,7 @@ const ROLE_LABELS: Record<TeamRole, string> = { owner: '所有者', admin: '管�
 
 /** 将分转换为清楚、固定两位小数的人民币展示。 */
 function memberMoney(fen: number): string {
-  return `¥${(fen / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  return points(fen)
 }
 
 /** 返回适合表格展示的日期，保留未知日期的可读降级。 */
@@ -136,7 +137,7 @@ export default function TeamMembersPanel({ team, role }: { team: PreviewTeam; ro
   /** 打开额度弹窗，将已有分金额转换为输入框中的元。 */
   function openLimit(member: PreviewMember) {
     setTarget(member)
-    setLimit(member.monthlyLimitFen === null ? '' : (member.monthlyLimitFen / 100).toFixed(2))
+    setLimit(member.monthlyLimitFen === null ? '' : String(member.monthlyLimitFen))
     setUnlimited(member.monthlyLimitFen === null)
     setError('')
     setDialog('limit')
@@ -147,8 +148,8 @@ export default function TeamMembersPanel({ team, role }: { team: PreviewTeam; ro
     event.preventDefault()
     if (!target || role !== 'owner') return
     try {
-      if (!unlimited && !/^\d+(\.\d{1,2})?$/.test(limit.trim())) throw new Error('请输入有效金额，最多保留两位小数')
-      const amountFen = unlimited ? null : Math.round(Number(limit) * 100)
+      if (!unlimited && parsePoints(limit, 100000000) === null) throw new Error('请输入不超过 100,000,000 的整数积分')
+      const amountFen = unlimited ? null : parsePoints(limit, 100000000)
       if (amountFen !== null && (!Number.isSafeInteger(amountFen) || amountFen < 0)) throw new Error('额度金额超出可设置范围')
       await updateMember(team.id, target.id, { monthlyLimitFen: amountFen })
       closeDialog()
@@ -196,7 +197,7 @@ export default function TeamMembersPanel({ team, role }: { team: PreviewTeam; ro
       {canInvite && <section className="pf-team-panel pf-team-members-invitations"><div className="pf-team-section-head"><div><h2>邀请记录 <span className="pf-team-members-count">{invitationListing.meta.total}</span></h2><p className="pf-team-muted">邀请有效期 7 天，仅被邀请邮箱登录后可以接受。</p></div><Mail size={21} /></div>{invitationListing.loading ? <p role="status">正在加载邀请…</p> : invitationListing.error ? <div className="pf-team-alert" role="alert">{invitationListing.error}<Button onClick={invitationListing.retry}>重试</Button></div> : invitations.length ? <div className="pf-team-members-invite-list">{invitations.map((invite) => <div className="pf-team-members-invite-row" key={invite.id}><span className="pf-team-members-mail-icon"><Mail size={17} /></span><div className="pf-team-members-invite-info"><strong>{invite.email}</strong><small>{new Date(invite.expiresAt).getTime() < Date.now() ? '已过期' : `${memberDate(invite.expiresAt)} 到期`} · 普通成员 · {{ pending: '待接受', accepted: '已接受', revoked: '已撤回', expired: '已过期' }[invite.status] || invite.status}</small></div><Button variant="text" size="sm" disabled={!links[invite.id] || invite.status !== 'pending'} onClick={() => void copyInvitation(invite.id)} aria-label={`复制 ${invite.email} 的邀请链接`}><Copy size={14} />复制链接</Button>{['pending', 'expired'].includes(invite.status) && <Button variant="text" size="sm" onClick={() => void resend(invite.id)}>重新发送</Button>}<Button variant="ghost" size="sm" icon disabled={invite.status !== 'pending'} onClick={() => void revoke(invite.id)} aria-label={`撤回 ${invite.email} 的邀请`}><X size={16} /></Button></div>)}</div> : <div className="pf-team-members-invite-empty"><Mail size={22} /><p>还没有待加入成员</p><span>邀请伙伴，一起开始下一段创作。</span></div>}<TeamPagination page={invitationPage} total={invitationListing.meta.total} onChange={setInvitationPage} /></section>}
 
       <Modal open={dialog === 'invite'} onClose={closeDialog} title="邀请创作伙伴" className="pf-team-members-modal"><div ref={dialog === 'invite' ? dialogContent : undefined}><p className="pf-team-muted">邀请普通成员加入「{team.name}」，加入后可查看团队全部项目与资产。</p><form className="pf-team-form" onSubmit={submitInvitation}><label className="pf-team-field" htmlFor="pf-team-invite-email">邮箱地址<input id="pf-team-invite-email" data-team-autofocus type="email" autoComplete="email" required maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} placeholder="partner@example.com" /></label><div className="pf-team-members-preview-note"><Mail size={16} /><span>邀请对应邮箱的真实用户加入；未配置邮件服务时请复制加入链接。</span></div>{error && <div className="pf-team-alert" role="alert">{error}</div>}<div className="pf-team-members-modal-actions"><Button variant="outline" onClick={closeDialog}>取消</Button><Button type="submit" variant="lime"><UserPlus size={16} />发送邀请</Button></div></form></div></Modal>
-      <Modal open={dialog === 'limit'} onClose={closeDialog} title={`设置 ${target?.name ?? '成员'} 的月度额度`} className="pf-team-members-modal"><div ref={dialog === 'limit' ? dialogContent : undefined}><form className="pf-team-form" onSubmit={saveLimit}><p className="pf-team-muted">额度用于限制该成员在团队内的月消费，不会向成员个人钱包转账。</p><label className="pf-team-members-checkbox"><input data-team-autofocus type="checkbox" checked={unlimited} onChange={(event) => setUnlimited(event.target.checked)} />不限月度额度</label><label className="pf-team-field" htmlFor="pf-team-monthly-limit">每月额度（元）<input id="pf-team-monthly-limit" inputMode="decimal" type="text" disabled={unlimited} value={limit} onChange={(event) => setLimit(event.target.value)} placeholder="例如 500.00" /></label><p className="pf-team-members-help">设为 0 可停止新增消费。已产生的费用和在途预留仍保留。额度从下一次提交生成任务开始生效。</p>{error && <div className="pf-team-alert" role="alert">{error}</div>}<div className="pf-team-members-modal-actions"><Button variant="outline" onClick={closeDialog}>取消</Button><Button type="submit" variant="lime">保存额度</Button></div></form></div></Modal>
+      <Modal open={dialog === 'limit'} onClose={closeDialog} title={`设置 ${target?.name ?? '成员'} 的月度额度`} className="pf-team-members-modal"><div ref={dialog === 'limit' ? dialogContent : undefined}><form className="pf-team-form" onSubmit={saveLimit}><p className="pf-team-muted">额度用于限制该成员在团队内的月消费，不会向成员个人钱包转账。</p><label className="pf-team-members-checkbox"><input data-team-autofocus type="checkbox" checked={unlimited} onChange={(event) => setUnlimited(event.target.checked)} />不限月度额度</label><label className="pf-team-field" htmlFor="pf-team-monthly-limit">每月额度（积分）<input id="pf-team-monthly-limit" inputMode="numeric" type="text" disabled={unlimited} value={limit} onChange={(event) => setLimit(event.target.value)} placeholder="例如 50000" /></label><p className="pf-team-members-help">设为 0 可停止新增消费。已产生的费用和在途预留仍保留。额度从下一次提交生成任务开始生效。</p>{error && <div className="pf-team-alert" role="alert">{error}</div>}<div className="pf-team-members-modal-actions"><Button variant="outline" onClick={closeDialog}>取消</Button><Button type="submit" variant="lime">保存额度</Button></div></form></div></Modal>
       <Modal open={dialog === 'remove'} onClose={closeDialog} title="移除团队成员" className="pf-team-members-modal"><div ref={dialog === 'remove' ? dialogContent : undefined}><p className="pf-team-members-remove-copy">确定将 <strong>{target?.name}</strong> 移出「{team.name}」？</p><p className="pf-team-muted">移除后，该成员将无法访问团队。已创建的团队项目、资产和消费记录仍保留在团队中。</p><p className="pf-team-members-help">移除会立即撤销该成员访问权限，不会删除团队内容。</p>{error && <div className="pf-team-alert" role="alert">{error}</div>}<div className="pf-team-members-modal-actions"><Button data-team-autofocus variant="outline" onClick={closeDialog}>保留成员</Button><Button variant="dark" onClick={confirmRemoval}>确认移除</Button></div></div></Modal>
     </div>
   )

@@ -1,3 +1,4 @@
+import { points } from '../lib/points'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
@@ -22,9 +23,7 @@ import { GITHUB_REPO_URL } from '../lib/siteLinks'
 import {
   availableBillingPayTypes,
   billingPaymentReturn,
-  billingReturnHint,
-  cnyAmountDisplay,
-  skuPriceDisplay,
+  billingReturnHint, skuPriceDisplay,
   stripeCheckoutUrl,
   stripeSkuQuote,
   type BillingPayType,
@@ -356,13 +355,13 @@ export default function PricingPage() {
                         <strong>{price?.amount ?? '—'}</strong>
                       </div>
                       <p className="pf-pricing-sku-credit">
-                        <span>{t('pricing.credit')}</span><em>{cnyAmountDisplay(sku.credit_fen)}</em>
+                        <span>{t('pricing.credit')}</span><em>{points(sku.credit_fen)}</em>
                       </p>
                       {missingStripeQuote ? <p className="pf-pricing-sku-exchange" role="status">{t('pricing.stripeQuoteUnavailable')}</p> : quote && quote.payment_currency !== 'cny' ? (
                         <p className="pf-pricing-sku-exchange">{t('pricing.stripeExchange', { currency: quote.payment_currency.toUpperCase(), rate: quote.payment_exchange_rate })}</p>
                       ) : null}
                       {bonus > 0 ? (
-                        <p className="pf-pricing-sku-bonus"><Zap size={12} aria-hidden />{t('pricing.bonus', { amount: cnyAmountDisplay(bonus) })}</p>
+                        <p className="pf-pricing-sku-bonus"><Zap size={12} aria-hidden />{t('pricing.bonus', { amount: points(bonus) })}</p>
                       ) : (
                         <p className="pf-pricing-sku-bonus is-empty">&nbsp;</p>
                       )}

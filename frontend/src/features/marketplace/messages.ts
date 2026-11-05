@@ -1,3 +1,4 @@
+import { points } from '../../lib/points.ts'
 import { marketText as mt, marketFeedback } from './translate.ts'
 /** 用户提示与接口错误码分开处理，不改变服务端状态和错误契约。 */
 const businessMessages: Record<string, string> = {
@@ -51,6 +52,7 @@ function readableText(text: string): string | undefined {
 
 function limitText(value: unknown, field: string): string {
   if (typeof value !== 'number' && typeof value !== 'string') return mt("允许的范围")
+  if (field === 'unlock_price_fen') return points(Number(value))
   if (field.endsWith('_fen') && Number.isFinite(Number(value))) return `¥${(Number(value) / 100).toFixed(2)}`
   return String(value)
 }

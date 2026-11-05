@@ -1,3 +1,4 @@
+import { pointText, points } from './points'
 import { dialog } from './dialog'
 import { workspaceScope } from '../features/teams/workspaceScope'
 
@@ -5,7 +6,7 @@ export const PRICING_PATH = '/pricing'
 
 /** 是否为余额不足 / 计费拦截类错误 */
 export function isBillingError(message: string) {
-  return /余额不足|请先充值|402|insufficient_balance/i.test(message)
+  return /余额不足|积分不足|insufficient points|请先充值|402|insufficient_balance/i.test(message)
 }
 
 /** 跳转定价页充值 */
@@ -30,10 +31,10 @@ export async function handleBillingError(
     return true
   }
   const go = await dialog.confirm({
-    title: '余额不足',
-    message: message || '当前余额不足以开始生成，请先充值。',
-    confirmText: '去充值',
-    cancelText: '知道了',
+    title: pointText('积分不足', 'Insufficient Points'),
+    message: pointText('当前积分不足以开始生成，请先充值。', 'You do not have enough Points. Please top up to continue.'),
+    confirmText: pointText('去充值', 'Top up'),
+    cancelText: pointText('知道了', 'OK'),
     tone: 'danger',
   })
   if (go) {
@@ -50,4 +51,12 @@ export function notifyBillingErrorIfNeeded(status: number, message: string) {
   if (status === 402 || isBillingError(message)) {
     void handleBillingError(new Error(message))
   }
+}
+
+/** Only recognized system templates are converted; unknown text is retained. */
+export function billingPointsMessage(message: string): string {
+  const match = message.match(/^余额不足：需要 ¥(\d+\.\d{2})，当前 ¥(\d+\.\d{2})，请先充值$/)
+  if (!match) return message
+  const units = (value: string) => Number(value.replace('.', ''))
+  return pointText(`积分不足：需要 ${points(units(match[1]))}，当前 ${points(units(match[2]))}，请先充值`, `Insufficient Points: required ${points(units(match[1]))}, available ${points(units(match[2]))}. Please top up.`)
 }

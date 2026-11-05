@@ -1,3 +1,4 @@
+import { points } from '../../lib/points'
 import { useMarketplaceLocale } from './useMarketplaceLocale'
 import { marketText as mt, marketFeedback } from './translate'
 import { useEffect, useState } from 'react'
@@ -67,7 +68,7 @@ function MineWorks({ listing, loading, page, changePage, remove }: { listing: Li
         <div className="pf-market-item-body">
           <h3><Link to={href}>{item.title}</Link></h3>
           <p className="pf-market-author"><span>{item.kind === 'series' ? mt("剧") : mt("作")}</span>{mineStatus(item)}{item.kind === 'series' ? mt(" · {0} 集", [item.episode_count || 0]) : ''}</p>
-          <div className="pf-market-item-price"><div><strong>{free ? mt("免费") : item.kind === 'series' && item.sale_type === 'platform_unlock' ? mt("按集解锁") : money(item.sale_type === 'platform_unlock' ? item.unlock_price_fen : copyrightPrice)}</strong>{!free && <span>{item.sale_type === 'platform_unlock' ? item.kind === 'series' ? mt("分集定价") : mt("解锁价") : mt("参考价")}</span>}</div><button type="button" onClick={() => remove(item)}>{mt("删除")}</button><Link to={href} aria-label={mt("管理{0}", [item.title])}><ArrowUpRight size={20} /></Link></div>
+          <div className="pf-market-item-price"><div><strong>{free ? mt("免费") : item.kind === 'series' && item.sale_type === 'platform_unlock' ? mt("按集解锁") : (item.sale_type === 'platform_unlock' ? points(item.unlock_price_fen) : money(copyrightPrice))}</strong>{!free && <span>{item.sale_type === 'platform_unlock' ? item.kind === 'series' ? mt("分集定价") : mt("解锁价") : mt("参考价")}</span>}</div><button type="button" onClick={() => remove(item)}>{mt("删除")}</button><Link to={href} aria-label={mt("管理{0}", [item.title])}><ArrowUpRight size={20} /></Link></div>
         </div>
       </article>
     })}</div> : <EmptyState title={mt("还没有作品")} description={mt("单条视频和短剧都会出现在这里。")} action={mt("发布我的作品")} to="/marketplace/works/new" />}

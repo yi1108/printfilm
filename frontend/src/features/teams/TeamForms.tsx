@@ -56,5 +56,5 @@ export function CreateTeamProjectModal({ open, onClose, teamId }: { open: boolea
     navigate(`/drama/projects/${id}`)
   }
 
-  return <ProjectCreateDialog key={teamId} open={open} onClose={onClose} kind="drama" contextLabel="团队项目 · 成员共同创作" titleRequired titleMaxLength={60} sourceMaxLength={100000} allowImageStyle={false} onSubmit={submit} footerNote="创建项目不会自动提交生成任务。后续生成费用由团队所有者的个人余额支付。" />
+  return <ProjectCreateDialog key={teamId} open={open} onClose={onClose} kind="drama" contextLabel="团队项目 · 成员共同创作" titleRequired titleMaxLength={60} sourceMaxLength={100000} allowImageStyle={false} onSubmit={submit} footerNote="创建项目不会自动提交生成任务。后续生成费用由团队所有者的个人积分支付。" />
 }

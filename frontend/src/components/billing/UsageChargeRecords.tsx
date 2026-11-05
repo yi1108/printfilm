@@ -1,3 +1,4 @@
+import { points } from '../../lib/points'
 import { useCallback, useEffect, useState } from 'react'
 import { api, type UsageChargeRecord } from '../../api'
 import Pagination from '../ui/Pagination'
@@ -111,7 +112,7 @@ export default function UsageChargeRecords({ variant = 'compact' }: UsageChargeR
                 </span>
                 <span className="pf-settings-list-meta pf-usage-record-meta">
                   <strong className="pf-usage-record-charge">
-                    {item.charge_fen > 0 ? `-¥${item.charge_yuan.toFixed(2)}` : '—'}
+                    {item.charge_fen > 0 ? `-${points(item.charge_fen)}` : '—'}
                   </strong>
                   <em className="pf-muted">{formatWhen(item.created_at)}</em>
                 </span>

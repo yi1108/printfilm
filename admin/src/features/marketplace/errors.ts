@@ -1,3 +1,4 @@
+import { points } from '../../lib/points.ts'
 const messages: Record<string, string> = {
   MARKETPLACE_STORAGE_UNAVAILABLE: '文件服务暂未配置，请检查后台文件服务设置。',
   MARKETPLACE_PAYMENT_UNAVAILABLE: '支付服务暂不可用，请检查支付配置后重试。',
@@ -29,6 +30,7 @@ function readableText(value: string) {
 
 function boundary(value: unknown, field: string): string {
   if ((typeof value !== 'number' && typeof value !== 'string') || value === '' || !Number.isFinite(Number(value))) return '允许范围'
+  if (field === 'unlock_price_fen') return points(Number(value))
   return field.endsWith('_fen') ? `¥${(Number(value) / 100).toFixed(2)}` : String(value)
 }
 

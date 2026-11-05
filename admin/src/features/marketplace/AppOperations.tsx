@@ -1,3 +1,4 @@
+import { points } from '../../lib/points'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { CircleAlert, Coins, RefreshCw, Smartphone, Wallet } from 'lucide-react'
 import { PaginationBar } from '@/components/PaginationBar'
@@ -65,7 +66,7 @@ export default function AppOperations({ revision = 0 }: { revision?: number }) {
     catch (cause) { setError((cause as Error).message) } finally { setBusy(false) }
   }
   const stats = [
-    { key: 'wallet_balance_fen', label: '平台可用余额', icon: Wallet },
+    { key: 'wallet_balance_fen', label: '平台可用积分', icon: Wallet },
     { key: 'topup_count', label: '充值交易数', icon: Coins },
     { key: 'pending_notifications', label: '待处理苹果通知', icon: CircleAlert },
     { key: 'payout_due_fen', label: '可结算创作者收益', icon: Smartphone },
@@ -74,7 +75,7 @@ export default function AppOperations({ revision = 0 }: { revision?: number }) {
     <div className="market-ops-feedback"><strong>统一余额与苹果内购</strong><p className="mt-2">Web与App共用余额和充值套餐，余额可用于AI生成及视频解锁；充值先补齐欠费，消费解锁后才产生创作者收益。苹果渠道费及相关税费由平台承担。</p></div>
     <div className="market-ops-filter"><label>交易环境 <select aria-label="交易环境" value={environment} onChange={event => { setEnvironment(event.target.value); setPage(1); setEditing(null); setMessage('') }}><option value="Production">生产环境</option><option value="Sandbox">沙箱测试环境</option></select></label><button type="button" disabled={loading} onClick={() => setRefresh(value => value + 1)}><RefreshCw size={14} /> 刷新App数据</button></div>
     {environment === 'Sandbox' && <p className="market-ops-feedback">沙箱须使用独立测试部署、数据库和Redis。此处的环境筛选不能创建测试余额，也不能将沙箱充值计入生产账户。</p>}
-    <div className="market-ops-stats">{stats.map(card => <div key={card.key} className="market-ops-stat flex min-w-0 items-center gap-4 rounded-xl border border-[var(--ops-line)] bg-white p-5"><span className="market-ops-stat-icon"><card.icon size={20} /></span><span><span className="market-ops-stat-label">{card.label}</span><strong>{summary?.[card.key] === undefined ? '—' : card.key.endsWith('_fen') ? appMoney(summary[card.key]) : String(summary[card.key])}</strong></span></div>)}</div>
+    <div className="market-ops-stats">{stats.map(card => <div key={card.key} className="market-ops-stat flex min-w-0 items-center gap-4 rounded-xl border border-[var(--ops-line)] bg-white p-5"><span className="market-ops-stat-icon"><card.icon size={20} /></span><span><span className="market-ops-stat-label">{card.label}</span><strong>{summary?.[card.key] === undefined ? '—' : card.key === 'wallet_balance_fen' ? points(summary[card.key]) : card.key.endsWith('_fen') ? appMoney(summary[card.key]) : String(summary[card.key])}</strong></span></div>)}</div>
     {summaryError && <p role="alert" className="market-ops-feedback is-error">运营统计读取失败：{summaryError}</p>}
     {summary && <p className="market-ops-context">App开放：{summary.app_enabled ? '已开启' : '已关闭'} · 苹果新购：{summary.iap_enabled ? '已开启' : '已关闭'} · 生产配置检查：{summary.production_ready ? '配置完整（仍需真实联调）' : '未就绪'} · 创作者历史退款待抵扣：{appMoney(summary.creator_debt_fen)}</p>}
     <nav className="flex flex-wrap gap-2" aria-label="App运营分类">{Object.entries(appPanels).map(([key, label]) => <button type="button" key={key} aria-pressed={panel === key} className={panel === key ? 'market-ops-approve' : ''} onClick={() => changePanel(key as AppPanel)}>{label}</button>)}</nav>
@@ -120,7 +121,7 @@ function ProductForm({ item, onSaved, onCancel }: { item: Item | null; onSaved: 
     <div className="grid gap-4 md:grid-cols-4">
       <label>共同套餐<select value={skuId} disabled={Boolean(item?.sku_id)} onChange={event => setSkuId(event.target.value)}>{presets.map(row => <option key={String(row.id)} value={String(row.id)}>{String(row.name)} · {String(row.id)}</option>)}</select></label>
       <label>苹果商品编号<input readOnly value={String(item?.product_id || preset?.product_id || '')} /></label>
-      <label>到账人民币额度<input readOnly value={preset ? appMoney(preset.credit_fen) : '加载中'} /></label>
+      <label>到账积分<input readOnly value={preset ? points(preset.credit_fen) : '加载中'} /></label>
       <label>预期售价<input readOnly value={preset ? `CNY ${Number(preset.amount_fen) / 100} / USD ${Number((preset.expected_prices as Record<string, number>)?.USD) / 100}` : '加载中'} /></label>
     </div>
     <label><input type="checkbox" name="enabled" defaultChecked={Boolean(item?.enabled)} /> 允许新购（须完成苹果配置和统一余额核对）</label>

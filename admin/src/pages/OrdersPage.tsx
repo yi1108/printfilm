@@ -1,3 +1,4 @@
+import { points } from "@/lib/points";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -17,7 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/ui/page";
 import { useAdminDetailQuery } from "@/hooks/useAdminDetailQuery";
-import { fenToYuan } from "@/lib/utils";
+
 import { orderPaymentLabel } from "@/lib/orderPayment";
 import { ledgerKindLabel, orderStatusLabel, payTypeLabel, taskDomainLabel } from "@/lib/statusLabels";
 
@@ -191,7 +192,7 @@ export function OrdersPage() {
                   <TableHead>用户</TableHead>
                   <TableHead>SKU</TableHead>
                   <TableHead>支付金额</TableHead>
-                  <TableHead>入账（CNY）</TableHead>
+                  <TableHead>到账积分</TableHead>
                   <TableHead>支付</TableHead>
                   <TableHead>状态</TableHead>
                   <TableHead>渠道单号</TableHead>
@@ -216,7 +217,7 @@ export function OrdersPage() {
                     </TableCell>
                     <TableCell>{o.sku_id}</TableCell>
                     <TableCell>{orderPaymentLabel(o)}</TableCell>
-                    <TableCell>¥{fenToYuan(o.credit_fen)}</TableCell>
+                    <TableCell>{points(o.credit_fen)}</TableCell>
                     <TableCell>{payTypeLabel(o.pay_type)}</TableCell>
                     <TableCell>
                       <Badge variant={o.status === "paid" ? "success" : "secondary"}>
@@ -276,7 +277,7 @@ export function OrdersPage() {
                   <TableHead>ID</TableHead>
                   <TableHead>用户</TableHead>
                   <TableHead>变动</TableHead>
-                  <TableHead>余额后</TableHead>
+                  <TableHead>剩余积分</TableHead>
                   <TableHead>类型</TableHead>
                   <TableHead>关联</TableHead>
                   <TableHead>备注</TableHead>
@@ -292,9 +293,9 @@ export function OrdersPage() {
                     </TableCell>
                     <TableCell className={e.delta_fen >= 0 ? "text-emerald-700" : "text-red-600"}>
                       {e.delta_fen >= 0 ? "+" : ""}
-                      ¥{fenToYuan(e.delta_fen)}
+                      {points(e.delta_fen)}
                     </TableCell>
-                    <TableCell>¥{fenToYuan(e.balance_after)}</TableCell>
+                    <TableCell>{points(e.balance_after)}</TableCell>
                     <TableCell>
                       <Badge variant="secondary">{ledgerKindLabel(e.kind)}</Badge>
                     </TableCell>
@@ -444,7 +445,7 @@ export function OrdersPage() {
                     <TableCell>{row.capability ?? row.billing_key}</TableCell>
                     <TableCell className="max-w-[120px] truncate text-xs">{row.model || "—"}</TableCell>
                     <TableCell>{row.total_tokens ?? 0}</TableCell>
-                    <TableCell>¥{fenToYuan(row.charge_fen ?? 0)}</TableCell>
+                    <TableCell>{points(row.charge_fen ?? 0)}</TableCell>
                     <TableCell>
                       <Badge
                         variant={

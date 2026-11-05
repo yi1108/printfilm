@@ -1,3 +1,4 @@
+import { parsePoints } from '../../lib/points'
 import { useMarketplaceLocale } from './useMarketplaceLocale'
 import { marketText as mt, marketFeedback } from './translate'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
@@ -39,7 +40,7 @@ function EpisodePanel({ episode, count, free, open, saleType, seriesId, busy, vi
       <AssetPicker kind="image" required value={episode.cover_asset_id} onChange={cover_asset_id => update({ cover_asset_id })} title={mt("分集封面（可使用系列封面）")} />
       {saleType !== 'free' && <label>{mt("本集参考价（元）")}<input type="number" min="0" step="0.01" value={(episode.copyright_price_fen / 100) || ''} onChange={event => update({ copyright_price_fen: Math.round(Number(event.target.value || 0) * 100) })} /></label>}
       {episode.source === 'printfilm' ? <p className="pf-market-notice">{mt("PrintFilm 生成：本系列统一引用账号授权函，无需逐集签署或上传证书。")}</p> : episode.asset_id && (seriesId ? <button type="button" disabled={busy} onClick={goRights}>{mt("填写第")} {episode.episode_no}  {mt("集权属材料")}</button> : <p>{mt("请先保存草稿，再填写这一集的权属材料。保存后会回到这个页面。")}</p>)}
-      {saleType === 'platform_unlock' && <><label>{mt("本集观众解锁价（元）")}<input type="number" min="0.01" step="0.01" value={(episode.unlock_price_fen / 100) || ''} onChange={event => update({ unlock_price_fen: Math.round(Number(event.target.value || 0) * 100) })} /></label><label>{mt("本集平台抽成比例（万分比，可留空使用平台默认）")}<input type="number" min="0" max="10000" step="1" value={episode.share_bps ?? ''} onChange={event => update({ share_bps: event.target.value === '' ? null : Number(event.target.value) })} placeholder={mt("例如 2000，表示平台20%、创作者80%")} /><small>{mt("10000 表示 100%；本集未设置时使用平台默认比例。")}</small></label></>}
+      {saleType === 'platform_unlock' && <><label>{mt("本集观众解锁价（积分）")}<input type="number" min="0" max="100000000" step="1" value={Number.isNaN(episode.unlock_price_fen) ? '' : episode.unlock_price_fen} onChange={event => update({ unlock_price_fen: parsePoints(event.target.value, 100000000) ?? NaN })} /></label><label>{mt("本集平台抽成比例（万分比，可留空使用平台默认）")}<input type="number" min="0" max="10000" step="1" value={episode.share_bps ?? ''} onChange={event => update({ share_bps: event.target.value === '' ? null : Number(event.target.value) })} placeholder={mt("例如 2000，表示平台20%、创作者80%")} /><small>{mt("10000 表示 100%；本集未设置时使用平台默认比例。")}</small></label></>}
       {count > 1 && <button type="button" disabled={busy} onClick={remove}>{mt("删除本集")}</button>}
     </div>}
   </article>

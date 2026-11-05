@@ -1,3 +1,4 @@
+import { points } from '../lib/points'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { Link, Navigate, useSearchParams } from 'react-router-dom'
 import { AlertCircle, ArrowUpRight, CheckCircle2, Clock3, Download, Eye, FileText, ListChecks, ListFilter, Loader2, Plus, RefreshCw, Search, X } from 'lucide-react'
@@ -175,7 +176,7 @@ function TaskHistoryContent() {
         </button>
         <div className="gen-task-description"><button type="button" className="gen-task-title" onClick={() => openDetail(item)} title={title}>{title}</button><div className="gen-task-metadata"><span className="gen-task-tag">{kindLabels[item.kind as TaskKind] || 'AI'}</span>{shortVideoImage && <span className="gen-task-tag">{text('AI短视频', 'AI short video')}</span>}{item.kind === 'image' && item.urls.length > 1 && <span className="gen-task-tag">{text(`${item.urls.length} 张图片`, `${item.urls.length} images`)}</span>}{ratio && <span className="gen-task-tag">{ratio}</span>}</div>{item.error && <button type="button" className="gen-task-error" onClick={() => openDetail(item)} title={formatGenerationErrorMessage(item.error)}><AlertCircle size={12} /><span>{errorSummary(item.error)}</span><ArrowUpRight size={12} /></button>}</div>
         <div className="gen-task-state"><span className={`gen-state is-${item.status}`}><RowStatusIcon size={13} />{labels[item.status] || item.status}</span><small>{formatLabel}</small></div>
-        <div className="gen-task-cost"><strong>{billingState === 'hidden' ? '—' : `¥${((item.billing_charged_fen || 0) / 100).toFixed(2)}`}</strong><small>{billingLabels[billingState]}</small></div>
+        <div className="gen-task-cost"><strong>{billingState === 'hidden' ? '—' : points(item.billing_charged_fen || 0)}</strong><small>{billingLabels[billingState]}</small></div>
         <div className="gen-task-time"><span>{when(item.created_at)}</span><small>{text('耗时', 'Duration')} {elapsed(item)}</small></div>
         <div className="gen-row-actions">{item.status === 'succeeded' && (item.kind === 'text' ? item.text_content : item.urls[0]) && <button type="button" className="gen-secondary" disabled={downloading === recordKey} onClick={() => void download(item)}>{downloading === recordKey ? <Loader2 size={15} className="gen-spin" /> : <Download size={15} />}{text('下载', 'Download')}</button>}<button type="button" className="gen-icon-button" onClick={() => openDetail(item)} aria-label={text('查看任务详情', 'Task details')}><Eye size={18} /></button></div>
       </article>})}

@@ -1,9 +1,10 @@
+import { points } from '../../lib/points.ts'
 /** App运营只展示明确允许的业务字段，避免将Apple签名和支付密钥带到页面。 */
 export const appPanels = {
-  products: '苹果充值商品', transactions: '苹果交易', notifications: '苹果通知', wallets: '统一余额账户',
+  products: '苹果充值商品', transactions: '苹果交易', notifications: '苹果通知', wallets: '统一积分账户',
   'recharge-orders': '各渠道充值订单', 'funding-sources': '资金来源', 'funding-reviews': 'Web资金对账',
   debts: '欠费记录', repayments: '欠费偿还',
-  'wallet-entries': '统一余额流水', 'unlock-orders': '余额解锁订单', adjustments: '退款与收益冲正',
+  'wallet-entries': '统一积分流水', 'unlock-orders': '积分解锁订单', adjustments: '退款与收益冲正',
   media: 'App播放准备', revenue: 'App收益明细', settlements: '月度对账', payouts: '创作者打款',
 } as const
 export type AppPanel = keyof typeof appPanels
@@ -11,18 +12,18 @@ export type AppPanel = keyof typeof appPanels
 const names: Record<string, string> = {
   payment_amount_minor: '原币实付（最小单位）', storefront: 'Apple商店地区', valuation_status: '财务核算状态',
   expected_prices: '固定售价', fx_snapshot: '财务汇率快照',
-  sku_id: '共同套餐编号', balance_fen: '平台可用余额', frozen_fen: '冻结额度', debt_fen: '未补齐欠费',
-  delta_fen: '余额变动', frozen_delta_fen: '冻结变动', frozen_after: '变动后冻结',
-  source_type: '资金来源', source_ref: '来源编号', total_units: '到账额度（分）', total_amount_fen: '来源实付',
-  available_units: '来源可用额度（分）', cause_type: '欠费原因', cause_ref: '原因编号', origin_lot_id: '原充值来源',
-  units: '额度（分）', debt_id: '欠费编号', allocation_id: '使用记录编号', repaid_units: '已补齐额度（分）',
-  outstanding_units: '未补齐额度（分）', reviewed_at: '核对时间', pay_type: '支付渠道', credit_fen: '到账额度',
-  product_id: '苹果商品编号', coins: '额度（分）', price_fen: '苹果参考价', enabled: '可新购', used: '已有交易',
+  spendable_fen: '实际可消费积分', pending_commitment_fen: '任务预留积分', sku_id: '共同套餐编号', balance_fen: '平台可用积分', frozen_fen: '冻结额度', debt_fen: '未补齐欠费',
+  delta_fen: '积分变动', frozen_delta_fen: '冻结变动', frozen_after: '变动后冻结',
+  source_type: '资金来源', source_ref: '来源编号', total_units: '到账积分', total_amount_fen: '来源实付',
+  available_units: '来源可用积分', cause_type: '欠费原因', cause_ref: '原因编号', origin_lot_id: '原充值来源',
+  units: '积分', debt_id: '欠费编号', allocation_id: '使用记录编号', repaid_units: '已补齐积分',
+  outstanding_units: '未补齐积分', reviewed_at: '核对时间', pay_type: '支付渠道', credit_fen: '到账额度',
+  product_id: '苹果商品编号', coins: '积分', price_fen: '苹果参考价', enabled: '可新购', used: '已有交易',
   environment: '交易环境', user_id: '用户编号', owner_id: '创作者编号', transaction_id: '苹果交易编号',
   original_transaction_id: '原始交易编号', apple_transaction_id: '充值记录编号', status: '状态', currency: '币种',
-  amount_fen: '金额', balance_coins: '观影币余额', balance: '观影币余额', available_coins: '可用观影币',
-  remaining_coins: '批次剩余币数', coin_amount: '消费观影币', coins_delta: '币数变动', delta_coins: '币数变动',
-  balance_after: '变动后余额', balance_after_coins: '变动后余额', kind: '业务类型', action: '操作',
+  amount_fen: '金额', balance_coins: '积分余额', balance: '积分余额', available_coins: '可用积分',
+  remaining_coins: '批次剩余币数', coin_amount: '消费积分', coins_delta: '币数变动', delta_coins: '币数变动',
+  balance_after: '变动后积分', balance_after_coins: '变动后积分', kind: '业务类型', action: '操作',
   publication_id: '发布版本编号', order_id: '订单编号', out_trade_no: '订单号',
   notification_type: '通知类型', notification_uuid: '通知编号', attempts: '处理次数', error: '处理说明',
   next_attempt_at: '下次处理时间', settlement_status: '对账状态', revoked_at: '退款时间', signed_at: '苹果签名时间',
@@ -70,6 +71,7 @@ export function appRecordFields(item: Record<string, unknown>, panel?: AppPanel)
     if (key === 'expected_prices' && typeof value === 'object') text = Object.entries(value).map(([currency, amount]) => `${currency} ${(Number(amount) / 100).toFixed(2)}`).join(' / ')
     else if (key === 'fx_snapshot' && typeof value === 'object') { const rate = value as Record<string, unknown>; text = rate.cny_per_unit ? `版本 ${rate.version} · ${rate.cny_per_unit} CNY · ${rate.source}` : '待核算' }
     else if (typeof value === 'boolean') text = value ? '是' : '否'
+    else if (['spendable_fen', 'pending_commitment_fen', 'debt_fen', 'frozen_delta_fen', 'frozen_after', 'available_units', 'units', 'repaid_units', 'outstanding_units', 'balance_coins', 'balance', 'available_coins', 'remaining_coins', 'coin_amount', 'coins_delta', 'delta_coins', 'balance_after', 'balance_after_coins', 'balance_fen', 'frozen_fen', 'credit_fen', 'bonus_fen', 'charge_fen', 'delta_fen', 'balance_after_fen', 'unlock_price_fen', 'coins', 'total_units', 'remaining_units', 'debt_units', 'available_fen'].includes(key)) text = points(value)
     else if (key.endsWith('_fen')) text = appMoney(value)
     else if (Array.isArray(value)) text = value.filter(entry => typeof entry === 'number' || typeof entry === 'string').join('、') || '—'
     else if (typeof value === 'number' || typeof value === 'string') {
