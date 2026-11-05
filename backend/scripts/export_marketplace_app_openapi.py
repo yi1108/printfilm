@@ -9,7 +9,7 @@ def validate_document(document: dict, routes) -> int:
     """检查内部引用与已挂载HTTP操作，防止交付断裂或漏接口的OpenAPI。"""
     from fastapi.routing import APIRoute
 
-    allowed = ("/api/marketplace/app/v1/", "/api/admin/marketplace/app/", "/api/billing/")
+    allowed = ("/api/marketplace/app/v1/", "/api/admin/marketplace/app/", "/api/admin/marketplace/curation/", "/api/billing/")
     notification = "/api/marketplace/payments/apple/notifications"
     paths = document.get("paths", {})
     if not paths or any(not path.startswith(allowed) and path != notification for path in paths):
@@ -63,7 +63,18 @@ def validate_document(document: dict, routes) -> int:
         "/api/marketplace/app/v1/me/author-blocks",
         "/api/marketplace/app/v1/me/author-blocks/{author_id}",
         "/api/marketplace/app/v1/reports",
+        "/api/marketplace/app/v1/{target_type}/{target_id}/share-sessions",
+        "/api/marketplace/app/v1/share-sessions/{token}/events",
         "/api/admin/marketplace/app/summary",
+        "/api/admin/marketplace/app/social/metrics",
+        "/api/admin/marketplace/app/social/metrics/{target_type}/{target_id}",
+        "/api/admin/marketplace/app/social/metrics/events",
+        "/api/admin/marketplace/app/social/initialization-jobs",
+        "/api/admin/marketplace/app/social/initialization-jobs/{job_id}",
+        "/api/admin/marketplace/app/social/initialization-jobs/{job_id}/retry",
+        "/api/admin/marketplace/curation/{target_type}/{target_id}",
+        "/api/admin/marketplace/curation/batch",
+        "/api/admin/marketplace/curation/events",
         "/api/admin/marketplace/app/products",
         "/api/admin/marketplace/app/revenue",
         "/api/admin/marketplace/app/{kind}",

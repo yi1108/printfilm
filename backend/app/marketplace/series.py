@@ -113,6 +113,8 @@ async def _series_data(db, item: Series, *, private: bool = False) -> dict:
     episodes = (await db.execute(select(SeriesEpisode).where(SeriesEpisode.series_id == item.id).order_by(SeriesEpisode.episode_no))).scalars().all()
     result = data(item, "id", "title", "description", "category", "tags", "cover_asset_id", "sale_type", "copyright_price_fen", "free_episode_count", "created_at")
     result.update(await category_fields(db, item))
+    from .curation import flags as curation_flags
+    result.update(await curation_flags(db, "series", item.id))
     result["episode_count"] = len(episodes)
     result["episodes"] = [await _episode_data(db, episode, private=private) for episode in episodes]
     if private:
@@ -540,7 +542,8 @@ async def listing_series(series_id: int, body: Version, db: DB, user: Actor, lis
     # publications are kept for entitlements but must never be relisted when a
     # newer episode version is approved.
     episodes = list((await db.execute(
-        select(SeriesEpisode).where(SeriesEpisode.series_id == series.id).with_for_update()
+        select(SeriesEpisode).where(SeriesEpisode.series_id == series.id)
+        .order_by(SeriesEpisode.id).with_for_update()
     )).scalars().all())
     if listed:
         if series.blocked or series.audit_status != "approved":
@@ -580,6 +583,11 @@ async def listing_series(series_id: int, body: Version, db: DB, user: Actor, lis
         )
     for episode in episodes:
         episode.listed = listed and episode.audit_status == "approved" and not episode.blocked
+    if listed:
+        await db.flush()
+        from .app_engagement import initialize_target
+        for episode in episodes:
+            await initialize_target(db, "series_episode", episode.id, automatic=True)
     await db.commit()
     return await _series_data(db, series, private=True)
 

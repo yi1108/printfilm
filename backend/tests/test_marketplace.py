@@ -1132,7 +1132,8 @@ async def test_real_ffmpeg_processing_with_oss_transport_stub(monkeypatch, tmp_p
     result = await worker.process_asset({"id": 999, "filename": "source.mp4", "object_key": "unit-test", "kind": "video", "size_bytes": source.stat().st_size, "content_type": "video/mp4"})
     assert result["duration_seconds"] == 31
     assert result["fingerprint"] == worker.fingerprint(source)
-    assert set(result) == {"duration_seconds", "fingerprint"}
+    assert set(result) == {"duration_seconds", "fingerprint", "display_width", "display_height"}
+    assert (result["display_width"], result["display_height"]) == (320, 180)
     assert results == {}  # 不为每次上传额外制作试看、审片或自动封面。
     probe = json.loads(await worker.command(settings.ffprobe_path, "-v", "error", "-show_format", "-show_streams", "-of", "json", str(source)))
     assert float(probe["format"]["duration"]) == 31

@@ -93,12 +93,15 @@ async def overview(db: DB, user: Admin):
     description='仅管理员可访问。kind 支持 works、rights、cases、recruits、submissions、reports、jobs、events、previews、series、episodes、orders、ledger、payouts、entitlements。支持按适用的状态筛选；权益记录还可按 user_id、owner_id 筛选。',
     response_description='运营记录 items 与分页信息 meta。',
 )
-async def records(kind: str, db: DB, user: Admin, status: str = "", user_id: int | None = Query(None, ge=1), owner_id: int | None = Query(None, ge=1), page_number: int = Query(1, alias="page", ge=1), page_size: int = Query(20, ge=1, le=100)):
+async def records(kind: str, db: DB, user: Admin, status: str = "", curation: str = "", user_id: int | None = Query(None, ge=1), owner_id: int | None = Query(None, ge=1), page_number: int = Query(1, alias="page", ge=1), page_size: int = Query(20, ge=1, le=100)):
     """管理员分页工作台；敏感材料在单独鉴权接口读取。"""
     model = MODELS.get(kind)
     if not model:
         fail("记录类型无效", 404)
     query = select(model)
+    if curation and kind in ("works", "series"):
+        from .curation import filter_curation
+        query = filter_curation(query, model, "work" if kind == "works" else "series", curation)
     if kind in ("works", "series"):
         query = query.where(model.deleted_at.is_(None))
     field = getattr(model, "audit_status", None) if kind in ("works", "recruits", "series") else getattr(model, "status", None)
@@ -153,6 +156,9 @@ async def records(kind: str, db: DB, user: Admin, status: str = "", user_id: int
         else:
             fields = [column.name for column in model.__table__.columns]
             result = data(item, *fields)
+        if kind in ("works", "series"):
+            from .curation import admin_fields
+            result.update(await admin_fields(db, "work" if kind == "works" else "series", item.id))
         items.append(result)
     if kind in ("rights", "cases", "reports", "entitlements"):
         event(db, user.id, kind, 0, "admin_list_read")

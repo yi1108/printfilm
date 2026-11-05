@@ -1,7 +1,9 @@
+import ContentBadges from './ContentBadges'
+import ShareButton from './ShareButton'
 import { useMarketplaceLocale } from './useMarketplaceLocale'
 import { marketText as mt, marketFeedback } from './translate'
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { Lock } from 'lucide-react'
 import { Contact, Media, NeedLogin } from './shared'
 import { money, request, type Row } from './api'
@@ -9,7 +11,7 @@ import { PageHeading } from './ui'
 import { isFreeEpisode } from './playbackPolicy'
 
 type Episode = Row & { episode_no: number; description?: string }
-type Series = { id: number; title: string; description?: string; category?: string; category_label?: string; sale_type: string; copyright_price_fen?: number; free_episode_count?: number; episodes: Episode[] }
+type Series = { is_featured?: boolean; is_pinned?: boolean; id: number; title: string; description?: string; category?: string; category_label?: string; sale_type: string; copyright_price_fen?: number; free_episode_count?: number; episodes: Episode[] }
 
 const pageSize = 15
 
@@ -21,6 +23,8 @@ function rememberKey(id: number) {
 export default function SeriesDetail() {
   const locale = useMarketplaceLocale()
   const id = Number(useParams().id)
+  const [searchParams] = useSearchParams()
+  const sharedEpisodeId = searchParams.get('episode_id') || ''
   const [item, setItem] = useState<Series | null>(null)
   const [error, setError] = useState('')
   const [current, setCurrent] = useState(1)
@@ -31,7 +35,8 @@ export default function SeriesDetail() {
     request<Series>(`/series/${id}`).then(value => {
       if (!active) return
       const saved = Number(sessionStorage.getItem(rememberKey(id)) || 1)
-      const episode = value.episodes.find(entry => entry.episode_no === saved) || value.episodes[0]
+      const episode = sharedEpisodeId ? value.episodes.find(entry => String(entry.id) === sharedEpisodeId) : value.episodes.find(entry => entry.episode_no === saved) || value.episodes[0]
+      if (sharedEpisodeId && !episode) { setError(mt('分享的分集不存在或暂不可访问')); return }
       setItem(value)
       if (episode) {
         setCurrent(episode.episode_no)
@@ -39,7 +44,7 @@ export default function SeriesDetail() {
       }
     }).catch(e => { if (active) setError(e.message) })
     return () => { active = false }
-  }, [id, locale])
+  }, [id, locale, sharedEpisodeId])
   function select(episodeNo: number, play = true) {
     setCurrent(episodeNo)
     setAutoPlay(play)
@@ -59,7 +64,7 @@ export default function SeriesDetail() {
   const price = item.sale_type === 'platform_unlock' ? mt("按集解锁") : mt("版权合作参考价 {0}", [money(item.copyright_price_fen)])
   return <>
     <PageHeading title={item.title} description={mt("{0} · 短剧 · {1} 集", [item.category_label || item.category || mt('其他'), item.episodes.length])} back="/marketplace" />
-    <div className="pf-series-layout">
+    <ContentBadges item={item} /><div className="pf-series-layout">
       <section className="pf-series-stage">
         <Media key={episode.id} kind="series_episode" id={episode.id} purpose="preview" video autoPlay={autoPlay} onEnded={() => { if (next) select(next.episode_no) }} />
       </section>
@@ -72,6 +77,7 @@ export default function SeriesDetail() {
           {!free && item.sale_type === 'copyright_contact' && <NeedLogin><Contact kind="series_episode" id={episode.id} /></NeedLogin>}
           {!free && item.sale_type === 'platform_unlock' && <small>{mt("当前网页仅提供短试看，暂不支持购买和完整播放。")}</small>}
         </section>
+        {item.sale_type !== 'copyright_contact' && <ShareButton kind="series_episode" id={episode.id} />}
         <div className="pf-series-transport">
           <button type="button" disabled={!previous} onClick={() => previous && select(previous.episode_no)}>{mt("上一集")}</button>
           <span>{mt("第")} {episode.episode_no}  {mt("集 ·")} {episode.title}</span>

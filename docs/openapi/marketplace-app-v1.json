@@ -1,6 +1,78 @@
 {
   "components": {
     "schemas": {
+      "BatchInput": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BatchItem"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Items",
+            "type": "array"
+          },
+          "reason": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "reason"
+        ],
+        "title": "BatchInput",
+        "type": "object"
+      },
+      "BatchItem": {
+        "additionalProperties": false,
+        "properties": {
+          "is_featured": {
+            "title": "Is Featured",
+            "type": "boolean"
+          },
+          "is_pinned": {
+            "title": "Is Pinned",
+            "type": "boolean"
+          },
+          "pin_priority": {
+            "default": 100,
+            "maximum": 9999.0,
+            "minimum": 0.0,
+            "title": "Pin Priority",
+            "type": "integer"
+          },
+          "target_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Target Id",
+            "type": "integer"
+          },
+          "target_type": {
+            "enum": [
+              "work",
+              "series"
+            ],
+            "title": "Target Type",
+            "type": "string"
+          },
+          "version": {
+            "minimum": 0.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "is_featured",
+          "is_pinned",
+          "target_type",
+          "target_id"
+        ],
+        "title": "BatchItem",
+        "type": "object"
+      },
       "CommentInput": {
         "properties": {
           "parent_id": {
@@ -114,6 +186,45 @@
         "title": "CreateOrderBody",
         "type": "object"
       },
+      "CurationInput": {
+        "additionalProperties": false,
+        "properties": {
+          "is_featured": {
+            "title": "Is Featured",
+            "type": "boolean"
+          },
+          "is_pinned": {
+            "title": "Is Pinned",
+            "type": "boolean"
+          },
+          "pin_priority": {
+            "default": 100,
+            "maximum": 9999.0,
+            "minimum": 0.0,
+            "title": "Pin Priority",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "version": {
+            "minimum": 0.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "is_featured",
+          "is_pinned",
+          "reason"
+        ],
+        "title": "CurationInput",
+        "type": "object"
+      },
       "ExchangeRateInput": {
         "additionalProperties": false,
         "properties": {
@@ -195,6 +306,89 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "InitializationInput": {
+        "additionalProperties": false,
+        "properties": {
+          "preview": {
+            "default": true,
+            "title": "Preview",
+            "type": "boolean"
+          },
+          "reason": {
+            "default": "历史作品初始数量补齐",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "target_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "work",
+                  "series_episode",
+                  "episode"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Type"
+          }
+        },
+        "title": "InitializationInput",
+        "type": "object"
+      },
+      "MetricsInput": {
+        "additionalProperties": false,
+        "properties": {
+          "clear": {
+            "default": false,
+            "title": "Clear",
+            "type": "boolean"
+          },
+          "favorite_count": {
+            "default": 0,
+            "maximum": 1000000000.0,
+            "minimum": 0.0,
+            "title": "Favorite Count",
+            "type": "integer"
+          },
+          "like_count": {
+            "default": 0,
+            "maximum": 1000000000.0,
+            "minimum": 0.0,
+            "title": "Like Count",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "share_count": {
+            "default": 0,
+            "maximum": 1000000000.0,
+            "minimum": 0.0,
+            "title": "Share Count",
+            "type": "integer"
+          },
+          "version": {
+            "minimum": 0.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "reason"
+        ],
+        "title": "MetricsInput",
         "type": "object"
       },
       "NotificationInput": {
@@ -459,6 +653,157 @@
           "idempotency_key"
         ],
         "title": "SettlementInput",
+        "type": "object"
+      },
+      "ShareEventInput": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "completed",
+              "copied",
+              "cancelled"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "anonymous_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 16,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anonymous Id"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "title": "ShareEventInput",
+        "type": "object"
+      },
+      "ShareEventOutput": {
+        "properties": {
+          "action": {
+            "enum": [
+              "completed",
+              "copied",
+              "cancelled"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "counted": {
+            "description": "此会话是否已计入真实分享；重复返回true不代表新增一次。",
+            "title": "Counted",
+            "type": "boolean"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "share_count": {
+            "description": "已合计运营初始值及真实分享的展示总数。",
+            "title": "Share Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ok",
+          "counted",
+          "action",
+          "share_count"
+        ],
+        "title": "ShareEventOutput",
+        "type": "object"
+      },
+      "ShareInput": {
+        "additionalProperties": false,
+        "properties": {
+          "anonymous_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 16,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anonymous Id"
+          }
+        },
+        "title": "ShareInput",
+        "type": "object"
+      },
+      "ShareSessionOutput": {
+        "properties": {
+          "content_id": {
+            "title": "Content Id",
+            "type": "integer"
+          },
+          "content_type": {
+            "enum": [
+              "work",
+              "series_episode"
+            ],
+            "title": "Content Type",
+            "type": "string"
+          },
+          "cover_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Url"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "token": {
+            "description": "24小时分享回调凭证，不得写入日志；不是播放令牌。",
+            "title": "Token",
+            "type": "string"
+          },
+          "url": {
+            "description": "稳定的公网HTTPS作品业务链接；不包含原片或HLS地址。",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "expires_at",
+          "content_type",
+          "content_id",
+          "title",
+          "description",
+          "cover_url",
+          "url"
+        ],
+        "title": "ShareSessionOutput",
         "type": "object"
       },
       "SocialSettingInput": {
@@ -1377,6 +1722,434 @@
         ]
       }
     },
+    "/api/admin/marketplace/app/social/initialization-jobs": {
+      "post": {
+        "operationId": "initialize_metrics_api_admin_marketplace_app_social_initialization_jobs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InitializationInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Initialize Metrics Api Admin Marketplace App Social Initialization Jobs Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Initialize Metrics",
+        "tags": [
+          "互动运营"
+        ]
+      }
+    },
+    "/api/admin/marketplace/app/social/initialization-jobs/{job_id}": {
+      "get": {
+        "operationId": "get_job_api_admin_marketplace_app_social_initialization_jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Job Api Admin Marketplace App Social Initialization Jobs  Job Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Job",
+        "tags": [
+          "互动运营"
+        ]
+      }
+    },
+    "/api/admin/marketplace/app/social/initialization-jobs/{job_id}/retry": {
+      "post": {
+        "operationId": "retry_job_api_admin_marketplace_app_social_initialization_jobs__job_id__retry_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Retry Job Api Admin Marketplace App Social Initialization Jobs  Job Id  Retry Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Retry Job",
+        "tags": [
+          "互动运营"
+        ]
+      }
+    },
+    "/api/admin/marketplace/app/social/metrics": {
+      "get": {
+        "operationId": "metrics_api_admin_marketplace_app_social_metrics_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "target_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "work",
+                    "series",
+                    "series_episode",
+                    "episode"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 100,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "curation",
+            "required": false,
+            "schema": {
+              "default": "",
+              "pattern": "^(|featured|pinned|normal)$",
+              "title": "Curation",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Metrics Api Admin Marketplace App Social Metrics Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Metrics",
+        "tags": [
+          "互动运营"
+        ]
+      }
+    },
+    "/api/admin/marketplace/app/social/metrics/events": {
+      "get": {
+        "operationId": "metric_events_api_admin_marketplace_app_social_metrics_events_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "target_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "work",
+                    "series",
+                    "series_episode",
+                    "episode"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "target_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Metric Events Api Admin Marketplace App Social Metrics Events Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Metric Events",
+        "tags": [
+          "互动运营"
+        ]
+      }
+    },
+    "/api/admin/marketplace/app/social/metrics/{target_type}/{target_id}": {
+      "patch": {
+        "operationId": "update_metrics_api_admin_marketplace_app_social_metrics__target_type___target_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_type",
+            "required": true,
+            "schema": {
+              "enum": [
+                "work",
+                "series",
+                "series_episode",
+                "episode"
+              ],
+              "title": "Target Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target_id",
+            "required": true,
+            "schema": {
+              "title": "Target Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetricsInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Update Metrics Api Admin Marketplace App Social Metrics  Target Type   Target Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Metrics",
+        "tags": [
+          "互动运营"
+        ]
+      }
+    },
     "/api/admin/marketplace/app/social/stats": {
       "get": {
         "operationId": "social_stats_api_admin_marketplace_app_social_stats_get",
@@ -1675,6 +2448,286 @@
         "summary": "Records",
         "tags": [
           "App运营与财务"
+        ]
+      }
+    },
+    "/api/admin/marketplace/curation/batch": {
+      "post": {
+        "operationId": "batch_curation_api_admin_marketplace_curation_batch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Batch Curation Api Admin Marketplace Curation Batch Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Batch Curation",
+        "tags": [
+          "作品推荐运营"
+        ]
+      }
+    },
+    "/api/admin/marketplace/curation/events": {
+      "get": {
+        "operationId": "curation_events_api_admin_marketplace_curation_events_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "target_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "work",
+                    "series"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "target_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Curation Events Api Admin Marketplace Curation Events Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Curation Events",
+        "tags": [
+          "作品推荐运营"
+        ]
+      }
+    },
+    "/api/admin/marketplace/curation/{target_type}/{target_id}": {
+      "get": {
+        "operationId": "get_curation_api_admin_marketplace_curation__target_type___target_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_type",
+            "required": true,
+            "schema": {
+              "enum": [
+                "work",
+                "series"
+              ],
+              "title": "Target Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target_id",
+            "required": true,
+            "schema": {
+              "title": "Target Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Curation Api Admin Marketplace Curation  Target Type   Target Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Curation",
+        "tags": [
+          "作品推荐运营"
+        ]
+      },
+      "patch": {
+        "operationId": "update_curation_api_admin_marketplace_curation__target_type___target_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_type",
+            "required": true,
+            "schema": {
+              "enum": [
+                "work",
+                "series"
+              ],
+              "title": "Target Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target_id",
+            "required": true,
+            "schema": {
+              "title": "Target Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CurationInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Update Curation Api Admin Marketplace Curation  Target Type   Target Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Curation",
+        "tags": [
+          "作品推荐运营"
         ]
       }
     },
@@ -2572,7 +3625,7 @@
     },
     "/api/marketplace/app/v1/feed": {
       "get": {
-        "description": "SQL 层先筛审核、版权、封禁和作者屏蔽，再执行稳定游标分页。",
+        "description": "先按分类、关键词、内容类型及公开权限筛选，再执行服务端排序。默认 recommended：置顶优先、置顶排序值降序、精选优先、发布时间及内容类型与编号降序；latest 严格按发布时间排序。公开卡片只返回 is_featured 和 is_pinned，不返回运营权重。推荐排序调整后，或请求读取期间运营排序发生变化，返回409 MARKETPLACE_FEED_UPDATED；客户端应清空列表和游标并重新加载第一页。旧时间游标仅兼容 latest；切换筛选或排序需清空游标。",
         "operationId": "feed_api_marketplace_app_v1_feed_get",
         "parameters": [
           {
@@ -2620,11 +3673,13 @@
             }
           },
           {
+            "description": "上一页返回的next_cursor；切换筛选或排序时清空。",
             "in": "query",
             "name": "cursor",
             "required": false,
             "schema": {
               "default": "",
+              "description": "上一页返回的next_cursor；切换筛选或排序时清空。",
               "maxLength": 1024,
               "title": "Cursor",
               "type": "string"
@@ -2640,6 +3695,19 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "description": "recommended：置顶及精选优先（默认）；latest：严格按发布时间。",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "recommended",
+              "description": "recommended：置顶及精选优先（默认）；latest：严格按发布时间。",
+              "pattern": "^(recommended|latest)$",
+              "title": "Sort",
+              "type": "string"
             }
           },
           {
@@ -2667,12 +3735,75 @@
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
+                  "properties": {
+                    "has_more": {
+                      "type": "boolean"
+                    },
+                    "items": {
+                      "items": {
+                        "properties": {
+                          "is_featured": {
+                            "description": "平台精选标识，仅由运营设置；前端可显示精选 / Featured。",
+                            "type": "boolean"
+                          },
+                          "is_pinned": {
+                            "description": "平台置顶标识，仅由运营设置；仅推荐排序提高位置，latest仍遵守时间排序。",
+                            "type": "boolean"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "next_cursor": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "不透明签名游标，原样传回；无下一页时为null。"
+                    }
+                  },
                   "title": "Response Feed Api Marketplace App V1 Feed Get",
                   "type": "object"
                 }
               }
             },
-            "description": "Successful Response",
+            "description": "服务端排序后的作品及系列卡片、分页状态和下一页游标。",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": {
+                    "code": "MARKETPLACE_FEED_UPDATED",
+                    "message": "列表已更新，请刷新"
+                  }
+                }
+              }
+            },
+            "description": "推荐列表已更新，请清空列表和游标后重新加载。",
             "headers": {
               "Content-Language": {
                 "description": "Resolved display language",
@@ -2726,7 +3857,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Feed",
+        "summary": "获取 App 推荐或最新内容流",
         "tags": [
           "App视频与观影币"
         ]
@@ -3505,7 +4636,8 @@
                     "works",
                     "series",
                     "episode",
-                    "episodes"
+                    "episodes",
+                    "series_episode"
                   ],
                   "type": "string"
                 },
@@ -3630,7 +4762,8 @@
                     "works",
                     "series",
                     "episode",
-                    "episodes"
+                    "episodes",
+                    "series_episode"
                   ],
                   "type": "string"
                 },
@@ -4691,6 +5824,118 @@
         ]
       }
     },
+    "/api/marketplace/app/v1/share-sessions/{token}/events": {
+      "post": {
+        "description": "仅在系统分享完成或复制成功后上报；取消不计数。首个有效事件确定会话结果，重试原令牌和原动作。同身份同作品滚动24小时最多计数一次。",
+        "operationId": "finish_share_session_api_marketplace_app_v1_share_sessions__token__events_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+            "in": "header",
+            "name": "accept-language",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+              "title": "Accept-Language"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareEventInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareEventOutput"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "确认分享或复制操作",
+        "tags": [
+          "App视频与观影币"
+        ]
+      }
+    },
     "/api/marketplace/app/v1/unlocks": {
       "post": {
         "description": "只有 App 播放文件已就绪的当前可售版本才允许扣币。",
@@ -4914,7 +6159,8 @@
                 "works",
                 "series",
                 "episode",
-                "episodes"
+                "episodes",
+                "series_episode"
               ],
               "title": "Target Type",
               "type": "string"
@@ -5063,7 +6309,8 @@
                 "works",
                 "series",
                 "episode",
-                "episodes"
+                "episodes",
+                "series_episode"
               ],
               "title": "Target Type",
               "type": "string"
@@ -5188,7 +6435,8 @@
                 "works",
                 "series",
                 "episode",
-                "episodes"
+                "episodes",
+                "series_episode"
               ],
               "title": "Target Type",
               "type": "string"
@@ -5301,7 +6549,8 @@
                 "works",
                 "series",
                 "episode",
-                "episodes"
+                "episodes",
+                "series_episode"
               ],
               "title": "Target Type",
               "type": "string"
@@ -5416,7 +6665,8 @@
                 "works",
                 "series",
                 "episode",
-                "episodes"
+                "episodes",
+                "series_episode"
               ],
               "title": "Target Type",
               "type": "string"
@@ -5529,7 +6779,8 @@
                 "works",
                 "series",
                 "episode",
-                "episodes"
+                "episodes",
+                "series_episode"
               ],
               "title": "Target Type",
               "type": "string"
@@ -5630,6 +6881,131 @@
         ]
       }
     },
+    "/api/marketplace/app/v1/{target_type}/{target_id}/share-sessions": {
+      "post": {
+        "description": "先检查App可见性及分享配置。游客须提供匿名安装ID，登录用户按账号识别；同一身份每分钟最多创建10个会话。会话有效24小时。",
+        "operationId": "create_share_session_api_marketplace_app_v1__target_type___target_id__share_sessions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_type",
+            "required": true,
+            "schema": {
+              "enum": [
+                "works",
+                "episodes"
+              ],
+              "title": "Target Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target_id",
+            "required": true,
+            "schema": {
+              "title": "Target Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+            "in": "header",
+            "name": "accept-language",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+              "title": "Accept-Language"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareSessionOutput"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "准备单视频或当前分集分享",
+        "tags": [
+          "App视频与观影币"
+        ]
+      }
+    },
     "/api/marketplace/app/v1/{target_type}/{target_id}/social-settings": {
       "put": {
         "description": "创作者控制评论开关；不改变已保存评论。",
@@ -5645,7 +7021,8 @@
                 "works",
                 "series",
                 "episode",
-                "episodes"
+                "episodes",
+                "series_episode"
               ],
               "title": "Target Type",
               "type": "string"

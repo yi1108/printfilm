@@ -958,5 +958,11 @@
   "分镜画幅比例不一致：第{0}镜（分镜编号{1}，{2}×{3}，显示{4}:{5}）与第{6}镜（分镜编号{7}，{8}×{9}，显示{10}:{11}）；差异超过5%的自动补边范围，请先统一画幅后发布": "Shot aspect ratios differ: shot {0} (ID {1}, {2}×{3}, display {4}:{5}) and shot {6} (ID {7}, {8}×{9}, display {10}:{11}). The difference exceeds the 5% automatic padding tolerance. Align the aspect ratios before publishing.",
   "分镜旋转角度不受支持，请先导出为标准横屏或竖屏视频": "Unsupported shot rotation. Export a standard landscape or portrait video first.",
   "未知充值包": "Unknown top-up package.",
-  "价格已更新，请刷新后重试": "The price has changed. Refresh and try again."
+  "价格已更新，请刷新后重试": "The price has changed. Refresh and try again.",
+  "列表已更新，请刷新": "The feed has changed. Refresh to continue.",
+  "运营配置已修改，请刷新后重试": "The curation settings have changed. Refresh and try again.",
+  "运营筛选条件无效": "Invalid curation filter.",
+  "请填写运营调整原因": "Provide a reason for the curation change.",
+  "请填写初始化原因 / An initialization reason is required": "Provide an initialization reason.",
+  "请填写调整原因 / An adjustment reason is required": "Provide an adjustment reason."
 }

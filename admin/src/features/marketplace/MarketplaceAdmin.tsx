@@ -1,4 +1,6 @@
 import { points } from '../../lib/points'
+import EngagementOperations from './EngagementOperations'
+import { CurationControls } from './CurationOperations'
 import CategoryForm from './CategoryForm'
 import { useEffect, useState, type FormEvent } from 'react'
 import { request, assetFile, assetUrl, letterFile, useMarketplaceStatus, type Item, type Listing } from './api'
@@ -9,7 +11,7 @@ import { RefreshCw, Film, ShieldCheck, Users, Flag, CircleAlert, MessageCircle, 
 import './marketplace-admin.css'
 
 // 独立下游运营工作台；不复用或改变原作品审核页。
-const businessTabs = { works: '作品审核', series: '短剧审核', recruits: '招募审核', reports: '举报处理', support: '客服配置', categories: '作品分类', revenue: '平台分成' }
+const businessTabs = { engagement: '作品运营', works: '作品审核', series: '短剧审核', recruits: '招募审核', reports: '举报处理', support: '客服配置', categories: '作品分类', revenue: '平台分成' }
 const maintenanceTabs = { previews: '作品试看任务', submissions: '历史投稿记录', jobs: '历史媒体任务', orders: '平台订单', entitlements: '永久播放权益', ledger: '收益账本', payouts: '人工打款', events: '操作记录' }
 const tabs = { ...businessTabs, ...maintenanceTabs }
 const statusNames: Record<string, string> = { preview_failed: '短试看生成失败', original: '免费原片', missing: '未生成', running: '处理中', done: '已完成', draft: '草稿', pending: '待审核', approved: '已通过', rejected: '已驳回', ready: '已就绪', processing: '处理中', failed: '失败', open: '征集中', closed: '已关闭', expired: '已到期', pending_materials: '待材料', reviewing: '材料核验中', supplement: '待补正', applying: '办理中', certificated: '已取得证书', cancelled: '已取消', to_review: '待看', candidate: '候选', not_selected: '不采用', active: '有效权益', inactive: '已停用', printfilm: 'PrintFilm 生成', external: '其他平台生成', existing: '已有证书', self_service: '自行办理', assisted: '客服协办', free: '免费公开', copyright_contact: '版权出售收益', platform_unlock: '平台投放收益', work: '单视频作品', series: '短剧', series_episode: '短剧分集', recruit: '招募需求', submission: '历史投稿', manual: '手动上传', drama_import: '漫剧导入', alipay: '支付宝', wxpay: '微信支付' }
@@ -135,7 +137,7 @@ function ReviewGallery({ items, series, recruit = false, onOpen }: { items: Item
     <span className="market-ops-card-cover"><CoverImage id={typeof item.cover_asset_id === 'number' ? item.cover_asset_id : undefined} /><em className={`market-ops-badge status-${String(item.audit_status || 'draft')}`}>{auditLabel(item)}</em></span>
     <span className="market-ops-card-body">
       <em>{recruit ? '招募' : series ? '短剧' : String(item.category || '作品')}</em>
-      <strong>{String(item.title || '未命名作品')}</strong>
+      <strong>{String(item.title || '未命名作品')}</strong>{!recruit && <span className="market-ops-curation-tags">{item.is_pinned ? <span>置顶</span> : null}{item.is_featured ? <span>精选</span> : null}</span>}
       <small><i>{String(item.author || '创').slice(0, 1)}</i>{String(item.author || `用户 #${item.owner_id || ''}`)}</small>
       <b>{priceLabel(item, series, recruit)}{recruit ? <span>/ 条预算 · 征集 {String(item.wanted_count || 0)} 条</span> : series ? <span>{Number(item.episode_count || (Array.isArray(item.episodes) ? item.episodes.length : 0))} 集{Number(item.free_episode_count) > 0 ? ` · 前${item.free_episode_count}集免费` : ''}</span> : !isFreeItem(item) && <span>{item.sale_type === 'platform_unlock' ? '解锁价' : '参考价'}</span>}</b>
     </span>
@@ -156,7 +158,7 @@ function ReviewStage({ item, series, recruit = false, onBack, onReview }: { item
         <span className={`market-ops-badge status-${String(item.audit_status || 'draft')}`}>{auditLabel(item)}</span>
         <h2>{String(item.title || '未命名作品')}</h2>
         <p>{String(item.author || '创作者')} · {priceLabel(item, series, recruit)}{series ? ` · ${episodes.length} 集` : ''}{recruit ? ` · 征集 ${String(item.wanted_count || 0)} 条` : ''}</p>
-        <p>{String(item.description || '暂无简介')}</p>
+        <p>{String(item.description || '暂无简介')}</p>{!recruit && <CurationControls targetType={series ? 'series' : 'work'} targetId={item.id} />}
         {recruit && <p>交付要求：{String(item.requirements || '未填写')}</p>}
         <p>授权意向：{String(item.license_scope || '未填写')}</p>
         {recruit && <p>截止时间：{String(item.deadline_at || '未填写')}</p>}
@@ -198,6 +200,7 @@ export default function MarketplaceAdmin() {
   const [overview, setOverview] = useState<Record<string, number>>({})
   const [page, setPage] = useState(1)
   const [status, setStatus] = useState('pending')
+  const [curationFilter, setCurationFilter] = useState('')
   const [selected, setSelected] = useState<Item | null>(null)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -209,17 +212,18 @@ export default function MarketplaceAdmin() {
   function navigateTab(next: keyof typeof tabs, nextStatus?: string) {
     if (next === 'jobs' || next === 'events' || next === 'previews' || next === 'submissions' || next === 'orders' || next === 'entitlements' || next === 'ledger' || next === 'payouts') setMaintenanceOpen(true)
     const fallback = next === 'works' || next === 'series' || next === 'recruits' ? 'pending' : ''
-    setKind(next); setPage(1); setStatus(nextStatus === undefined ? fallback : nextStatus); setSelected(null); setListing(null); setError(''); setMessage('')
+    setKind(next); setCurationFilter(''); setPage(1); setStatus(nextStatus === undefined ? fallback : nextStatus); setSelected(null); setListing(null); setError(''); setMessage('')
   }
   useEffect(() => {
-    if (!enabled || kind === 'support' || kind === 'categories' || kind === 'revenue') return
+    if (!enabled || kind === 'support' || kind === 'categories' || kind === 'revenue' || kind === 'engagement') return
     let active = true; setLoading(true); setError('')
     const params = new URLSearchParams({ page: String(page), status })
+    if ((kind === 'works' || kind === 'series') && curationFilter) params.set('curation', curationFilter)
     if (kind === 'entitlements') { if (entitlementUserId) params.set('user_id', entitlementUserId); if (entitlementOwnerId) params.set('owner_id', entitlementOwnerId) }
     request<Listing>(`/api/admin/marketplace/records/${kind}?${params}`).then(result => { if (active) setListing(result) }).catch(e => { if (active) setError(e.message) }).finally(() => { if (active) setLoading(false) })
     request<Record<string, number>>('/api/admin/marketplace/overview').then(value => { if (active) setOverview(value) }).catch(() => {})
     return () => { active = false }
-  }, [enabled, kind, page, status, refresh, entitlementUserId, entitlementOwnerId])
+  }, [enabled, kind, page, status, refresh, entitlementUserId, entitlementOwnerId, curationFilter])
   // 统一提交审核意图，后端始终重新核对版本与状态。
   async function action(path: string, body: unknown) { setError(''); setMessage(''); try { await request(`/api/admin/marketplace${path}`, 'POST', body); setRefresh(v => v + 1); setMessage('操作成功'); return true } catch (e) { setError((e as Error).message); return false } }
   // 审核原因和逐项确认来自该记录的表单，不自动勾选。
@@ -244,7 +248,7 @@ export default function MarketplaceAdmin() {
     {maintenanceOpen && <div className="market-ops-maintenance"><div><strong>更多运营功能</strong><p>查看订单、播放权益、收益与打款记录，以及短试看任务和历史操作。招募接单由客服对接。</p></div><nav aria-label="更多运营功能">{Object.entries(maintenanceTabs).map(([key, label]) => <button type="button" key={key} aria-current={kind === key ? 'page' : undefined} onClick={() => navigateTab(key as keyof typeof tabs)}>{label}</button>)}</nav></div>}
     {kind === 'jobs' && <p className="market-ops-feedback">此处保留历史媒体任务用于排查；招募不再创建投稿或审片任务，收费作品的短试看请查看“作品试看任务”。</p>}
     {error && <p role="alert" className="market-ops-feedback is-error">{error}</p>}{message && <p role="status" className="market-ops-feedback">{message}</p>}
-    {kind === 'support' ? <SupportForm /> : kind === 'categories' ? <CategoryForm /> : kind === 'revenue' ? <RevenueConfigForm /> : <><div className="market-ops-filter"><div><h2>{tabs[kind]}</h2><span>{listing ? `共 ${listing.meta.total} 条记录` : '正在加载记录'}</span></div><select aria-label="状态筛选" className="rounded border bg-background p-2" value={status} onChange={e => { setStatus(e.target.value); setPage(1) }}><option value="">全部状态</option>{statusOptions(kind).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>{kind === 'entitlements' && <div className="market-ops-entitlement-filter"><input aria-label="购买用户编号" type="number" min="1" placeholder="购买用户编号" value={entitlementUserId} onChange={e => { setEntitlementUserId(e.target.value); setPage(1) }} /><input aria-label="创作者编号" type="number" min="1" placeholder="创作者编号" value={entitlementOwnerId} onChange={e => { setEntitlementOwnerId(e.target.value); setPage(1) }} /></div>}<button type="button" onClick={() => setRefresh(v => v + 1)}>刷新</button></div>{kind === 'payouts' && <PayoutCreateForm onSaved={() => setRefresh(v => v + 1)} />}{loading ? <p role="status">正在加载…</p> : reviewView === 'detail' && selected ? <ReviewStage item={selected} series={kind === 'series'} recruit={kind === 'recruits'} onBack={() => setSelected(null)} onReview={review} /> : reviewView === 'cards' ? <ReviewGallery items={listing?.items ?? []} series={kind === 'series'} recruit={kind === 'recruits'} onOpen={setSelected} /> : listing?.items.map(item => <article className="market-ops-record" key={`${kind}-${item.id}-${refresh}`}><header className="market-ops-record-head"><div><span className="market-ops-record-id">#{item.id} · {tabs[kind]}</span><h3>{String(item.title || item.filename || item.recruit_title || (kind === 'entitlements' ? `用户 #${item.user_id} 的永久权益` : '业务记录'))}</h3></div><span className={`market-ops-badge status-${recordStatus(kind, item) || 'record'}`}>{kind === 'events' ? '操作记录' : kind === 'submissions' ? statusNames[String(item.selection)] || '历史投稿' : statusLabel(kind, recordStatus(kind, item))}</span></header><details className="market-ops-details" open={kind === 'works' || kind === 'recruits' || kind === 'series' || kind === 'entitlements'}><summary>{recordDetailsTitle(kind)}</summary><Summary item={item} kind={kind} /></details>
+    {kind === 'engagement' ? <EngagementOperations revision={refresh} /> : kind === 'support' ? <SupportForm /> : kind === 'categories' ? <CategoryForm /> : kind === 'revenue' ? <RevenueConfigForm /> : <><div className="market-ops-filter"><div><h2>{tabs[kind]}</h2><span>{listing ? `共 ${listing.meta.total} 条记录` : '正在加载记录'}</span></div><select aria-label="状态筛选" className="rounded border bg-background p-2" value={status} onChange={e => { setStatus(e.target.value); setPage(1) }}><option value="">全部状态</option>{statusOptions(kind).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>{(kind === 'works' || kind === 'series') && <select aria-label="精选置顶筛选" value={curationFilter} onChange={event => { setCurationFilter(event.target.value); setPage(1); setSelected(null) }}><option value="">全部运营状态</option><option value="featured">已加精</option><option value="pinned">已置顶</option><option value="normal">普通内容</option></select>}{kind === 'entitlements' && <div className="market-ops-entitlement-filter"><input aria-label="购买用户编号" type="number" min="1" placeholder="购买用户编号" value={entitlementUserId} onChange={e => { setEntitlementUserId(e.target.value); setPage(1) }} /><input aria-label="创作者编号" type="number" min="1" placeholder="创作者编号" value={entitlementOwnerId} onChange={e => { setEntitlementOwnerId(e.target.value); setPage(1) }} /></div>}<button type="button" onClick={() => setRefresh(v => v + 1)}>刷新</button></div>{kind === 'payouts' && <PayoutCreateForm onSaved={() => setRefresh(v => v + 1)} />}{loading ? <p role="status">正在加载…</p> : reviewView === 'detail' && selected ? <ReviewStage item={selected} series={kind === 'series'} recruit={kind === 'recruits'} onBack={() => setSelected(null)} onReview={review} /> : reviewView === 'cards' ? <ReviewGallery items={listing?.items ?? []} series={kind === 'series'} recruit={kind === 'recruits'} onOpen={setSelected} /> : listing?.items.map(item => <article className="market-ops-record" key={`${kind}-${item.id}-${refresh}`}><header className="market-ops-record-head"><div><span className="market-ops-record-id">#{item.id} · {tabs[kind]}</span><h3>{String(item.title || item.filename || item.recruit_title || (kind === 'entitlements' ? `用户 #${item.user_id} 的永久权益` : '业务记录'))}</h3></div><span className={`market-ops-badge status-${recordStatus(kind, item) || 'record'}`}>{kind === 'events' ? '操作记录' : kind === 'submissions' ? statusNames[String(item.selection)] || '历史投稿' : statusLabel(kind, recordStatus(kind, item))}</span></header><details className="market-ops-details" open={kind === 'works' || kind === 'recruits' || kind === 'series' || kind === 'entitlements'}><summary>{recordDetailsTitle(kind)}</summary><Summary item={item} kind={kind} /></details>
       {kind === 'works' && item.sale_type !== 'free' && <WorkPreviewLink id={Number(item.id)} />}
       {typeof item.asset_id === 'number' && <FileLink id={item.asset_id} label="视频预览" purpose="original" video />}
       {kind === 'works' && typeof item.cover_asset_id === 'number' && <FileLink id={item.cover_asset_id} label="作品封面" />}{typeof item.certificate_asset_id === 'number' && <FileLink id={item.certificate_asset_id} label="权属证明／登记证书" />}

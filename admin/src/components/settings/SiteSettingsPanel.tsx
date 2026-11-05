@@ -21,6 +21,10 @@ export function SiteSettingsPanel() {
         ffprobe_path: form.ffprobe_path,
         marketplace_enabled: form.marketplace_enabled,
         marketplace_app_enabled: form.marketplace_app_enabled,
+        marketplace_social_initialization_enabled: form.marketplace_social_initialization_enabled,
+        marketplace_sharing_enabled: form.marketplace_sharing_enabled,
+        marketplace_share_base_url: (form.marketplace_share_base_url || '').trim(),
+        marketplace_share_apple_team_id: (form.marketplace_share_apple_team_id || '').trim(),
         marketplace_max_duration_seconds: form.marketplace_max_duration_seconds,
       },
       "站点配置已保存",
@@ -170,6 +174,16 @@ export function SiteSettingsPanel() {
               onChange={(e) => patchField("marketplace_max_duration_seconds", Number(e.target.value))}
             />
           </LabeledControl>
+        </SettingsPanel>
+        <SettingsPanel className="settings-panel--compact" title="4. App 互动与作品分享" description="初始化数量、真实分享与 Apple 链接关联均在这里配置，无需修改环境文件。">
+          <div className="settings-toggle-row"><div><strong>自动初始化互动数量</strong><span>为新上架且符合 App 展示条件的单视频和分集生成一次初始数量。历史作品请到数字资产平台运营的互动运营页批量补齐；关闭不会清除已保存数量。</span></div><Switch checked={form.marketplace_social_initialization_enabled ?? false} onCheckedChange={value => patchField("marketplace_social_initialization_enabled", value)} /></div>
+          <div className="settings-toggle-row"><div><strong>启用作品分享</strong><span>允许分享单视频和当前短剧分集的业务链接。需要有效的公网 HTTPS 域名，不能填写 localhost 或局域网地址。</span></div><Switch checked={form.marketplace_sharing_enabled ?? false} onCheckedChange={value => patchField("marketplace_sharing_enabled", value)} /></div>
+          <div className="settings-field-grid">
+            <LabeledControl label="分享公网基址" hint="例如 https://www.printfilm.com；域名应将 /s/ 和 /.well-known/apple-app-site-association 转发至后端，其余作品页面交给 Web。" className="settings-field-span-full"><input className="settings-input" type="url" value={form.marketplace_share_base_url ?? ''} onChange={event => patchField("marketplace_share_base_url", event.target.value)} placeholder="https://www.printfilm.com" /></LabeledControl>
+            <LabeledControl label="Apple Team ID" hint="Apple 开发者账号中的 Team ID，用于 Universal Links 关联。"><input className="settings-input" value={form.marketplace_share_apple_team_id ?? ''} maxLength={10} onChange={event => patchField("marketplace_share_apple_team_id", event.target.value)} placeholder="ABCDEFGHIJ" /></LabeledControl>
+            <LabeledControl label="App Bundle ID" hint="复用“支付与通知 → Apple 服务器连接”中的 Bundle ID；如需调整，请到该处保存。"><input className="settings-input" readOnly value={form.apple_bundle_id || '尚未配置，请到 Apple 服务器连接填写'} /></LabeledControl>
+          </div>
+          <p className="settings-panel-footnote">App 还需配置 Associated Domains 并完成真机验证。保存域名不会自动修改 DNS、反向代理或 iOS 工程。</p>
         </SettingsPanel>
       </div>
     </SettingsTabShell>

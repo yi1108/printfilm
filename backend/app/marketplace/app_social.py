@@ -4,17 +4,17 @@ from typing import Literal
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func, insert, select, update
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import func, select, update
 
 from .app_access import error, require_app_open, require_social_open, current_content
 from .app_models import AuthorBlock
+from .app_engagement import insert_once, lock_stats, totals
 from .dependencies import Actor, DB, Visitor
 from .models import Series, SeriesEpisode, Work
 from .app_social_models import AppComment, AppCommentAction, AppCommentReport, AppContentStats, AppFavorite, AppLike, AppSocialSetting
 
 router = APIRouter()
-TargetType = Literal["work", "works", "series", "episode", "episodes"]
+TargetType = Literal["work", "works", "series", "episode", "episodes", "series_episode"]
 MAX_COMMENT_DEPTH = 5
 
 
@@ -32,13 +32,13 @@ class SocialSettingInput(BaseModel):
 
 
 def _kind(target_type: str) -> str:
-    if target_type in ("episode", "episodes"):
+    if target_type in ("episode", "episodes", "series_episode"):
         return "series_episode"
     return "work" if target_type == "works" else target_type
 
 
 def _stored_type(target_type: str) -> str:
-    return "episode" if target_type in ("episode", "episodes") else "work" if target_type == "works" else target_type
+    return "episode" if target_type in ("episode", "episodes", "series_episode") else "work" if target_type == "works" else target_type
 
 
 async def _target(db, target_type: str, target_id: int, user_id=None):
@@ -61,38 +61,38 @@ async def _target(db, target_type: str, target_id: int, user_id=None):
 
 
 async def _stats(db, target_type: str, target_id: int, user_id=None):
+    target_type = _stored_type(target_type)
     row = await db.scalar(select(AppContentStats).where(AppContentStats.target_type == target_type, AppContentStats.target_id == target_id))
+    combined = await totals(db, target_type, target_id, row)
     likes = bool(user_id and await db.scalar(select(AppLike.id).where(AppLike.user_id == user_id, AppLike.target_type == target_type, AppLike.target_id == target_id)))
     favorites = bool(user_id and await db.scalar(select(AppFavorite.id).where(AppFavorite.user_id == user_id, AppFavorite.target_type == target_type, AppFavorite.target_id == target_id)))
     settings = await db.scalar(select(AppSocialSetting).where(AppSocialSetting.target_type == target_type, AppSocialSetting.target_id == target_id))
     from .app_settings import get_app_settings
     global_comments = bool(get_app_settings().comments_enabled)
-    return {"like_count": row.like_count if row else 0, "comment_count": row.comment_count if row else 0,
-            "favorite_count": row.favorite_count if row else 0, "liked_by_me": likes,
+    return {**combined, "comment_count": row.comment_count if row else 0, "liked_by_me": likes,
             "favorited_by_me": favorites, "comments_enabled": bool(global_comments and (settings.comments_enabled if settings else True))}
 
 
 async def _mutate(db, user, target_type: str, target_id: int, model, enabled: bool):
     stored = _stored_type(target_type)
     await _target(db, stored, target_id, user.id)
-    existing = await db.scalar(select(model).where(model.user_id == user.id, model.target_type == stored, model.target_id == target_id).with_for_update())
+    # Writers lock the stable per-target row before changing any detail record.
+    stats = await lock_stats(db, stored, target_id)
+    existing = await db.scalar(select(model).where(model.user_id == user.id,
+        model.target_type == stored, model.target_id == target_id).with_for_update())
+    attribute = "like_count" if model is AppLike else "favorite_count"
     if enabled and not existing:
-        statement = pg_insert(model).values(user_id=user.id, target_type=stored, target_id=target_id).on_conflict_do_nothing(index_elements=["user_id", "target_type", "target_id"]) if db.bind and db.bind.dialect.name == "postgresql" else insert(model).values(user_id=user.id, target_type=stored, target_id=target_id)
-        result = await db.execute(statement)
-        inserted = result.rowcount == 1
+        inserted = await insert_once(db, model, {"user_id": user.id, "target_type": stored,
+            "target_id": target_id}, ["user_id", "target_type", "target_id"])
         if inserted:
-            existing = True
-    else:
-        inserted = False
-    if enabled and inserted:
-        await db.execute(update(AppContentStats).where(AppContentStats.target_type == stored, AppContentStats.target_id == target_id).values(**({"like_count": AppContentStats.like_count + 1} if model is AppLike else {"favorite_count": AppContentStats.favorite_count + 1})))
+            setattr(stats, attribute, getattr(stats, attribute) + 1)
     elif not enabled and existing:
         await db.delete(existing)
-        await db.execute(update(AppContentStats).where(AppContentStats.target_type == stored, AppContentStats.target_id == target_id).values(**({"like_count": func.greatest(AppContentStats.like_count - 1, 0)} if model is AppLike else {"favorite_count": func.greatest(AppContentStats.favorite_count - 1, 0)})))
-    if not await db.scalar(select(AppContentStats.id).where(AppContentStats.target_type == stored, AppContentStats.target_id == target_id)):
-        db.add(AppContentStats(target_type=stored, target_id=target_id, like_count=1 if enabled and model is AppLike else 0, favorite_count=1 if enabled and model is AppFavorite else 0))
+        setattr(stats, attribute, max(0, getattr(stats, attribute) - 1))
+    await db.flush()
+    result = await _stats(db, stored, target_id, user.id)
     await db.commit()
-    return await _stats(db, stored, target_id, user.id)
+    return result
 
 
 @router.put("/{target_type}/{target_id}/like")
@@ -207,7 +207,7 @@ async def report_comment(comment_id: int, body: ReportInput, db: DB, user: Actor
 @router.get("/me/favorites")
 async def my_favorites(db: DB, user: Actor, target_type: TargetType | None = None, limit: int = Query(20, ge=1, le=50)):
     query = select(AppFavorite).where(AppFavorite.user_id == user.id)
-    if target_type: query = query.where(AppFavorite.target_type == target_type)
+    if target_type: query = query.where(AppFavorite.target_type == _stored_type(target_type))
     rows = list((await db.scalars(query.order_by(AppFavorite.created_at.desc()).limit(limit))).all())
     return {"items": [{"target_type": row.target_type, "target_id": row.target_id, "created_at": row.created_at} for row in rows]}
 

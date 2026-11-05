@@ -336,3 +336,12 @@ body:has(.pf-market-shell) .pf-wx-fab-root { display:none; }
   .pf-market-shell[lang="en"] .pf-market-search { min-width: 0; width: 100%; }
   .pf-market-shell[lang="en"] .pf-market-title { overflow-wrap: anywhere; }
 }
+
+/* Platform curation and business-link sharing. */
+.pf-market-curation-badges { display: inline-flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.pf-market-curation-badge { display: inline-flex; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; line-height: 1.5; background: #e9f0df; color: #35512c; }
+.pf-market-curation-badge.is-pinned { background: #f4ebd6; color: #765720; }
+.pf-market-share { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0; }
+.pf-market-share button { display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px; border: 1px solid var(--pf-market-border, #dce3d4); border-radius: 10px; color: inherit; background: transparent; cursor: pointer; }
+.pf-market-share button:disabled { opacity: .6; cursor: wait; }
+.pf-market-share small { overflow-wrap: anywhere; }

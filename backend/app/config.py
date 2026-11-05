@@ -182,6 +182,10 @@ class Settings(BaseSettings):
     marketplace_enabled: bool = False
     # App 视频。环境变量 MARKETPLACE_APP_ENABLED 只作为尚未保存时的初始值；管理端保存后以数据库为准。
     marketplace_app_enabled: bool = False
+    marketplace_social_initialization_enabled: bool = False
+    marketplace_sharing_enabled: bool = False
+    marketplace_share_base_url: str = ""
+    marketplace_share_apple_team_id: str = ""
     # 完整视频最长秒数。环境变量 MARKETPLACE_MAX_DURATION_SECONDS；管理端保存后以数据库为准。
     marketplace_max_duration_seconds: int = 1800
 

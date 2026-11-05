@@ -2,7 +2,7 @@
 import logging
 import re
 
-_PLAYBACK = re.compile(r"(/api/marketplace/app/v1/playback-sessions/)[^/?\s]+")
+_PLAYBACK = re.compile(r"(/api/marketplace/app/v1/(?:playback-sessions|share-sessions)/)[^/?\s]+")
 
 
 def safe_request_path(value: str) -> str:
@@ -15,7 +15,7 @@ class PlaybackAccessFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         if isinstance(record.args, tuple) and len(record.args) == 5:
             args = list(record.args)
-            if isinstance(args[2], str) and "/api/marketplace/app/v1/playback-sessions/" in args[2]:
+            if isinstance(args[2], str) and any(path in args[2] for path in ("/api/marketplace/app/v1/playback-sessions/", "/api/marketplace/app/v1/share-sessions/")):
                 args[2] = safe_request_path(args[2])
                 record.args = tuple(args)
         return True

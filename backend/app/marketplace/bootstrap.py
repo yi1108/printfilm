@@ -21,7 +21,7 @@ def install(app: FastAPI) -> None:
         enabled = is_marketplace_enabled()
         from app.config import get_settings
         settings = get_settings()
-        return {"enabled": enabled, "storage_configured": enabled and configured(), "payments": enabled and bool(settings.epay_pid and settings.epay_key and settings.epay_api_url)}
+        return {"enabled": enabled, "storage_configured": enabled and configured(), "sharing_enabled": enabled and settings.marketplace_app_enabled and settings.marketplace_sharing_enabled, "payments": enabled and bool(settings.epay_pid and settings.epay_key and settings.epay_api_url)}
 
     from . import admin, api, authorization, media, uploads, workspace, series, commerce, handoff, drama_publish
     from .dependencies import enabled
@@ -41,12 +41,14 @@ async def apply_marketplace_switch() -> None:
         return
     from app.database import engine
     from .models import MarketBase
-    from .app_schema import legacy_marketplace_tables
+    from .app_schema import legacy_marketplace_tables, acquire_schema_lock, apply_schema
     from .locale_schema import ensure_locale_columns
     async with engine.begin() as conn:
+        await conn.run_sync(acquire_schema_lock)
         await conn.run_sync(lambda connection: MarketBase.metadata.create_all(connection, tables=legacy_marketplace_tables()))
         # 旧库没有双语列时，保存市场开关会在读取作品前补列，避免 category_code 不存在。
         await conn.run_sync(ensure_locale_columns)
+        await conn.run_sync(apply_schema)
     from app.database import AsyncSessionLocal
     from .previews import reconcile_preview_policy
     async with AsyncSessionLocal() as db:

@@ -1,3 +1,5 @@
+import ContentBadges from './ContentBadges'
+import ShareButton from './ShareButton'
 import { points } from '../../lib/points'
 import { useMarketplaceLocale } from './useMarketplaceLocale'
 import { marketText as mt, marketFeedback } from './translate'
@@ -69,7 +71,7 @@ export default function Detail({ recruit = false, manage = false }: { recruit?: 
     <PageHeading title={item.title || mt("作品详情")} description={`${item.author || mt("创作者")} · ${item.category_label || item.category || mt('其他')}`} back="/marketplace" />
     <div className="pf-market-buyer-layout">
       <section className="pf-market-buyer-player" aria-label={mt("作品视频预览")}><Media kind="work" id={id} purpose="preview" video /></section>
-      <aside className="pf-market-buyer-info"><span className="pf-market-badge">{mt("视频作品")}</span><h2>{item.title}</h2><p>{mt("创作者 ·")} {item.author || mt("创作者")}</p><div className="pf-market-buyer-price"><span>{isFreeWork(item) ? mt("免费公开") : item.sale_type === 'platform_unlock' ? mt("观众解锁价") : mt("参考价")}</span><strong>{isFreeWork(item) ? mt("免费") : (item.sale_type === 'platform_unlock' ? points(item.unlock_price_fen) : money(item.price_fen))}</strong></div>{item.sale_type === 'copyright_contact' && <Contact kind="work" id={id} />}<small>{isFreeWork(item) ? mt("免费作品可看完整时长，播放原片。使用仍须遵守作者授权范围。") : item.sale_type === 'platform_unlock' ? mt("购买后可永久在线播放所购版本，不包含版权转让。当前网页仅提供短试看。") : mt("当前为无水印短试看，最长15秒且不超过原片时长的30%。版权合作请联系客服，确认价格、授权或转让范围及交付方式。")}</small><ReportForm kind="work" id={id} /></aside>
+      <aside className="pf-market-buyer-info"><span className="pf-market-badge">{mt("视频作品")}</span><ContentBadges item={item} /><h2>{item.title}</h2><p>{mt("创作者 ·")} {item.author || mt("创作者")}</p><div className="pf-market-buyer-price"><span>{isFreeWork(item) ? mt("免费公开") : item.sale_type === 'platform_unlock' ? mt("观众解锁价") : mt("参考价")}</span><strong>{isFreeWork(item) ? mt("免费") : (item.sale_type === 'platform_unlock' ? points(item.unlock_price_fen) : money(item.price_fen))}</strong></div>{item.sale_type === 'copyright_contact' && <Contact kind="work" id={id} />}<small>{isFreeWork(item) ? mt("免费作品可看完整时长，播放原片。使用仍须遵守作者授权范围。") : item.sale_type === 'platform_unlock' ? mt("购买后可永久在线播放所购版本，不包含版权转让。当前网页仅提供短试看。") : mt("当前为无水印短试看，最长15秒且不超过原片时长的30%。版权合作请联系客服，确认价格、授权或转让范围及交付方式。")}</small>{item.sale_type !== 'copyright_contact' && <ShareButton kind="work" id={id} />}<ReportForm kind="work" id={id} /></aside>
     </div>
     <section className="pf-market-detail-section"><h2>{mt("作品介绍")}</h2><p className="pf-market-text">{item.description || mt("暂未填写详细介绍")}</p><h2>{mt("用途及授权意向")}</h2><p className="pf-market-text">{item.license_scope || mt("具体授权范围请联系客服确认")}</p><p>{mt("内容审核已通过，版权材料已核验。")}{item.sale_type === 'copyright_contact' ? mt("具体授权或版权转让以双方另行签订的协议为准。") : mt("观看权益不等于取得版权，使用仍须遵守作者授权范围。")}</p></section>
   </>

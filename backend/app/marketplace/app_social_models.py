@@ -14,6 +14,7 @@ class AppContentStats(Record, MarketBase):
     like_count: Mapped[int] = mapped_column(BigInteger, default=0)
     comment_count: Mapped[int] = mapped_column(BigInteger, default=0)
     favorite_count: Mapped[int] = mapped_column(BigInteger, default=0)
+    share_count: Mapped[int] = mapped_column(BigInteger, default=0)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     __table_args__ = (UniqueConstraint("target_type", "target_id"),)
 

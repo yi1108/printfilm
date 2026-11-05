@@ -588,6 +588,8 @@ async def load_model_settings_cache(db: AsyncSession) -> None:
                               reference_limit_settings(config.get("media_reference_limits")))
     _refresh_overlay({"flat": flat})
     reload_settings()
+    from app.marketplace.app_settings import get_app_settings
+    get_app_settings.cache_clear()
 
 
 def _build_readiness(
@@ -691,6 +693,9 @@ async def patch_admin_model_settings(
         current[field] = value
         applied.append(field)
 
+    if current.get("marketplace_sharing_enabled"):
+        from app.marketplace.sharing_config import validate_share_origin
+        current["marketplace_share_base_url"] = validate_share_origin(current.get("marketplace_share_base_url", ""))
     apple_changed = any(key.startswith(("apple_", "clear_apple_")) for key in applied)
     if apple_changed:
         from app.marketplace.apple_configuration import validate_material, configuration_status

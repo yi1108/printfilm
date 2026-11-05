@@ -172,6 +172,8 @@ async def work_data(db: AsyncSession, work: Work, private: bool = False) -> dict
     from .categories import category_fields
     from .locale import localized
     result.update(await category_fields(db, work))
+    from .curation import flags as curation_flags
+    result.update(await curation_flags(db, "work", work.id))
     result.update(author=owner.nickname if owner else localized("创作者", "Creator"), duration_seconds=asset.duration_seconds if asset else None)
     if private:
         from .previews import is_preview_key, preview_for, requires_preview

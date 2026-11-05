@@ -75,34 +75,34 @@ async def require_schema(request: Request) -> None:
 
 def install(app: FastAPI) -> None:
     """独立挂载App及运营路由，不继承市场展示开关依赖。"""
-    from . import app_admin, app_content, app_playback, apple_api, coin_api, app_social
+    from . import app_admin, app_content, app_playback, apple_api, coin_api, app_social, app_sharing, metrics_admin, curation_admin
     from .app_logging import install_access_filter
     from .locale import locale_header
     from .locale_middleware import install_locale
     install_locale(app)
     register_models()
     install_access_filter()
-    for router in (app_content.router, app_playback.router, coin_api.router, apple_api.router, app_social.router):
+    for router in (app_content.router, app_playback.router, coin_api.router, apple_api.router, app_social.router, app_sharing.router):
         app.include_router(router, prefix="/api/marketplace/app/v1", dependencies=[Depends(require_schema), Depends(locale_header)], tags=["App视频与观影币"])
     app.include_router(app_admin.router, prefix="/api/admin/marketplace/app", dependencies=[Depends(require_schema)], tags=["App运营与财务"])
+    app.include_router(metrics_admin.router, prefix="/api/admin/marketplace/app", dependencies=[Depends(require_schema)], tags=["互动运营"])
+    app.include_router(curation_admin.router, prefix="/api/admin/marketplace", dependencies=[Depends(require_schema)], tags=["作品推荐运营"])
+    app.include_router(app_sharing.public_router, dependencies=[Depends(require_schema)])
     app.include_router(apple_api.notifications_router, dependencies=[Depends(require_schema)], tags=["Apple服务器通知"])
     app.include_router(apple_api.billing_router, dependencies=[Depends(require_schema)], tags=["统一钱包Apple支付"])
 
 
 async def start_app_services() -> None:
     """尝试补齐已开启的 App 结构。迁移失败只记日志，不能让原 API 退出导致健康检查失败。"""
-    from .app_settings import get_app_settings, is_app_enabled
-    from .apple_client import apple_configured
     from .apple_runtime import start_apple_runtime
-    from app.services.billing import wallet
     try:
-        config = get_app_settings()
-        if is_app_enabled() or config.apple_iap_enabled or apple_configured() or wallet.enabled():
-            missing = await ensure_schema()
-            if missing:
-                logger.error("App 数据库结构未完整，App 接口暂不可用：%s", ", ".join(missing))
+        missing = await ensure_schema()
+        if missing:
+            logger.error("App 数据库结构未完整，App 接口暂不可用：%s", ", ".join(missing))
     except Exception:
         logger.exception("App 数据库结构迁移失败，原 API 继续启动")
+    from .engagement_runtime import start_engagement_runtime
+    await start_engagement_runtime()
     try:
         await start_apple_runtime()
     except Exception:
@@ -113,6 +113,8 @@ async def stop_app_services() -> None:
     """关闭通知处理后释放播放Redis连接，数据库持久状态不丢失。"""
     from .apple_runtime import stop_apple_runtime
     from .app_playback import session_store
+    from .engagement_runtime import stop_engagement_runtime
+    await stop_engagement_runtime()
     await stop_apple_runtime()
     if session_store.cache_info().currsize:
         await session_store().aclose()

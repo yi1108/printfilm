@@ -16,6 +16,11 @@ class MarketplaceAppSettings(BaseSettings):
     enabled: bool = Field(False, validation_alias=AliasChoices("MARKETPLACE_APP_ENABLED", "enabled"))
     social_enabled: bool = True
     comments_enabled: bool = True
+    social_initialization_enabled: bool = False
+    sharing_enabled: bool = False
+    share_base_url: str = ""
+    share_apple_team_id: str = ""
+    share_bundle_id: str = ""
     apple_iap_enabled: bool = False
     apple_environment: Literal["Production", "Sandbox"] = "Production"
     apple_bundle_id: str = ""
@@ -58,6 +63,15 @@ def get_app_settings() -> MarketplaceAppSettings:
         overlay["apple_private_key_path"] = ""
     if "apple_root_certificates" in overlay:
         overlay["apple_root_cert_paths"] = ""
+    from app.config import get_settings
+    system = get_settings()
+    overlay.update({
+        "social_initialization_enabled": system.marketplace_social_initialization_enabled,
+        "sharing_enabled": system.marketplace_sharing_enabled,
+        "share_base_url": system.marketplace_share_base_url,
+        "share_apple_team_id": system.marketplace_share_apple_team_id,
+        "share_bundle_id": overlay.get("apple_bundle_id", config.apple_bundle_id),
+    })
     return config.model_copy(update=overlay)
 
 

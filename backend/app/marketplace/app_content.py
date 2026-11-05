@@ -20,6 +20,8 @@ from .locale import localized
 from .dependencies import Actor, DB, Visitor
 from .models import Asset, Publication, Series, SeriesEpisode, Work
 from .service import data
+from .curation import (flags as curation_flags, join_curation, ordering_columns, revision as curation_revision,
+    feed_fingerprint, encode_feed_cursor, decode_feed_cursor)
 
 router = APIRouter()
 
@@ -80,9 +82,9 @@ async def content_data(db, kind, item, parent, asset, publication, free, user=No
     media = await media_for(db, kind, item.id, item.version, "preview" if mode == "preview" else "full")
     from .app_social import _stats
     social = await _stats(db, "episode" if kind == "series_episode" else kind, item.id, user.id if user else None)
-    return {**await category_fields(db, parent), **data(item, "id", "title", "description", "version"), "content_type": kind,
+    return {**await curation_flags(db, kind, item.id), **await category_fields(db, parent), **data(item, "id", "title", "description", "version"), "content_type": kind,
         "author": author_card(author, item.owner_id),
-        "creator": author_card(author, item.owner_id), "engagement": {k: social[k] for k in ("like_count", "comment_count", "favorite_count", "liked_by_me", "favorited_by_me")},
+        "creator": author_card(author, item.owner_id), "engagement": {k: social[k] for k in ("like_count", "comment_count", "favorite_count", "share_count", "liked_by_me", "favorited_by_me")},
         "social": {"comments_enabled": social["comments_enabled"]},
         "category": parent.category, "tags": parent.tags, "sale_type": parent.sale_type,
         "cover_url": await cover_url(db, item.cover_asset_id or (parent.cover_asset_id if kind == "series_episode" else None)),
@@ -105,10 +107,10 @@ async def series_data(db, item, user=None):
     asset = await db.get(Asset, first.asset_id) if first and first.asset_id else None
     from .app_social import _stats
     social = await _stats(db, "series", item.id, user.id if user else None)
-    return {**await category_fields(db, item), **data(item, "id", "title", "description", "category", "tags", "version", "sale_type", "free_episode_count", "created_at"),
+    return {**await curation_flags(db, "series", item.id), **await category_fields(db, item), **data(item, "id", "title", "description", "category", "tags", "version", "sale_type", "free_episode_count", "created_at"),
         "content_type": "series", "episode_count": count,
         "author": author_card(author, item.owner_id), "creator": author_card(author, item.owner_id),
-        "engagement": {k: social[k] for k in ("like_count", "comment_count", "favorite_count", "liked_by_me", "favorited_by_me")},
+        "engagement": {k: social[k] for k in ("like_count", "comment_count", "favorite_count", "share_count", "liked_by_me", "favorited_by_me")},
         "social": {"comments_enabled": social["comments_enabled"]},
         "cover_url": await cover_url(db, item.cover_asset_id), **video_shape(asset)}
 
@@ -120,7 +122,7 @@ async def capabilities():
     from .apple_client import apple_configured
     config = get_app_settings()
     from app.services.billing import wallet
-    return {"enabled": app_open(), "social_enabled": bool(config.social_enabled and app_open()), "comments_enabled": bool(config.comments_enabled and app_open()), "storage_configured": storage.configured(),
+    return {"sharing_enabled": bool(getattr(config, "sharing_enabled", False) and app_open()), "enabled": app_open(), "social_enabled": bool(config.social_enabled and app_open()), "comments_enabled": bool(config.comments_enabled and app_open()), "storage_configured": storage.configured(),
         "apple_iap_enabled": bool(config.apple_iap_enabled), "environment": environment(),
         "payments_configured": apple_configured(),
         "purchasing_enabled": bool(wallet.enabled() and app_open() and config.apple_iap_enabled and apple_configured()),
@@ -135,12 +137,34 @@ async def app_categories(db: DB):
     return await category_config(db)
 
 
-@router.get("/feed", response_model=dict)
+@router.get(
+    "/feed", response_model=dict, summary="获取 App 推荐或最新内容流",
+    description=("先按分类、关键词、内容类型及公开权限筛选，再执行服务端排序。默认 recommended：置顶优先、置顶排序值降序、"
+                 "精选优先、发布时间及内容类型与编号降序；latest 严格按发布时间排序。公开卡片只返回 is_featured 和 is_pinned，"
+                 "不返回运营权重。推荐排序调整后，或请求读取期间运营排序发生变化，返回409 MARKETPLACE_FEED_UPDATED；"
+                 "客户端应清空列表和游标并重新加载第一页。旧时间游标仅兼容 latest；切换筛选或排序需清空游标。"),
+    responses={
+        200: {"description": "服务端排序后的作品及系列卡片、分页状态和下一页游标。", "content": {"application/json": {"schema": {
+            "type": "object", "properties": {
+                "items": {"type": "array", "items": {"type": "object", "properties": {
+                    "is_featured": {"type": "boolean", "description": "平台精选标识，仅由运营设置；前端可显示精选 / Featured。"},
+                    "is_pinned": {"type": "boolean", "description": "平台置顶标识，仅由运营设置；仅推荐排序提高位置，latest仍遵守时间排序。"},
+                }}},
+                "has_more": {"type": "boolean"},
+                "next_cursor": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "不透明签名游标，原样传回；无下一页时为null。"},
+            }}}}},
+        409: {"description": "推荐列表已更新，请清空列表和游标后重新加载。", "content": {"application/json": {
+            "example": {"detail": {"code": "MARKETPLACE_FEED_UPDATED", "message": "列表已更新，请刷新"}}
+        }}},
+    },
+)
 async def feed(db: DB, user: Visitor, q: str = Query("", max_length=100), category: str = Query("", max_length=60), category_code: str = Query("", max_length=80),
-               content_type: str = Query("all", pattern="^(all|work|series)$"), cursor: str = Query("", max_length=1024),
-               limit: int = Query(20, ge=1, le=50)):
+               content_type: str = Query("all", pattern="^(all|work|series)$"), cursor: str = Query("", max_length=1024, description="上一页返回的next_cursor；切换筛选或排序时清空。"),
+               limit: int = Query(20, ge=1, le=50), sort: str = Query("recommended", pattern="^(recommended|latest)$", description="recommended：置顶及精选优先（默认）；latest：严格按发布时间。")):
     """SQL 层先筛审核、版权、封禁和作者屏蔽，再执行稳定游标分页。"""
     require_app_open()
+    fingerprint = feed_fingerprint(q=q, category=category, category_code=category_code, content_type=content_type, sort=sort, user_id=user.id if user else None)
+    revision = await curation_revision(db) if sort == "recommended" else 0
     queries = []
     for kind, model, query in (("work", Work, work_query(user.id if user else None)),
                                ("series", Series, series_query(user.id if user else None))):
@@ -150,12 +174,17 @@ async def feed(db: DB, user: Visitor, q: str = Query("", max_length=100), catego
             query = query.where(model.title.ilike(f"%{q}%"))
         if category or category_code:
             query = query.where(await category_filter(db, model, category, category_code))
-        queries.append(query.with_only_columns(model.created_at.label("timestamp"), literal(kind).label("kind"), model.id.label("record_id")))
+        query = join_curation(query, model, kind)
+        queries.append(query.with_only_columns(*ordering_columns(), model.created_at.label("timestamp"), literal(kind).label("kind"), model.id.label("record_id")))
     combined = union_all(*queries).subquery()
     query = select(combined)
+    keys = [combined.c.timestamp, combined.c.kind, combined.c.record_id]
+    if sort == "recommended":
+        keys = [combined.c.pin, combined.c.priority, combined.c.feature, *keys]
     if cursor:
-        query = query.where(tuple_(combined.c.timestamp, combined.c.kind, combined.c.record_id) < decode_cursor(cursor))
-    rows = list((await db.execute(query.order_by(combined.c.timestamp.desc(), combined.c.kind.desc(), combined.c.record_id.desc()).limit(limit + 1))).all())
+        position = decode_feed_cursor(cursor, sort=sort, fingerprint=fingerprint, revision=revision)
+        query = query.where(tuple_(*keys) < position)
+    rows = list((await db.execute(query.order_by(*(key.desc() for key in keys)).limit(limit + 1))).all())
     more, rows = len(rows) > limit, rows[:limit]
     items = []
     for row in rows:
@@ -172,7 +201,11 @@ async def feed(db: DB, user: Visitor, q: str = Query("", max_length=100), catego
                     raise
                 continue
             items.append(await content_data(db, "work", *resolved, user))
-    return {"items": items, "has_more": more, "next_cursor": encode_cursor(rows[-1].timestamp, rows[-1].kind, rows[-1].record_id) if more else None}
+    # READ COMMITTED can observe an admin change between cursor validation,
+    # ordering and item serialization. Never emit a page with a stale epoch.
+    if sort == "recommended" and await curation_revision(db) != revision:
+        error("MARKETPLACE_FEED_UPDATED", "列表已更新，请刷新", 409)
+    return {"items": items, "has_more": more, "next_cursor": encode_feed_cursor(rows[-1], sort=sort, fingerprint=fingerprint, revision=revision) if more else None}
 
 
 @router.get("/works/{work_id}", response_model=dict)

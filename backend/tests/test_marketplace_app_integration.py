@@ -11,6 +11,14 @@ from app.marketplace.app_logging import PlaybackAccessFilter, safe_request_path
 from app.marketplace.bootstrap import install
 
 
+@pytest.fixture(autouse=True)
+def no_background_engagement_writes(monkeypatch):
+    from app.marketplace import engagement_runtime
+    async def no_start():
+        pass
+    monkeypatch.setattr(engagement_runtime, "start_engagement_runtime", no_start)
+
+
 def test_app_routes_registered_without_overriding_web_contracts():
     """校验实际挂载而非仅测试孤立路由模块。"""
     app = FastAPI()
@@ -60,6 +68,8 @@ async def test_feed_returns_business_switch_error_or_empty_list_instead_of_missi
         """只模拟空查询结果，不连接或写入业务库。"""
         async def execute(self, statement):
             return SimpleNamespace(all=lambda: [])
+        async def scalar(self, statement):
+            return None
 
     async def database():
         yield EmptyDatabase()

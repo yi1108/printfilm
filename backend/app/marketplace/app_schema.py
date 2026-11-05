@@ -21,8 +21,8 @@ def acquire_schema_lock(connection) -> None:
 
 def register_models():
     """显式注册全部 App 模型，避免运行时导入次序遗漏表。"""
-    from . import app_models, app_media_models, apple_models, app_social_models
-    modules = {app_models.__name__, app_media_models.__name__, apple_models.__name__, app_social_models.__name__}
+    from . import app_models, app_media_models, apple_models, app_social_models, app_engagement_models, curation_models
+    modules = {app_models.__name__, app_media_models.__name__, apple_models.__name__, app_social_models.__name__, app_engagement_models.__name__, curation_models.__name__}
     names = {mapper.local_table.name for mapper in MarketBase.registry.mappers if mapper.class_.__module__ in modules}
     return [table for table in MarketBase.metadata.sorted_tables if table.name in names]
 
@@ -59,7 +59,7 @@ def check_schema(connection) -> list[str]:
             if bool(actual.get("unique")) != bool(index.unique) or actual.get("column_names") != [column.name for column in index.columns]:
                 missing.append(f"{table.name}:index-definition:{index.name}")
             expected_where = index.dialect_options["postgresql"].get("where")
-            if expected_where is not None:
+            if expected_where is not None and connection.dialect.name == "postgresql":
                 # PostgreSQL会加括号和类型转换，此处只接受本模块的active=true活动权益谓词。
                 actual_where = str(actual.get("dialect_options", {}).get("postgresql_where", "")).lower()
                 normalized = "".join(actual_where.replace("(", "").replace(")", "").split())
@@ -79,6 +79,7 @@ def apply_schema(connection) -> None:
     for table in tables:
         table.create(connection, checkfirst=True)
     patches = {
+        "marketplace_app_content_stats": {"share_count": "BIGINT NOT NULL DEFAULT 0"},
         "marketplace_apple_products": {
             "sku_id": "VARCHAR(64) NOT NULL DEFAULT ''",
             "sku_snapshot": "JSON NOT NULL DEFAULT '{}'",

@@ -1,5 +1,7 @@
 # 积分展示约定 / Points display
 
+互动合计数量、加精置顶排序与新版游标、作品分享及 Universal Links 接入见 [互动运营与分享说明](MARKETPLACE_OPERATIONS.md)。推荐分页收到 `MARKETPLACE_FEED_UPDATED`（409）时必须清空游标并刷新首页。
+
 平台额度：1 元额度 = 100 积分。余额、冻结、欠费、消费、到账及赠额的整数 *_fen 和兼容 coins 字段直接作为积分显示，不乘除 100（10000 → 10,000 Points；25 → 25 积分）。视频解锁价格同理。iOS 页面由客户端团队同步修改。
 
 充值实付、Apple 原币金额、版权参考价、创作者收益、渠道成本和打款仍使用货币。credit_currency=CNY 保留原协议含义。四档到账为 10,000 / 49,000 / 104,000 / 220,000 积分，支付售价不变。后端、历史数据、退款和扣费不变，无需迁移。未知历史人工文本不改写。
@@ -30,7 +32,7 @@ JSON业务前缀为`/api/marketplace/app/v1`，所有接口通过HTTPS访问。�
 
 | 配置 | 作用 | 关闭时行为 |
 | --- | --- | --- |
-| 系统设置 → 站点工具 → 启用 App 视频服务 | App 内容、播放和支付总开关。保存后写入数据库，预发不需要容器环境变量 | 返回 `MARKETPLACE_APP_UNAVAILABLE`；不影响原 Web 市场接口。未保存过时默认关闭，启动不做 App 建表。`MARKETPLACE_APP_ENABLED` 只在还没保存过时作为初始值 |
+| 系统设置 → 站点工具 → 启用 App 视频服务 | App 内容、播放及新业务入口。保存后写入数据库，预发不需要容器环境变量 | 返回 `MARKETPLACE_APP_UNAVAILABLE`；不影响原 Web 市场接口。未保存过时默认关闭。API 启动仍使用统一数据库锁幂等补齐结构；已有付款履约不受入口开关控制。`MARKETPLACE_APP_ENABLED` 只在还没保存过时作为初始值 |
 | `MARKETPLACE_SOCIAL_ENABLED` | 点赞、收藏、评论、举报和互动统计 | 互动接口返回 `MARKETPLACE_SOCIAL_UNAVAILABLE`；内容详情和播放仍可用 |
 | `MARKETPLACE_COMMENTS_ENABLED` | 全局评论能力 | 点赞和收藏仍可用；评论和回复返回 `MARKETPLACE_COMMENTS_DISABLED`，已有评论不删除 |
 
@@ -40,7 +42,7 @@ JSON业务前缀为`/api/marketplace/app/v1`，所有接口通过HTTPS访问。�
 
 互动联调最小流程：游客请求详情确认 `engagement.like_count`、`comment_count`、`favorite_count` 可读；登录后调用 `PUT /works/{id}/like` 或 `PUT /episodes/{id}/favorite`，重复请求应幂等；再调用 `POST /works/{id}/comments` 验证评论开关和错误码。评论列表支持 `sort=hot|latest`、游标分页和 `GET /comments/{comment_id}/replies` 多级回复。测试结束后使用对应 `DELETE` 接口清理测试互动数据。
 
-主后端通过市场接入点始终挂载 App 路由，随 API 管理 App 服务及原市场 Worker；仅更新文档或前端不会更新正在运行的后端。手动启动的 Windows 后端需要更新源码并重启原进程。先访问`/api/marketplace/app/v1/capabilities`确认路由与开关，再请求`/feed`：普通`{"detail":"Not Found"}`表示运行版本未挂载此路由；`MARKETPLACE_APP_UNAVAILABLE`表示市场或`MARKETPLACE_APP_ENABLED`关闭；缺少显式迁移返回`503 MARKETPLACE_APP_SCHEMA_REQUIRED`。没有可见作品时返回`200`和空`items`。普通市场启动不自动创建 App 或 Apple 财务表，播放封装也仅在开关和结构检查通过后使用原 Worker 执行。
+主后端通过市场接入点始终挂载 App 路由，随 API 管理 App 服务及原市场 Worker；仅更新文档或前端不会更新正在运行的后端。手动启动的 Windows 后端需要更新源码并重启原进程。先访问`/api/marketplace/app/v1/capabilities`确认路由与开关，再请求`/feed`：普通`{"detail":"Not Found"}`表示运行版本未挂载此路由；`MARKETPLACE_APP_UNAVAILABLE`表示市场或App入口关闭；结构未就绪返回`503 MARKETPLACE_APP_SCHEMA_REQUIRED`。没有可见作品时返回`200`和空`items`。API启动在同一数据库锁下自动进行内容、播放、互动及Apple/钱包的幂等增量迁移，不重算历史余额；迁移失败记录日志并保护相关接口。播放封装仅在开关和结构检查通过后使用原Worker执行。
 
 局域网调试时，后端使用`python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload`监听，并将本地`PUBLIC_BASE_URL`设为手机可访问的`http://电脑局域网IP:8000`。仅监听`127.0.0.1`时，使用电脑的局域网IP访问会连接失败；播放会话返回的地址也必须使用局域网IP。正式环境使用HTTPS域名。
 
@@ -48,7 +50,7 @@ JSON业务前缀为`/api/marketplace/app/v1`，所有接口通过HTTPS访问。�
 
 ```http
 GET /capabilities
-GET /feed?q=&category=&content_type=all&limit=20&cursor=
+GET /feed?q=&category=&content_type=all&sort=recommended&limit=20&cursor=
 GET /works/{work_id}
 GET /series/{series_id}
 GET /series/{series_id}/episodes?limit=20&cursor=

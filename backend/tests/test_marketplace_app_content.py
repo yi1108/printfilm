@@ -42,6 +42,8 @@ class MemorySessions:
 @pytest_asyncio.fixture
 async def app_ctx(monkeypatch):
     """服务端提交只提交 savepoint，最终连 schema 一起回滚。"""
+    from app.marketplace.app_schema import register_models
+    register_models()
     url, name = _resolve_test_database_url(get_settings().database_url)
     await _ensure_test_database(url, name)
     engine = create_async_engine(url)

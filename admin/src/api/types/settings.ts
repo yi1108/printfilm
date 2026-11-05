@@ -112,6 +112,10 @@ export type AdminModelSettings = {
   ffprobe_path: string;
   marketplace_enabled: boolean;
   marketplace_app_enabled: boolean;
+  marketplace_social_initialization_enabled: boolean;
+  marketplace_sharing_enabled: boolean;
+  marketplace_share_base_url: string;
+  marketplace_share_apple_team_id: string;
   marketplace_max_duration_seconds: number;
   source: string;
   updated_at?: string | null;
