@@ -47,9 +47,9 @@ def test_plan_fragments_omits_character_intro_when_disabled():
     assert "人物介绍" not in joined
 
 
-def test_prompt_forbids_intro_when_disabled():
+def test_prompt_strips_intro_when_disabled():
     content = f"{CHARACTER_INTRO_CUE}小宇｜好奇心队长\n【对白·慢速清晰】小宇：嗨。"
     prompt = build_seedance_prompt_text(content, [], burn_subtitles=True, character_intro=False)
-    assert "禁止任何人物介绍叠字" in prompt
     assert CHARACTER_INTRO_CUE not in prompt
     assert "小宇｜好奇心队长" not in prompt
+    assert "小宇：嗨" in prompt
