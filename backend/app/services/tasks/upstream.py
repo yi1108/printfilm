@@ -168,6 +168,13 @@ async def observed_request(
     if task_id is None:
         return await send(endpoint, **kwargs)
     is_submit, is_poll, provider_id = _video_request(method, endpoint)
+    if method not in {"GET", "HEAD", "OPTIONS"} and not is_poll:
+        from app.services.billing.unified_ai import guard_upstream_submission, validate_before_upstream
+        caller_db = _event_session.get()
+        if caller_db is not None:
+            await validate_before_upstream(caller_db, task_id)
+        else:
+            await guard_upstream_submission(task_id)
     if get_current_team_id() is not None and method not in {"GET", "HEAD", "OPTIONS"}:
         from app.services.tasks.team_scope import ensure_upstream_submission_allowed
         caller_db = _event_session.get()

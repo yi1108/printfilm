@@ -13,7 +13,7 @@ from urllib.parse import unquote, urlparse
 from app.config import get_settings
 from app.services.storage import STATIC_ROOT
 from . import storage
-from .config import get_marketplace_settings
+from .config import get_marketplace_settings, video_duration_limit
 from .drama_geometry import display_dimensions as _dimensions, fit_dimensions, validate_aspects
 from .worker import cache_root, command, fingerprint
 
@@ -279,7 +279,7 @@ async def prepare_drama_video(snapshot: dict, dest_key: str, progress=None) -> d
             sources.append(source)
             infos.append(await _probe(source))
         total = sum(info["duration"] for info in infos)
-        if total > settings.max_duration_seconds:
+        if total > video_duration_limit():
             raise _error("SOURCE_NOT_READY", "整集视频超过市场视频时长限制")
         output = root / "episode.mp4"
         timeout = min(7200, max(120, total * 8 + 60))
@@ -312,12 +312,16 @@ async def prepare_drama_video(snapshot: dict, dest_key: str, progress=None) -> d
         size = output.stat().st_size
         if not 0 < size <= settings.max_video_bytes:
             raise _error("SOURCE_NOT_READY", "完整成片超过市场视频大小限制")
-        if result["duration"] > settings.max_duration_seconds:
+        if result["duration"] > video_duration_limit():
             raise _error("SOURCE_NOT_READY", "完整成片超过市场视频时长限制")
+        try:
+            width, height = _dimensions(result)
+        except ValueError as exc:
+            raise _error("SOURCE_INCOMPATIBLE", "成片旋转角度不受支持，请先导出为标准横屏或竖屏视频") from exc
         digest = await _thread(fingerprint, output)
         await _thread(storage.upload, dest_key, output, "video/mp4")
         return {"size_bytes": size, "content_type": "video/mp4", "fingerprint": digest, "duration_seconds": result["duration"],
-                "width": result["width"], "height": result["height"]}
+                "width": width, "height": height}
 
 
 async def prepare_drama_cover(locator: str, dest_key: str, stamp: dict | None = None) -> dict:
@@ -347,7 +351,7 @@ async def prepare_drama_cover(locator: str, dest_key: str, stamp: dict | None = 
                 raise ValueError("invalid image")
             if video_source:
                 duration = float(probe.get("format", {}).get("duration", 0))
-                if not math.isfinite(duration) or not 0 < duration <= limits.max_duration_seconds:
+                if not math.isfinite(duration) or not 0 < duration <= video_duration_limit():
                     raise ValueError("invalid video")
             width, height = _dimensions({"video": image, "width": width, "height": height})
             if width * height > 50_000_000:

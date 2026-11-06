@@ -1,3 +1,4 @@
+import { points } from "@/lib/points";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -18,7 +19,7 @@ import { AdminEntityLink } from "@/components/admin/AdminEntityLink";
 import { AdminModal } from "@/components/admin/AdminModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatAccountId } from "@/lib/admin-account";
-import { fenToYuan } from "@/lib/utils";
+
 import { orderPaymentLabel } from "@/lib/orderPayment";
 import { ledgerKindLabel, orderStatusLabel } from "@/lib/statusLabels";
 
@@ -94,8 +95,8 @@ export function UserDetailDrawer({ userId, open, onOpenChange, initialUser }: Us
                   { label: "昵称", value: user.nickname || "—" },
                   { label: "手机", value: user.phone || "—" },
                   { label: "角色", value: user.role },
-                  { label: "余额", value: `¥${fenToYuan(user.balance_fen)}` },
-                  { label: "冻结", value: `¥${fenToYuan(user.frozen_fen)}` },
+                  { label: "可用积分", value: points(user.balance_fen) },
+                  { label: "冻结", value: points(user.frozen_fen) },
                   {
                     label: "注册时间",
                     value: user.created_at ? new Date(user.created_at).toLocaleString() : "—",
@@ -144,7 +145,7 @@ export function UserDetailDrawer({ userId, open, onOpenChange, initialUser }: Us
                   <tr>
                     <th>类型</th>
                     <th>变动</th>
-                    <th>余额后</th>
+                    <th>剩余积分</th>
                     <th>备注</th>
                   </tr>
                 </thead>
@@ -159,8 +160,8 @@ export function UserDetailDrawer({ userId, open, onOpenChange, initialUser }: Us
                     ledger.map((row) => (
                       <tr key={row.id}>
                         <td>{ledgerKindLabel(row.kind)}</td>
-                        <td>¥{fenToYuan(row.delta_fen)}</td>
-                        <td>¥{fenToYuan(row.balance_after)}</td>
+                        <td>{points(row.delta_fen)}</td>
+                        <td>{points(row.balance_after)}</td>
                         <td className="max-w-[200px] truncate text-xs">{row.note || "—"}</td>
                       </tr>
                     ))
@@ -194,7 +195,7 @@ export function UserDetailDrawer({ userId, open, onOpenChange, initialUser }: Us
                           {row.created_at ? new Date(row.created_at).toLocaleString() : "—"}
                         </td>
                         <td>{row.capability || "—"}</td>
-                        <td>¥{fenToYuan(row.charge_fen ?? 0)}</td>
+                        <td>{points(row.charge_fen ?? 0)}</td>
                         <td>
                           {row.task_run_id ? (
                             <AdminEntityLink kind="task" id={row.task_run_id} />

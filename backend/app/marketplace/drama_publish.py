@@ -162,7 +162,10 @@ async def episode_context(db, owner_id: int, project_id: int, episode, *, source
         if source_versions is not None:
             source_versions[episode.id] = (snapshot["source_version"], snapshot_source_version(snapshot, include_project_cover=False))
     except HTTPException as exc:
-        result["reason"] = str(exc.detail)
+        from .locale_messages import error_message
+        error = error_message(str(exc.detail), exc.status_code)[1]
+        result.update(reason=f"{error['code']}:{error['message']}",
+                      reason_code=error["code"], reason_label=error["message"])
     return result
 
 
@@ -295,6 +298,8 @@ async def publish_selected(project_id: int, body: DramaPublishInput, db, user):
     else:
         series = Series(owner_id=user.id, title=(body.title or project.title or "未命名短剧")[:200],
             description=(project.description or "")[:5000], category=await _category(db, "短剧"), sale_type="copyright_contact")
+        from .categories import resolve_category
+        series.category, series.category_code = await resolve_category(db, series.category)
         db.add(series)
         await db.flush()
         stale_target = False

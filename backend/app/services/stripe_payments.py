@@ -44,7 +44,7 @@ def _rate_text(value) -> str:
     return format(normalized, "f")
 
 
-def quote_payment(amount_fen: int, settings: Settings | None = None, *, language: str = "zh") -> dict:
+def quote_payment(amount_fen: int, settings: Settings | None = None, *, language: str = "zh", sku_id: str | None = None) -> dict:
     """人民币套餐价自动换算为外币最小单位；汇率为人民币/单位外币。"""
     settings = settings or get_settings()
     currency = settings.stripe_currency.strip().lower()
@@ -54,6 +54,9 @@ def quote_payment(amount_fen: int, settings: Settings | None = None, *, language
         raise ValueError("Stripe 收款币种只支持 CNY、USD 或 HKD")
     rate = "1" if currency == "cny" else _rate_text(getattr(settings, f"stripe_{currency}_cny_rate"))
     minor = int((Decimal(int(amount_fen)) / Decimal(rate)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    from app.services.billing.pricing import USD_TOPUP_PRICES
+    if currency == "usd" and sku_id in USD_TOPUP_PRICES:
+        minor = USD_TOPUP_PRICES[sku_id]
     if amount_fen <= 0 or not 1 <= minor <= MAX_PAYMENT_AMOUNT_MINOR:
         raise ValueError("Stripe 换算后的付款金额超出支持范围，请检查汇率")
     return {"payment_currency": currency, "payment_amount_minor": minor, "payment_exchange_rate": rate}
@@ -61,6 +64,10 @@ def quote_payment(amount_fen: int, settings: Settings | None = None, *, language
 
 def payment_snapshot(order: Order) -> dict:
     """读取订单固定报价；上线前的空字段订单仅回退为人民币，不使用当前汇率。"""
+    if order.pay_type == "apple_iap":
+        return {"payment_currency": order.payment_currency, "payment_amount_minor": order.payment_amount_minor,
+                "payment_exchange_rate": order.payment_exchange_rate,
+                "valuation_pending": bool(order.payment_currency and order.payment_exchange_rate is None)}
     if order.payment_currency is None and order.payment_amount_minor is None:
         return {"payment_currency": "cny", "payment_amount_minor": int(order.amount_fen), "payment_exchange_rate": "1"}
     if (order.payment_currency not in PAYMENT_CURRENCIES or order.payment_amount_minor is None
@@ -101,7 +108,7 @@ def is_ready(settings: Settings | None = None, *, language: str = "zh") -> bool:
         _frontend_url(settings)
         from app.services.billing.pricing import SKUS
         for sku in SKUS:
-            quote_payment(int(sku["amount_fen"]), settings, language=language)
+            quote_payment(int(sku["amount_fen"]), settings, language=language, sku_id=sku["id"])
     except ValueError:
         return False
     return True

@@ -151,7 +151,8 @@ def _write_letter(path: Path, font_name: str, body: SignInput, signed_at: str, o
     response_description='授权函模板 template 与当前签署记录 current。',
 )
 async def status(db: DB, user: Actor):
-    return {"template": {"version": VERSION, "title": TITLE, "notices": list(NOTICES), "body": BODY}, "current": summary(await current(db, user.id))}
+    from .letter_reference import reading_reference
+    return {"template": {"version": VERSION, "title": TITLE, "notices": list(NOTICES), "body": BODY}, "reading_reference": reading_reference(VERSION), "current": summary(await current(db, user.id))}
 
 
 @router.post(

@@ -10,7 +10,7 @@ import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page";
-import { fenToYuan } from "@/lib/utils";
+import { points } from "@/lib/points";
 
 type ListRes = { items: AdminDramaProject[]; meta: PageMeta };
 
@@ -95,7 +95,7 @@ export function DramaProjectsPage() {
                 </td>
                 <td>{row.episode_count ?? 0}</td>
                 <td>{row.asset_count ?? 0}</td>
-                <td>¥{fenToYuan(row.charge_fen ?? 0)}</td>
+                <td>{points(row.charge_fen ?? 0)}</td>
                 <td className="text-xs text-[var(--admin-muted)]">{row.summary_status || "—"}</td>
                 <td className="text-xs text-[var(--admin-muted)]">{row.assets_seed_status || "—"}</td>
                 <td className="text-xs text-[var(--admin-muted)]">

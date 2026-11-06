@@ -144,7 +144,7 @@ async def test_missing_selected_rate_disables_checkout_until_configured(settings
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("currency,rate,amount", [("usd", "7.2", 6806), ("hkd", "0.9", 54444)])
+@pytest.mark.parametrize("currency,rate,amount", [("usd", "7.2", 6999), ("hkd", "0.9", 54444)])
 async def test_order_creation_and_reads_expose_server_side_currency_snapshot(settings_client, db_session, monkeypatch, currency, rate, amount):
     client, user = settings_client
     await save_stripe(client)

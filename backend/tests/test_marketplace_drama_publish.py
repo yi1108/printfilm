@@ -62,6 +62,8 @@ async def drama_publish_ctx(monkeypatch):
             return {"kind": "local", "locator": locator, "size_bytes": 100, "file_id": "source-file", "mtime_ns": ctx.source_revision, "fingerprint": f"revision-{ctx.source_revision}"}
 
         app = FastAPI()
+        from app.marketplace.locale_middleware import install_locale
+        install_locale(app)
         app.include_router(drama_publish.router, prefix="/api/marketplace")
         app.include_router(handoff.router, prefix="/api/marketplace")
         app.dependency_overrides[get_db] = db_override
@@ -138,6 +140,12 @@ async def test_context_shows_complete_counts_and_all_owned_target_series(drama_p
     assert [item["id"] for item in body["series"]] == [own.id]
     assert body["storage_configured"] is True and body["authorization_ready"] is False
     assert "/static/" not in response.text
+    english = await ctx.client.get(f"/api/marketplace/printfilm/dramas/{project.id}/publish-context", headers={"Accept-Language": "en-US"})
+    failed = english.json()["episodes"][0]
+    assert failed["reason_code"] == "MARKETPLACE_SOURCE_NOT_READY"
+    assert failed["reason_label"] == "Complete all shot videos for this episode first."
+    assert failed["reason"].startswith("MARKETPLACE_SOURCE_NOT_READY:")
+    assert failed["name"] == body["episodes"][0]["name"]
 
 
 async def test_team_creator_loses_publish_access_and_import_source_after_leaving(drama_publish_ctx):

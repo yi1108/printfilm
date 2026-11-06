@@ -62,6 +62,9 @@ async def _ledger(
 
 async def _lock_user(db: AsyncSession, user_id: int) -> User | None:
     """串行化钱包写入，同时允许用量行对 users.id 的外键 KEY SHARE 校验。"""
+    from . import wallet
+    if wallet.enabled():
+        return await wallet.lock_account(db, user_id)
     return (
         await db.execute(
             select(User)
@@ -124,6 +127,9 @@ async def ensure_balance_for_task(db: AsyncSession, user: User, task: TaskRun) -
     locked = await _lock_user(db, int(user.id))
     if locked is None:
         raise ValueError("用户不存在")
+    from . import wallet
+    if wallet.enabled():
+        await wallet.ensure_can_spend(db, locked)
     # 同步调用方持有的 user 对象余额
     user.balance_fen = int(locked.balance_fen or 0)
     user.frozen_fen = int(locked.frozen_fen or 0)
@@ -161,6 +167,9 @@ async def ensure_balance_for_task_batch(
     locked = await _lock_user(db, int(user.id))
     if locked is None:
         raise ValueError("用户不存在")
+    from . import wallet
+    if wallet.enabled():
+        await wallet.ensure_can_spend(db, locked)
     user.balance_fen = int(locked.balance_fen or 0)
     user.frozen_fen = int(locked.frozen_fen or 0)
     unit = await estimate_task_fen(db, task)
@@ -195,6 +204,9 @@ async def freeze_for_task(db: AsyncSession, task: TaskRun) -> int:
         from app.services.billing.team import freeze_team_task
         return await freeze_team_task(db, task)
     if task.billing_status == "frozen":
+        from . import wallet, wallet_tasks
+        if wallet.enabled() and not task.provider_task_id:
+            await wallet_tasks.validate_task_funding(db, int(task.requested_by), int(task.id))
         return int(task.billing_estimate_fen or 0)
 
     user = await _lock_user(db, int(task.requested_by))
@@ -204,6 +216,12 @@ async def freeze_for_task(db: AsyncSession, task: TaskRun) -> int:
         await db.flush()
         return 0
     need = await estimate_task_fen(db, task)
+    from . import wallet, wallet_tasks
+    if wallet.enabled():
+        need = await wallet_tasks.reserve_task(db, user.id, task.id, need)
+        task.billing_estimate_fen, task.billing_status = need, "frozen"
+        await db.flush()
+        return need
     available = int(user.balance_fen or 0)
     if available < need:
         raise ValueError(f"余额不足：需要 ¥{need/100:.2f}，当前 ¥{available/100:.2f}，请先充值")
@@ -328,6 +346,16 @@ async def settle_task(db: AsyncSession, task_id: int) -> dict[str, int]:
             task.billing_status = "settled"
         await db.flush()
         return {"charged": charged, "refunded": 0}
+    from . import wallet, wallet_tasks
+    if wallet.enabled() and (task.billing_status == "frozen" or billing_active(user)):
+        outcome = await wallet_tasks.settle_task(db, user.id, task_id, charged)
+        task.billing_charged_fen, task.billing_refunded_fen = outcome["charged"], outcome["refunded"]
+        task.billing_status = "settled"
+        await db.flush()
+        if charged:
+            from .alerts import process_billing_alerts_after_charge
+            await process_billing_alerts_after_charge(db, user, charged_fen=charged)
+        return {"charged": outcome["charged"], "refunded": outcome["refunded"]}
     if task.billing_status != "frozen":
         # 非 frozen（none/settled 重入外）但有用量：按实扣直接扣钱包，避免只记账漏扣
         if charged > 0 and billing_active(user):
@@ -452,6 +480,18 @@ async def credit_topup(
     ref_id: str,
     note: str = "",
 ) -> None:
+    from . import wallet
+    if wallet.enabled():
+        from app.models import Order
+        order = await db.scalar(select(Order).where(Order.out_trade_no == ref_id, Order.user_id == user.id))
+        if ref_type != "order" or not order:
+            raise ValueError("充值资金来源缺少有效订单")
+        amount = order.amount_fen
+        if order.payment_currency and order.payment_currency != "cny":
+            from decimal import Decimal, ROUND_HALF_UP
+            amount = int((Decimal(order.payment_amount_minor) * Decimal(order.payment_exchange_rate)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        await wallet.credit(db, user.id, int(credit_fen), source_type="web_order", source_ref=ref_id, amount_fen=amount, note=note)
+        return
     locked = await _lock_user(db, int(user.id))
     target = locked or user
     await _ledger(db, target, int(credit_fen), "topup", ref_type=ref_type, ref_id=ref_id, note=note)
@@ -475,7 +515,7 @@ async def close_expired_pending_orders(
     now = datetime.now(timezone.utc)
     # Stripe owns its Checkout expiry; never apply Epay's five-minute timeout.
     stmt = (
-        select(Order).where(Order.status == "pending", Order.pay_type != "stripe")
+        select(Order).where(Order.status == "pending", Order.pay_type.notin_(("stripe", "apple_iap")))
         .with_for_update().execution_options(populate_existing=True)
     )
     if team_id is not None:

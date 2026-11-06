@@ -6,7 +6,7 @@ import { PageSection } from "@/components/admin/PageSection";
 import { PageHeader } from "@/components/ui/page";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api, type AdminFinanceDaily } from "@/api/client";
-import { fenToYuan } from "@/lib/utils";
+import { points } from "@/lib/points";
 
 type FinanceDays = "7" | "14" | "30" | "90";
 
@@ -95,7 +95,7 @@ export function FinanceListPage() {
                   {rows.map((row) => (
                     <TableRow key={row.date}>
                       <TableCell className="font-mono text-xs">{row.date}</TableCell>
-                      <TableCell>¥{fenToYuan(row.charge_fen)}</TableCell>
+                      <TableCell>{points(row.charge_fen)}</TableCell>
                       <TableCell>{row.calls.toLocaleString()}</TableCell>
                       <TableCell>{row.tokens.toLocaleString()}</TableCell>
                     </TableRow>
@@ -103,7 +103,7 @@ export function FinanceListPage() {
                   {totals ? (
                     <TableRow className="bg-[rgba(15,45,32,0.04)] font-medium">
                       <TableCell>合计</TableCell>
-                      <TableCell>¥{fenToYuan(totals.charge_fen)}</TableCell>
+                      <TableCell>{points(totals.charge_fen)}</TableCell>
                       <TableCell>{totals.calls.toLocaleString()}</TableCell>
                       <TableCell>{totals.tokens.toLocaleString()}</TableCell>
                     </TableRow>

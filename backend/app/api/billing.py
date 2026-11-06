@@ -63,8 +63,9 @@ async def quote_media(body: MediaQuoteBody, _user: User = Depends(get_current_us
 
 class CreateOrderBody(BaseModel):
     sku_id: str
-    pay_type: Literal["alipay", "wxpay", "stripe"]
+    pay_type: Literal["alipay", "wxpay", "stripe", "apple_iap"]
     language: Literal["zh", "en"] = "zh"
+    idempotency_key: str | None = Field(None, min_length=8, max_length=128)
 
 
 @router.get(
@@ -73,7 +74,10 @@ class CreateOrderBody(BaseModel):
     description="需要登录，返回个人可用余额、冻结金额、套餐和计费开关。金额同时提供分和元两种单位。",
     response_description="个人钱包与计费配置",
 )
-async def wallet(user: User = Depends(get_current_user)) -> dict:
+async def wallet(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict:
+    from app.services.billing import wallet as funds
+    from app.marketplace.coin_service import funds_call
+    state = await funds_call(funds.snapshot(db, user.id)) if funds.enabled() else {}
     return {
         "balance_fen": int(user.balance_fen or 0),
         "frozen_fen": int(user.frozen_fen or 0),
@@ -82,6 +86,8 @@ async def wallet(user: User = Depends(get_current_user)) -> dict:
         "plan": user.plan or "free",
         "billing_enabled": settings.billing_enabled,
         "markup": settings.billing_markup,
+        "unified_wallet_enabled": funds.enabled(),
+        **state,
     }
 
 
@@ -91,12 +97,18 @@ async def wallet(user: User = Depends(get_current_user)) -> dict:
     description="无需登录，返回可购买的充值套餐、支持的支付方式及计费倍率。",
     response_description="充值套餐与支付方式",
 )
-async def list_skus(language: Literal["zh", "en"] = Query("zh")) -> dict:
+async def list_skus(request: Request, language: Literal["zh", "en"] = Query("zh"), channel: Literal["web", "apple_iap"] = "web", db: AsyncSession = Depends(get_db)) -> dict:
+    if channel == "apple_iap":
+        from app.marketplace.apple_api import coin_products
+        from app.marketplace.app_bootstrap import require_schema
+        await require_schema(request)
+        result = await coin_products(db)
+        return {**result, "skus": result["items"], "pay_types": ["apple_iap"] if result["purchasing_enabled"] else []}
     stripe_settings = get_settings()
     stripe_ready = stripe_payments.is_ready(stripe_settings, language=language)
     return {
         "skus": [
-            {**sku, **({"stripe_quote": stripe_payments.quote_payment(int(sku["amount_fen"]), stripe_settings, language=language)} if stripe_ready else {})}
+            {**sku, **({"stripe_quote": stripe_payments.quote_payment(int(sku["amount_fen"]), stripe_settings, language=language, sku_id=sku["id"])} if stripe_ready else {})}
             for sku in billing.SKUS
         ],
         "pay_types": ["alipay", "wxpay"] + (["stripe"] if stripe_ready else []),
@@ -210,6 +222,22 @@ async def create_order(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict:
+    if body.pay_type == "apple_iap":
+        from app.marketplace.apple_api import purchasing_enabled
+        from app.marketplace.app_bootstrap import require_schema
+        from app.marketplace.apple_recharge import find_product_for_sku
+        from app.marketplace.apple_service import purchase_intent
+        from app.marketplace.app_settings import get_app_settings
+        from app.marketplace.coin_service import app_fail
+        await require_schema(request)
+        if not purchasing_enabled():
+            app_fail("MARKETPLACE_PAYMENT_UNAVAILABLE", "苹果充值暂不可用，请稍后重试。", 503)
+        if not body.idempotency_key:
+            app_fail("MARKETPLACE_IDEMPOTENCY_REQUIRED", "请提供充值操作编号。", 422)
+        product = await find_product_for_sku(db, body.sku_id)
+        result = await purchase_intent(db, user.id, get_app_settings().apple_environment, product.product_id, body.idempotency_key)
+        await db.commit()
+        return result
     if body.pay_type == "stripe" and not stripe_payments.is_ready(language=body.language):
         raise HTTPException(status_code=503, detail="Stripe 支付未启用或未完成配置")
     # 下单前先清理该用户已过期的待支付单
@@ -220,7 +248,7 @@ async def create_order(
     payment = {}
     if body.pay_type == "stripe":
         try:
-            payment = stripe_payments.quote_payment(int(sku["amount_fen"]), language=body.language)
+            payment = stripe_payments.quote_payment(int(sku["amount_fen"]), language=body.language, sku_id=sku["id"])
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
     out_trade_no = f"PF{int(time.time())}{user.id:04d}{uuid.uuid4().hex[:8]}"

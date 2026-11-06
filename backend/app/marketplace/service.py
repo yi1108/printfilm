@@ -154,7 +154,9 @@ def event(db: AsyncSession, actor: int, kind: str, target: int, action: str, not
 
 def notify(db: AsyncSession, owner: int, message: str, link: str = "/marketplace/mine") -> None:
     """站内消息与业务事务一并提交，不依赖 SMTP。"""
-    db.add(Notification(owner_id=owner, message=message, link=link))
+    from .notification_locale import encode
+    code, params = encode(message)
+    db.add(Notification(owner_id=owner, message=str(message), link=link, template_code=code, message_params=params))
 
 
 def data(record, *fields: str) -> dict:
@@ -167,7 +169,12 @@ async def work_data(db: AsyncSession, work: Work, private: bool = False) -> dict
     owner = await db.get(User, work.owner_id)
     asset = await db.get(Asset, work.asset_id) if work.asset_id else None
     result = data(work, "id", "title", "description", "category", "tags", "price_fen", "sale_type", "unlock_price_fen", "share_bps", "source", "license_scope", "created_at")
-    result.update(author=owner.nickname if owner else "创作者", duration_seconds=asset.duration_seconds if asset else None)
+    from .categories import category_fields
+    from .locale import localized
+    result.update(await category_fields(db, work))
+    from .curation import flags as curation_flags
+    result.update(await curation_flags(db, "work", work.id))
+    result.update(author=owner.nickname if owner else localized("创作者", "Creator"), duration_seconds=asset.duration_seconds if asset else None)
     if private:
         from .previews import is_preview_key, preview_for, requires_preview
         preview = await preview_for(db, work)
@@ -196,7 +203,10 @@ async def recruit_data(db: AsyncSession, post: Recruit, private: bool = False) -
     """招募公开说明不包含私密投稿。"""
     owner = await db.get(User, post.owner_id)
     result = data(post, "id", "title", "description", "category", "budget_fen", "wanted_count", "requirements", "license_scope", "image_ids", "deadline_at", "created_at")
-    result["author"] = owner.nickname if owner else "需求发布者"
+    from .categories import category_fields
+    from .locale import localized
+    result.update(await category_fields(db, post))
+    result["author"] = owner.nickname if owner else localized("需求发布者", "Client")
     if private:
         result.update(data(post, "owner_id", "version", "audit_status", "state", "blocked", "reason"))
         result["submission_count"] = (await db.execute(select(func.count()).select_from(Submission).where(Submission.recruit_id == post.id))).scalar_one()

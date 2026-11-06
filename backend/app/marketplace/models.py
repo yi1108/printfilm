@@ -43,6 +43,8 @@ class Asset(Record, MarketBase):
     status: Mapped[str] = mapped_column(String(24), default="uploading", index=True)
     fingerprint: Mapped[str] = mapped_column(String(64), default="")
     duration_seconds: Mapped[float | None]
+    display_width: Mapped[int | None] = mapped_column(Integer)
+    display_height: Mapped[int | None] = mapped_column(Integer)
     cover_key: Mapped[str | None] = mapped_column(String(512))
     preview_key: Mapped[str | None] = mapped_column(String(512))
     review_key: Mapped[str | None] = mapped_column(String(512))
@@ -84,6 +86,7 @@ class Work(Record, MarketBase):
     title: Mapped[str] = mapped_column(String(200))
     description: Mapped[str] = mapped_column(Text, default="")
     category: Mapped[str] = mapped_column(String(60), default="其他")
+    category_code: Mapped[str | None] = mapped_column(String(80), index=True)
     tags: Mapped[list[str]] = mapped_column(JSON, default=list)
     price_fen: Mapped[int] = mapped_column(BigInteger)
     sale_type: Mapped[str] = mapped_column(String(24), default="copyright_contact", index=True)
@@ -116,6 +119,7 @@ class Recruit(Record, MarketBase):
     title: Mapped[str] = mapped_column(String(200))
     description: Mapped[str] = mapped_column(Text)
     category: Mapped[str] = mapped_column(String(60), default="其他")
+    category_code: Mapped[str | None] = mapped_column(String(80), index=True)
     budget_fen: Mapped[int] = mapped_column(BigInteger)
     wanted_count: Mapped[int] = mapped_column(Integer)
     requirements: Mapped[str] = mapped_column(Text)
@@ -210,6 +214,7 @@ class Series(Record, MarketBase):
     title: Mapped[str] = mapped_column(String(200))
     description: Mapped[str] = mapped_column(Text, default="")
     category: Mapped[str] = mapped_column(String(60), default="其他")
+    category_code: Mapped[str | None] = mapped_column(String(80), index=True)
     tags: Mapped[list[str]] = mapped_column(JSON, default=list)
     cover_asset_id: Mapped[int | None] = mapped_column(ForeignKey("marketplace_assets.id"))
     sale_type: Mapped[str] = mapped_column(String(24), default="copyright_contact", index=True)
@@ -375,6 +380,8 @@ class Notification(Record, MarketBase):
     __tablename__ = "marketplace_notifications"
     owner_id: Mapped[int] = mapped_column(Integer, index=True)
     message: Mapped[str] = mapped_column(Text)
+    template_code: Mapped[str] = mapped_column(String(100), default="")
+    message_params: Mapped[dict] = mapped_column(JSON, default=dict)
     link: Mapped[str] = mapped_column(String(300))
     read: Mapped[bool] = mapped_column(Boolean, default=False)
 
@@ -396,13 +403,16 @@ class CategoryConfig(MarketBase):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
     names: Mapped[list[str]] = mapped_column(JSON)
+    items: Mapped[list[dict]] = mapped_column(JSON, default=list)
 
 
 class Support(MarketBase):
     __tablename__ = "marketplace_support"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     name: Mapped[str] = mapped_column(String(80), default="平台客服")
+    name_en: Mapped[str] = mapped_column(String(160), default="")
     wechat: Mapped[str] = mapped_column(String(100), default="")
     hours: Mapped[str] = mapped_column(String(100), default="")
+    hours_en: Mapped[str] = mapped_column(String(200), default="")
     qr_asset_id: Mapped[int | None] = mapped_column(ForeignKey("marketplace_assets.id"))
     enabled: Mapped[bool] = mapped_column(Boolean, default=False)

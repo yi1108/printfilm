@@ -191,7 +191,7 @@ export const enShell = {
     assetsLead: 'Characters, scenes, props, and media live in the Digital Asset Library',
     openAssets: 'Open Digital Asset Library',
     subLead: 'Pay as you go — balance never expires',
-    balance: 'Available',
+    balance: 'Available Points',
     frozen: 'On hold',
     currentPlan: 'Current plan',
     goTopup: 'Add credits',

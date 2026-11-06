@@ -15,7 +15,7 @@ import { PageHeader } from "@/components/ui/page";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAdminTeamQuery } from "@/hooks/useAdminTeamQuery";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
-import { fenToYuan } from "@/lib/utils";
+import { points } from "@/lib/points";
 
 /** 团队管理入口：查看归属、规模、所有者账户与消费上限与实际消费。 */
 export function TeamsPage() {
@@ -44,13 +44,13 @@ export function TeamsPage() {
     {data && data.items.length > 0 && <div className="space-y-3">
       <Table><TableHeader><TableRow>
         <TableHead>团队</TableHead><TableHead>所有者</TableHead><TableHead>成员 / 项目</TableHead>
-        <TableHead>所有者个人余额 / 冻结</TableHead><TableHead>本月消费</TableHead><TableHead>创建时间</TableHead><TableHead>操作</TableHead>
+        <TableHead>所有者个人积分 / 冻结</TableHead><TableHead>本月消费</TableHead><TableHead>创建时间</TableHead><TableHead>操作</TableHead>
       </TableRow></TableHeader><TableBody>{data.items.map((team) => <TableRow key={team.id}>
         <TableCell><div className="flex items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--admin-accent-soft)] text-[var(--admin-forest)]"><UsersRound className="h-5 w-5" /></span><div><Link className="font-semibold hover:underline" to={`/teams/${team.id}`}>{team.name}</Link><div className="mt-1 text-xs text-[var(--admin-muted)]">#{team.id}</div></div></div></TableCell>
         <TableCell><div>{team.owner_nickname || "—"}</div><div className="mt-1 text-xs text-[var(--admin-muted)]">{team.owner_email}</div></TableCell>
         <TableCell><span className="tabular-nums">{team.member_count} 位成员 / {team.project_count} 个项目</span></TableCell>
-        <TableCell className="tabular-nums"><div>¥{fenToYuan(team.balance_fen)}</div><div className="mt-1 text-xs text-[var(--admin-muted)]">冻结 ¥{fenToYuan(team.frozen_fen)}</div></TableCell>
-        <TableCell className="tabular-nums"><div>¥{fenToYuan(team.month_spent_fen)}</div><div className="mt-1 text-xs text-[var(--admin-muted)]">{team.period}</div></TableCell>
+        <TableCell className="tabular-nums"><div>{points(team.balance_fen)}</div><div className="mt-1 text-xs text-[var(--admin-muted)]">冻结 {points(team.frozen_fen)}</div></TableCell>
+        <TableCell className="tabular-nums"><div>{points(team.month_spent_fen)}</div><div className="mt-1 text-xs text-[var(--admin-muted)]">{team.period}</div></TableCell>
         <TableCell className="whitespace-nowrap text-xs">{teamDate(team.created_at)}</TableCell>
         <TableCell><Button type="button" asChild size="sm" variant="outline"><Link to={`/teams/${team.id}`}>查看团队</Link></Button></TableCell>
       </TableRow>)}</TableBody></Table>

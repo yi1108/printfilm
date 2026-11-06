@@ -1,8 +1,11 @@
+import { getActiveLocale } from '../../i18n/detect.ts'
+import { marketText as mt } from './translate.ts'
 import { explainMarketplaceError, marketplaceErrorCode } from './messages'
 
 /** 下游独立客户端；不修改原 api.ts。金额统一以分传输。 */
 export type Row = {
-  id: number; title?: string; description?: string; category?: string; author?: string;
+  is_featured?: boolean; is_pinned?: boolean;
+  id: number; title?: string; description?: string; category?: string; category_code?: string; category_label?: string; category_labels?: { zh: string; en: string }; author?: string;
   price_fen?: number; copyright_price_fen?: number; unlock_price_fen?: number; sale_type?: 'free' | 'copyright_contact' | 'platform_unlock'; share_bps?: number | null; budget_fen?: number; quote_fen?: number; wanted_count?: number;
   requirements?: string; license_scope?: string; image_ids?: number[]; deadline_at?: string;
   version?: number; asset_id?: number | null; cover_asset_id?: number | null; source?: string; tags?: string[];
@@ -15,7 +18,7 @@ export type Row = {
   can_review?: boolean; can_purchase?: boolean; submission_count?: number;
   is_owner?: boolean; is_open?: boolean; can_submit?: boolean; can_contact?: boolean;
   rights_id?: number; route?: string; official_reference?: string; note?: string;
-  message?: string; link?: string; read?: boolean; created_at?: string;
+  historical?: boolean; message?: string; link?: string; read?: boolean; created_at?: string;
 }
 export type Listing = { items: Row[]; meta: { page: number; page_size: number; total: number } }
 export type Capabilities = { enabled: boolean; storage_configured: boolean }
@@ -42,18 +45,18 @@ export async function request<T>(path: string, method = 'GET', body?: unknown, s
   let response: Response
   try {
     response = await fetch(`${base}/api/marketplace${path}`, {
-      method, signal, headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body !== undefined ? { 'Content-Type': binary ? 'application/octet-stream' : 'application/json' } : {}) },
+      method, signal, headers: { 'Accept-Language': getActiveLocale(), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body !== undefined ? { 'Content-Type': binary ? 'application/octet-stream' : 'application/json' } : {}) },
       body: body === undefined ? undefined : binary ? body : JSON.stringify(body),
     })
   } catch (cause) {
     if (signal?.aborted) throw cause
-    throw new Error('网络连接失败，请检查网络后重试。', { cause })
+    throw new Error(mt("网络连接失败，请检查网络后重试。"), { cause })
   }
   const result = await response.json().catch(() => ({}))
   if (!response.ok) {
     if (response.status === 401) window.location.assign(`/auth?next=${encodeURIComponent(window.location.pathname + window.location.search)}`)
     const detail = result?.detail
-    throw Object.assign(new Error(explainMarketplaceError(detail, response.status)), { code: marketplaceErrorCode(detail), status: response.status })
+    throw Object.assign(new Error(explainMarketplaceError(detail, response.status)), { code: marketplaceErrorCode(detail) || result?.error?.code, status: response.status })
   }
   return result as T
 }
@@ -64,16 +67,16 @@ export async function letterFile(id: number): Promise<Blob> {
   let response: Response
   try {
     response = await fetch(`${base}/api/marketplace/authorizations/${id}/file`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: { 'Accept-Language': getActiveLocale(), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     })
   } catch {
-    throw new Error('授权函暂时无法打开')
+    throw new Error(mt("授权函暂时无法打开"))
   }
   if (!response.ok) {
     if (response.status === 401) window.location.assign(`/auth?next=${encodeURIComponent(window.location.pathname + window.location.search)}`)
     const result = await response.json().catch(() => ({}))
     const detail = result?.detail
-    throw Object.assign(new Error(explainMarketplaceError(detail, response.status)), { code: marketplaceErrorCode(detail), status: response.status })
+    throw Object.assign(new Error(explainMarketplaceError(detail, response.status)), { code: marketplaceErrorCode(detail) || result?.error?.code, status: response.status })
   }
   return response.blob()
 }
@@ -142,8 +145,8 @@ export async function upload(file: File, kind: string, progress: (percent: numbe
   } catch (error) {
     if (signal?.aborted && session) {
       try { await request(`/uploads/${session.id}`, 'DELETE'); localStorage.removeItem(key) }
-      catch { throw new Error('取消未确认，请到我的文件检查状态；重新选择相同文件可恢复上传。') }
-      throw new Error('已取消上传')
+      catch { throw new Error(mt("取消未确认，请到我的文件检查状态；重新选择相同文件可恢复上传。")) }
+      throw new Error(mt("已取消上传"))
     }
     throw error
   }
@@ -152,10 +155,10 @@ export async function upload(file: File, kind: string, progress: (percent: numbe
 // 以分展示人民币，避免浮点金额进入业务接口。
 export const money = (value?: number) => `¥${((value ?? 0) / 100).toFixed(2)}`
 // 北京时间展示，服务端保留 UTC。
-export const date = (value?: string) => value ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '—'
+export const date = (value?: string) => value ? new Date(value).toLocaleString(getActiveLocale() === 'en' ? 'en-GB' : 'zh-CN', { timeZone: 'Asia/Shanghai' }) : '—'
 // 将UTC转为当前浏览器datetime-local值，避免表单回填时改变时区。
 export function localDate(value: string) { const date = new Date(value); return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16) }
 // 状态不在客户端推断，仅翻译后端结果。
-export const labels: Record<string, string> = { draft: '草稿', preview_failed: '短试看生成失败', pending: '待审核', approved: '已通过', rejected: '已驳回', missing: '未提交', ready: '已就绪', processing: '处理中', uploading: '上传中', failed: '失败', open: '征集中', closed: '已关闭', expired: '已到期', to_review: '待看', candidate: '候选', not_selected: '不采用', pending_materials: '待材料', reviewing: '材料核验中', supplement: '待补正', applying: '办理中', certificated: '已取得证书', cancelled: '已取消', existing: '已有证书', self_service: '自行办理', assisted: '客服协办' }
+export const labels: Record<string, string> = new Proxy<Record<string, string>>({ draft: '草稿', preview_failed: '短试看生成失败', pending: '待审核', approved: '已通过', rejected: '已驳回', missing: '未提交', ready: '已就绪', processing: '处理中', uploading: '上传中', failed: '失败', open: '征集中', closed: '已关闭', expired: '已到期', to_review: '待看', candidate: '候选', not_selected: '不采用', pending_materials: '待材料', reviewing: '材料核验中', supplement: '待补正', applying: '办理中', certificated: '已取得证书', cancelled: '已取消', existing: '已有证书', self_service: '自行办理', assisted: '客服协办' }, { get: (target, key: string) => target[key] ? mt(target[key]) : undefined })
 
 

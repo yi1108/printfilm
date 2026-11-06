@@ -19,7 +19,7 @@ async def test_language_mode_quotes_cny_and_usd_from_one_admin_rate(settings_cli
     response = await client.patch(SETTINGS_URL, json={"stripe_currency": "auto", "stripe_usd_cny_rate": "7.2"})
     assert response.status_code == 200
     assert response.json()["settings"]["stripe_ready"] is True
-    for language, currency, amount, rate in [("zh", "cny", 49000, "1"), ("en", "usd", 6806, "7.2")]:
+    for language, currency, amount, rate in [("zh", "cny", 49000, "1"), ("en", "usd", 6999, "7.2")]:
         data = (await client.get(f"/api/billing/skus?language={language}")).json()
         assert "stripe" in data["pay_types"]
         sku = next(s for s in data["skus"] if s["id"] == "topup_49")
@@ -46,7 +46,7 @@ async def test_missing_usd_rate_only_disables_english_stripe(settings_client, mo
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("language,currency,amount", [("zh", "cny", 49000), ("en", "usd", 6806)])
+@pytest.mark.parametrize("language,currency,amount", [("zh", "cny", 49000), ("en", "usd", 6999)])
 async def test_order_uses_language_and_ignores_client_amount_then_remains_fixed(settings_client, db_session, monkeypatch, language, currency, amount):
     client, _ = settings_client
     await save_stripe(client)

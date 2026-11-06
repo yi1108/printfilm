@@ -3,7 +3,9 @@ from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func, literal, select, union_all
 
 from app.models import User
+from .categories import category_fields, category_filter, normalize_category_input
 from .dependencies import Actor, DB, Visitor
+from .curation import join_curation, ordering_columns
 from .previews import cancel_work_previews, prepare_preview, preview_ready, requires_preview
 from .models import Asset, Handoff, PlaybackJob, Publication, Recruit, RegistrationCase, RevenueConfig, Rights, Series, SeriesEpisode, Submission, Work
 from .schemas import CaseInput, RecruitInput, RecruitUpdate, RightsInput, Version, WorkInput, WorkUpdate
@@ -52,8 +54,8 @@ async def catalog_item(db, kind: str, item_id: int) -> dict:
     series = await db.get(Series, item_id)
     detail = await _series_data(db, series)
     owner = await db.get(User, series.owner_id)
-    return {"kind": "series", "id": series.id, "title": series.title, "description": series.description,
-            "category": series.category, "sale_type": series.sale_type, "price_fen": series.copyright_price_fen,
+    return {"is_featured": detail["is_featured"], "is_pinned": detail["is_pinned"], "kind": "series", "id": series.id, "title": series.title, "description": series.description,
+            **await category_fields(db, series), "category": series.category, "sale_type": series.sale_type, "price_fen": series.copyright_price_fen,
             "author": owner.nickname if owner else "创作者", "episode_count": detail["episode_count"],
             "free_episode_count": series.free_episode_count,
             "cover_asset_id": series.cover_asset_id, "created_at": series.created_at}
@@ -62,15 +64,15 @@ async def catalog_item(db, kind: str, item_id: int) -> dict:
 @router.get(
     "/works", response_model=dict,
     summary='分页查询作品广场',
-    description='合并单视频与短剧系列后筛选、排序并分页；仅展示满足公开条件的内容。q 搜索标题，category 按分类筛选，价格单位为人民币分；sort 支持 latest、price_asc、price_desc。',
+    description='合并单视频与短剧系列后筛选、排序并分页；仅展示满足公开条件的内容。q 搜索标题，category 按分类筛选，价格单位为人民币分；sort 支持 recommended（默认）、latest、price_asc、price_desc。',
     response_description='作品卡片 items 与分页信息 meta，kind 区分 work 和 series。',
 )
-async def works(db: DB, q: str = Query("", max_length=100), category: str = Query("", max_length=60),
+async def works(db: DB, q: str = Query("", max_length=100), category: str = Query("", max_length=60), category_code: str = Query("", max_length=80),
                 min_price: int | None = Query(None, ge=0), max_price: int | None = Query(None, ge=0),
-                sort: str = "latest", page_number: int = Query(1, alias="page", ge=1), page_size: int = Query(20, ge=1, le=100)):
+                sort: str = "recommended", page_number: int = Query(1, alias="page", ge=1), page_size: int = Query(20, ge=1, le=100)):
     """单视频和短剧共用作品广场，筛选后再分页。"""
     from .series import public_series_filters
-    if sort not in {"latest", "price_asc", "price_desc"}:
+    if sort not in {"recommended", "latest", "price_asc", "price_desc"}:
         fail("排序参数无效")
     work_query = select(Work.id.label("item_id"), literal("work").label("kind"), Work.created_at.label("sort_at"),
                         Work.price_fen.label("price")).join(Asset, Asset.id == Work.asset_id).join(Rights, Rights.asset_id == Asset.id).where(*public_work_filters())
@@ -79,19 +81,23 @@ async def works(db: DB, q: str = Query("", max_length=100), category: str = Quer
     if q:
         work_query = work_query.where(Work.title.ilike(f"%{q}%"))
         series_query = series_query.where(Series.title.ilike(f"%{q}%"))
-    if category:
-        work_query = work_query.where(Work.category == category)
-        series_query = series_query.where(Series.category == category)
+    if category or category_code:
+        work_query = work_query.where(await category_filter(db, Work, category, category_code))
+        series_query = series_query.where(await category_filter(db, Series, category, category_code))
     if min_price is not None:
         work_query = work_query.where(Work.price_fen >= min_price)
         series_query = series_query.where(Series.copyright_price_fen >= min_price)
     if max_price is not None:
         work_query = work_query.where(Work.price_fen <= max_price)
         series_query = series_query.where(Series.copyright_price_fen <= max_price)
+    work_query = join_curation(work_query, Work, "work").add_columns(*ordering_columns())
+    series_query = join_curation(series_query, Series, "series").add_columns(*ordering_columns())
     combined = union_all(work_query, series_query).subquery()
     total = (await db.execute(select(func.count()).select_from(combined))).scalar_one()
-    ordering = {"latest": combined.c.sort_at.desc(), "price_asc": combined.c.price.asc(), "price_desc": combined.c.price.desc()}
-    rows = (await db.execute(select(combined).order_by(ordering[sort], combined.c.item_id.desc())
+    chronological = [combined.c.sort_at.desc(), combined.c.kind.desc(), combined.c.item_id.desc()]
+    ordering = {"recommended": [combined.c.pin.desc(), combined.c.priority.desc(), combined.c.feature.desc(), *chronological],
+                "latest": chronological, "price_asc": [combined.c.price.asc(), *chronological], "price_desc": [combined.c.price.desc(), *chronological]}
+    rows = (await db.execute(select(combined).order_by(*ordering[sort])
                              .offset((page_number - 1) * page_size).limit(page_size))).all()
     return {"items": [await catalog_item(db, row.kind, row.item_id) for row in rows],
             "meta": {"page": page_number, "page_size": page_size, "total": total}}
@@ -120,8 +126,7 @@ async def work_detail(work_id: int, db: DB, user: Visitor):
 )
 async def create_work(body: WorkInput, db: DB, user: Actor):
     """文字草稿无需 OSS，绑定媒体时只能选择本人的 ready 资产。"""
-    from .categories import validate_category
-    await validate_category(db, body.category)
+    await normalize_category_input(db, body)
     if body.asset_id:
         await asset_owned_for_draft(db, body.asset_id, user)
     if body.cover_asset_id:
@@ -145,8 +150,7 @@ async def update_work(work_id: int, body: WorkUpdate, db: DB, user: Actor):
     ensure_kept(item)
     check_version(item, body.version)
     await _ensure_work_idle(db, item.id)
-    from .categories import validate_category
-    await validate_category(db, body.category, item.category)
+    await normalize_category_input(db, body, item)
     if body.asset_id:
         await asset_owned_for_draft(db, body.asset_id, user)
     if body.cover_asset_id:
@@ -298,6 +302,10 @@ async def listing(work_id: int, body: Version, db: DB, user: Actor, listed: bool
     if publication:
         publication.listed = listed and publication.audit_status == "approved" and (item.sale_type != "platform_unlock" or publication.playback_status == "done")
     event(db, user.id, "work", item.id, "listed" if listed else "unlisted", version=item.version)
+    if listed:
+        await db.flush()
+        from .app_engagement import initialize_target
+        await initialize_target(db, "work", item.id, automatic=True)
     await db.commit()
     return await work_data(db, item, True)
 
@@ -536,15 +544,15 @@ async def get_case(rights_id: int, db: DB, user: Actor):
     description='仅展示审核通过且仍开放的需求。支持标题、分类和预算范围筛选，预算单位为人民币分；sort 支持 latest 和 deadline。',
     response_description='招募需求 items 与分页信息 meta。',
 )
-async def recruits(db: DB, q: str = Query("", max_length=100), category: str = Query("", max_length=60),
+async def recruits(db: DB, q: str = Query("", max_length=100), category: str = Query("", max_length=60), category_code: str = Query("", max_length=80),
                    min_budget: int | None = Query(None, ge=0), max_budget: int | None = Query(None, ge=0),
                    sort: str = "latest", page_number: int = Query(1, alias="page", ge=1), page_size: int = Query(20, ge=1, le=100)):
     """只展示审核通过且仍开放的需求。"""
     query = select(Recruit).where(*public_recruit_filters())
     if q:
         query = query.where(Recruit.title.ilike(f"%{q}%"))
-    if category:
-        query = query.where(Recruit.category == category)
+    if category or category_code:
+        query = query.where(await category_filter(db, Recruit, category, category_code))
     if min_budget is not None:
         query = query.where(Recruit.budget_fen >= min_budget)
     if max_budget is not None:
@@ -583,6 +591,7 @@ async def recruit_detail(post_id: int, db: DB, user: Visitor):
 )
 async def create_recruit(body: RecruitInput, db: DB, user: Actor):
     """没有参考图的文字需求不依赖 OSS。"""
+    await normalize_category_input(db, body)
     if body.deadline_at <= now():
         fail("截止时间必须晚于当前时间")
     for image in body.image_ids:
@@ -603,6 +612,7 @@ async def update_recruit(post_id: int, body: RecruitUpdate, db: DB, user: Actor)
     """曾有投稿后锁定实质条款；其他修改撤下并重新审核。"""
     item = await owned(db, Recruit, post_id, user)
     check_version(item, body.version)
+    await normalize_category_input(db, body, item)
     if item.state in ("closed", "expired"):
         fail("需求已结束，请重新发布")
     if body.deadline_at <= now():
@@ -631,6 +641,8 @@ async def submit_recruit(post_id: int, body: Version, db: DB, user: Actor):
     """需求审核独立于原项目发布流程。"""
     item = await owned(db, Recruit, post_id, user)
     check_version(item, body.version)
+    from .categories import resolve_category
+    await resolve_category(db, item.category, item.category_code, item.category, item.category_code)
     if item.blocked or item.state in ("closed", "expired") or item.deadline_at <= now():
         fail("需求已结束或被封禁")
     item.audit_status = "pending"

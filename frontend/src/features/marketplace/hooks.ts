@@ -1,3 +1,4 @@
+import { marketText as mt } from './translate'
 import { useEffect, useState } from 'react'
 import { request, type Capabilities } from './api'
 
@@ -7,7 +8,7 @@ export function useMarketplace() {
   const [error, setError] = useState('')
   useEffect(() => {
     let active = true
-    request<Capabilities>('/capabilities').then(value => { if (active) setCapabilities(value) }).catch(() => { if (active) setError('无法读取下游业务状态，请稍后重试') })
+    request<Capabilities>('/capabilities').then(value => { if (active) setCapabilities(value) }).catch(() => { if (active) setError(mt("无法读取下游业务状态，请稍后重试")) })
     return () => { active = false }
   }, [])
   return { capabilities, error }

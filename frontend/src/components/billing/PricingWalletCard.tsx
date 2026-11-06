@@ -1,3 +1,4 @@
+import { points, pointText } from '../../lib/points'
 import { ArrowUpRight, Eye, EyeOff, RefreshCw, WalletCards } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -28,9 +29,9 @@ export default function PricingWalletCard({ wallet, usage, loggedIn, updatedAt, 
   const { t } = useI18n()
   const [balanceVisible, setBalanceVisible] = useState(true)
   const hasBalance = loggedIn && Boolean(wallet || usage)
-  const balanceYuan = wallet?.balance_yuan ?? usage?.balance_yuan ?? 0
-  const frozenYuan = wallet?.frozen_yuan ?? usage?.frozen_yuan ?? 0
-  const monthCharge = usage?.charge_yuan ?? 0
+  const balanceYuan = wallet?.balance_fen ?? usage?.balance_fen ?? 0
+  const frozenYuan = wallet?.frozen_fen ?? usage?.frozen_fen ?? 0
+  const monthCharge = usage?.charge_fen ?? 0
 
   return (
     <aside className="pf-pricing-wallet-dark" aria-label={t('pricing.walletBalance')} aria-busy={loading}>
@@ -60,18 +61,20 @@ export default function PricingWalletCard({ wallet, usage, loggedIn, updatedAt, 
       </div>
 
       <strong className={`pf-pricing-wallet-dark-balance${loading && !hasBalance ? ' is-loading' : ''}`} aria-label={loading && !hasBalance ? t('pricing.loadingWallet') : undefined}>
-        {hasBalance ? (balanceVisible ? <><span>¥</span>{balanceYuan.toFixed(2)}</> : '¥ ****') : '—'}
+        {hasBalance ? (balanceVisible ? points(balanceYuan) : pointText('**** 积分', '**** Points')) : '—'}
       </strong>
 
       <dl className="pf-pricing-wallet-dark-meta">
         <div>
           <dt>{t('pricing.monthCharge')}</dt>
-          <dd>{loggedIn && usage ? (balanceVisible ? `¥${monthCharge.toFixed(2)}` : '¥ ****') : '—'}</dd>
+          <dd>{loggedIn && usage ? (balanceVisible ? points(monthCharge) : pointText('**** 积分', '**** Points')) : '—'}</dd>
         </div>
         <div>
           <dt>{t('pricing.frozenLabel')}</dt>
-          <dd>{hasBalance ? (balanceVisible ? `¥${frozenYuan.toFixed(2)}` : '¥ ****') : '—'}</dd>
+          <dd>{hasBalance ? (balanceVisible ? points(frozenYuan) : pointText('**** 积分', '**** Points')) : '—'}</dd>
         </div>
+        {wallet?.debt_fen !== undefined && <div><dt>{pointText('欠费', 'Debt')}</dt><dd>{balanceVisible ? points(wallet.debt_fen) : '****'}</dd></div>}
+        {wallet?.spendable_fen !== undefined && <div><dt>{pointText('实际可消费', 'Spendable')}</dt><dd>{balanceVisible ? points(wallet.spendable_fen) : '****'}</dd></div>}
       </dl>
 
       {!loggedIn ? (

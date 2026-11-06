@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 from decimal import Decimal
 
 from pydantic import BaseModel, Field
@@ -19,6 +20,15 @@ class ModelCapabilityReadiness(BaseModel):
 
 
 class AdminModelSettingsOut(BaseModel):
+    apple_environment: Literal["Production", "Sandbox"] = "Production"
+    apple_iap_enabled: bool = False
+    apple_bundle_id: str = ""
+    apple_app_id: int = 0
+    apple_issuer_id: str = ""
+    apple_key_id: str = ""
+    apple_private_key: str = ""
+    apple_root_certificates: str = ""
+    has_apple_private_key: bool = False
     """当前生效的管理配置；密钥字段始终返回空串，通过 has_* 字段判断是否已配置。"""
 
     openai_api_key: str = Field(default="", description="OpenAI 兼容文本服务的 API 密钥；响应始终为空串，请通过 has_openai_api_key 判断是否已配置")
@@ -100,6 +110,7 @@ class AdminModelSettingsOut(BaseModel):
 
     # Token 计费
     billing_enabled: bool = Field(default=False, description="是否启用余额计费")
+    unified_wallet_enabled: bool = Field(default=False, description="资金来源核对完成后启用统一钱包")
     billing_markup: float = Field(default=1.0, description="兼容保留的计费倍率配置；当前用户扣费按上游成本计算，不再乘此倍率")
     billing_estimate_buffer: float = Field(default=1.2, description="Token 或视频时长类预扣估算的缓冲系数；按张计价的生图预扣不乘此系数")
     billing_seedance_video0: float = Field(default=46.0, description="带音频生成的 Seedance Token 成本兜底单价，单位：人民币元/百万 Token")
@@ -134,6 +145,14 @@ class AdminModelSettingsOut(BaseModel):
     ffmpeg_path: str = Field(default="ffmpeg", description="FFmpeg 可执行文件路径或命令名称")
     ffprobe_path: str = Field(default="ffprobe", description="FFprobe 可执行文件路径或命令名称")
     marketplace_enabled: bool = Field(default=False, description="是否启用数字资产市场；管理端保存后以数据库配置为准")
+    marketplace_app_enabled: bool = Field(default=False, description="是否启用 App 视频服务；在系统设置中保存后以数据库配置为准，不需要容器环境变量")
+    marketplace_social_initialization_enabled: bool = False
+    marketplace_sharing_enabled: bool = False
+    marketplace_share_base_url: str = Field(default="", max_length=500, description="作品分享公网 HTTPS 根地址，同时承载分享落地和 iOS/Android 关联文件")
+    marketplace_share_apple_team_id: str = Field(default="", max_length=32)
+    marketplace_share_android_package_name: str = Field(default="", max_length=255)
+    marketplace_share_android_sha256_fingerprints: str = Field(default="", max_length=10000)
+    marketplace_max_duration_seconds: int = Field(default=1800, gt=0, le=86400, description="完整视频最长时长，单位秒。默认 1800。上传、合成和 App 完整播放共用；试看仍最多 15 秒")
 
     source: str = Field(default="env", description="配置来源：db 表示已有数据库配置，env 表示环境变量或默认配置")
     updated_at: datetime | None = Field(default=None, description="数据库配置的最近更新时间；尚无时间记录时为 null")
@@ -141,6 +160,15 @@ class AdminModelSettingsOut(BaseModel):
 
 
 class AdminModelSettingsPatch(BaseModel):
+    apple_environment: Literal["Production", "Sandbox"] | None = None
+    apple_iap_enabled: bool | None = None
+    apple_bundle_id: str | None = Field(None, max_length=255)
+    apple_app_id: int | None = Field(None, ge=0)
+    apple_issuer_id: str | None = Field(None, max_length=64)
+    apple_key_id: str | None = Field(None, max_length=64)
+    apple_private_key: str | None = Field(None, max_length=16384)
+    clear_apple_private_key: bool = False
+    apple_root_certificates: str | None = Field(None, max_length=65536)
     """管理配置的部分更新请求，仅处理显式提交且非 null 的配置项。
 
     普通字符串可用空串覆盖。密钥省略、null 或空白字符串均保留原值，
@@ -220,6 +248,7 @@ class AdminModelSettingsPatch(BaseModel):
     stripe_hkd_cny_rate: str | Decimal | None = Field(default=None, description="1 港币对应的人民币金额；正数、最多六位小数，空串清除；不自动拉取市场汇率")
 
     billing_enabled: bool | None = Field(default=None, description="是否启用余额计费；省略或 null 时不修改")
+    unified_wallet_enabled: bool | None = Field(default=None, description="资金来源核对完成后启用统一钱包")
     billing_markup: float | None = Field(default=None, description="兼容保留的计费倍率配置；当前用户扣费按上游成本计算，不再乘此倍率；省略或 null 时不修改")
     billing_estimate_buffer: float | None = Field(default=None, description="Token 或视频时长类预扣估算的缓冲系数；按张计价的生图预扣不乘此系数；省略或 null 时不修改")
     billing_seedance_video0: float | None = Field(default=None, description="带音频生成的 Seedance Token 成本兜底单价，单位：人民币元/百万 Token；省略或 null 时不修改")
@@ -252,6 +281,14 @@ class AdminModelSettingsPatch(BaseModel):
     ffmpeg_path: str | None = Field(default=None, description="FFmpeg 可执行文件路径或命令名称；省略或 null 时不修改")
     ffprobe_path: str | None = Field(default=None, description="FFprobe 可执行文件路径或命令名称；省略或 null 时不修改")
     marketplace_enabled: bool | None = Field(default=None, description="是否启用数字资产市场；管理端保存后以数据库配置为准；省略或 null 时不修改")
+    marketplace_app_enabled: bool | None = Field(default=None, description="是否启用 App 视频服务；在系统设置中保存后以数据库配置为准；省略或 null 时不修改")
+    marketplace_social_initialization_enabled: bool | None = None
+    marketplace_sharing_enabled: bool | None = None
+    marketplace_share_base_url: str | None = Field(default=None, max_length=500)
+    marketplace_share_apple_team_id: str | None = Field(default=None, max_length=32)
+    marketplace_share_android_package_name: str | None = Field(default=None, max_length=255)
+    marketplace_share_android_sha256_fingerprints: str | None = Field(default=None, max_length=10000)
+    marketplace_max_duration_seconds: int | None = Field(default=None, gt=0, le=86400, description="完整视频最长时长，单位秒；省略或 null 时不修改")
 
 
 class AdminModelSettingsSaveOut(BaseModel):
@@ -321,6 +358,14 @@ def model_config_field_names() -> tuple[str, ...]:
         "epay_notify_url",
         "epay_return_url",
         "stripe_enabled",
+        "apple_iap_enabled",
+        "apple_environment",
+        "apple_bundle_id",
+        "apple_app_id",
+        "apple_issuer_id",
+        "apple_key_id",
+        "apple_private_key",
+        "apple_root_certificates",
         "stripe_secret_key",
         "stripe_webhook_secret",
         "stripe_frontend_url",
@@ -328,6 +373,7 @@ def model_config_field_names() -> tuple[str, ...]:
         "stripe_usd_cny_rate",
         "stripe_hkd_cny_rate",
         "billing_enabled",
+        "unified_wallet_enabled",
         "billing_markup",
         "billing_estimate_buffer",
         "billing_seedance_video0",
@@ -357,10 +403,19 @@ def model_config_field_names() -> tuple[str, ...]:
         "ffmpeg_path",
         "ffprobe_path",
         "marketplace_enabled",
+        "marketplace_app_enabled",
+        "marketplace_social_initialization_enabled",
+        "marketplace_sharing_enabled",
+        "marketplace_share_base_url",
+        "marketplace_share_apple_team_id",
+        "marketplace_share_android_package_name",
+        "marketplace_share_android_sha256_fingerprints",
+        "marketplace_max_duration_seconds",
     )
 
 
 SECRET_FIELD_FLAGS: dict[str, str] = {
+    "apple_private_key": "has_apple_private_key",
     "openai_api_key": "has_openai_api_key",
     "ark_api_key": "has_ark_api_key",
     "oss_access_key_id": "has_oss_access_key_id",

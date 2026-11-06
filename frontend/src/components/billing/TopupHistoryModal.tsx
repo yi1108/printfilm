@@ -1,7 +1,8 @@
+import { points } from '../../lib/points'
 import { useEffect, useState } from 'react'
 import Modal from '../ui/Modal'
 import { api, type BillingOrder } from '../../api'
-import { billingOrderChargeLabel, cnyAmountDisplay } from '../../lib/billingPayments'
+import { billingOrderChargeLabel, } from '../../lib/billingPayments'
 
 type Props = {
   open: boolean
@@ -80,7 +81,7 @@ export default function TopupHistoryModal({ open, onClose }: Props) {
               </div>
               <div className="pf-topup-meta">
                 <em>{billingOrderChargeLabel(o)}</em>
-                <span className="pf-muted">到账 {cnyAmountDisplay(o.credit_fen)}</span>
+                <span className="pf-muted">到账 {points(o.credit_fen)}</span>
                 <span className="pf-muted">{PAY_LABELS[o.pay_type] || o.pay_type}</span>
                 <span className={`pf-topup-status is-${o.status}`}>
                   {STATUS_CN[o.status] || o.status}

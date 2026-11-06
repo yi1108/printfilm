@@ -1,3 +1,4 @@
+import { points } from '../../lib/points'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowRight, ArrowUpRight, Check, FolderOpen, Image, Plus, Search, ShieldCheck, Trash2, Users, Wallet } from 'lucide-react'
@@ -19,7 +20,7 @@ type CreativePanelProps = { team: Team; role: TeamRole; onTabChange: (tab: TeamT
 const statusLabels: Record<TeamProjectStatus, string> = { draft: '构思中', producing: '制作中', completed: '已完成' }
 const assetLabels: Record<TeamAsset['type'], string> = { character: '角色', scene: '场景', prop: '道具', voice: '音色' }
 /** 金额显示为元。 */
-function money(amount: number): string { return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY' }).format(amount / 100) }
+const money = points
 /** 日期为空时保持可读。 */
 function dateLabel(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }) }
 /** 展示真实参与者，未出现在首屏成员中的使用成员标识。 */

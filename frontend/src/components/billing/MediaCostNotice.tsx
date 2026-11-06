@@ -1,3 +1,4 @@
+import { points, pointUnitRate, pointText } from '../../lib/points'
 import { useMediaModelsCatalog } from '../../hooks/useMediaModelsCatalog'
 import { mediaQuoteFen } from '../../lib/mediaQuote'
 
@@ -11,6 +12,6 @@ export function MediaCostNotice({ modelId, resolution, seconds, count = 1 }: {
   const amount = mediaQuoteFen(price, count, seconds ?? 1)
   return <span className="media-cost-notice" role="status">
     {model?.available === false ? '模型暂不可用' : amount === null ? '当前参数无法报价，请选择已定价档位' :
-      `¥${price}/${seconds === undefined ? '张' : '秒'} × ${seconds ?? count}${seconds === undefined ? ' 张' : ' 秒'}${seconds !== undefined && count > 1 ? ` × ${count} 条` : ''} = 预计 ¥${(amount / 100).toFixed(2)}`}
+      `${pointUnitRate(price!)} ${pointText('积分', 'Points')}/${seconds === undefined ? pointText('张', 'image') : pointText('秒', 'second')} × ${seconds ?? count}${seconds !== undefined && count > 1 ? ` × ${count}` : ''} = ${pointText('预计', 'Estimated')} ${points(amount)}`}
   </span>
 }

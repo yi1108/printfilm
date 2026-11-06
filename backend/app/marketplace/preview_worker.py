@@ -15,7 +15,7 @@ from sqlalchemy import and_, or_, select, update
 from app.config import get_settings
 from app.database import AsyncSessionLocal
 from . import storage
-from .config import get_marketplace_settings
+from .config import get_marketplace_settings, video_duration_limit
 from .models import Asset, EpisodePreview, Publication, Series, SeriesEpisode, Work, WorkPreview
 from .previews import (
     CLIP_EPISODE_PREFIX, CLIP_WORK_PREFIX, PREVIEW_LEASE_PREFIX, episode_is_free, is_preview_key,
@@ -106,7 +106,7 @@ async def render_preview(snapshot):
             if not video or not 0 < int(video.get("width", 0)) * int(video.get("height", 0)) <= 50_000_000:
                 raise ValueError("无效的视频尺寸")
             duration = _duration(probe)
-            if duration > get_marketplace_settings().max_duration_seconds:
+            if duration > video_duration_limit():
                 raise ValueError("视频超过时长限制")
             maximum = preview_duration(duration)
             # 留出音频尾帧余量，最终仍以 FFprobe 的实际结果为准。

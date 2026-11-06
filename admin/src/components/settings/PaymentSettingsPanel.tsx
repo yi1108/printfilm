@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { useAdminModelSettings } from "@/hooks/useAdminModelSettings";
 import { stripeRateInputError, stripeSettingsPatch, stripeSettingsReady } from "@/lib/stripeSettings";
 import { MediaPriceSettings } from "./MediaPriceSettings";
+import { AppleProductSettings } from "./AppleProductSettings";
+import { AppleConnectionSettings } from "./AppleConnectionSettings";
 
 const RATE_FIELDS = [
   { key: "billing_llm_per_m", label: "文字 LLM", unit: "元 / 百万 Token" },
@@ -76,6 +78,7 @@ export function PaymentSettingsPanel() {
       epay_notify_url: form.epay_notify_url.trim(),
       epay_return_url: form.epay_return_url.trim(),
       billing_enabled: form.billing_enabled,
+      unified_wallet_enabled: form.unified_wallet_enabled,
       billing_markup: 1.0,
       billing_estimate_buffer: form.billing_estimate_buffer,
       billing_seedance_video0: form.billing_seedance_video0,
@@ -124,7 +127,7 @@ export function PaymentSettingsPanel() {
   const smtpReady = form.smtp_enabled && Boolean(form.smtp_host.trim() && form.smtp_from.trim() && (!smtpNeedsPassword || hasSmtpPassword));
   const moneyHint = (key: NumericKey) => {
     const raw = numericDrafts[key] ?? form[key];
-    return raw === "" ? "请输入以分为单位的金额。" : `当前金额 ¥${(Number(raw) / 100).toFixed(2)}；100 分 = 1 元。`;
+    return raw === "" ? "请输入整数积分。" : `当前 ${Number(raw).toLocaleString()} 积分；100 积分 = 1 元额度。`;
   };
 
   return <div className="space-y-5">
@@ -201,9 +204,10 @@ export function PaymentSettingsPanel() {
         <div className="settings-toggle-row">
           <div><strong>启用余额计费</strong><span>开启后按规则扣除用户余额；关闭后生成不扣余额。</span></div>
           <Switch aria-label="启用余额计费" checked={form.billing_enabled} onCheckedChange={(value) => patchField("billing_enabled", value)} />
+          <label>启用统一钱包（须先核对历史资金来源）<Switch aria-label="启用统一钱包" checked={form.unified_wallet_enabled} onCheckedChange={(value) => patchField("unified_wallet_enabled", value)} /></label>
         </div>
         <div className="settings-field-grid mt-5">
-          <LabeledControl label="注册赠送金额（分）" required hint={moneyHint("billing_signup_grant_fen")}>
+          <LabeledControl label="注册赠送积分" required hint={moneyHint("billing_signup_grant_fen")}>
             <input className="settings-input" type="number" min={0} step={1} placeholder="0" {...numericControl("billing_signup_grant_fen")} />
           </LabeledControl>
         </div>
@@ -239,7 +243,7 @@ export function PaymentSettingsPanel() {
           <Switch aria-label="用户消费弹窗提醒" checked={form.billing_user_alert_enabled} disabled={!form.billing_enabled} onCheckedChange={(value) => patchField("billing_user_alert_enabled", value)} />
         </div>
         <div className="settings-field-grid mt-5">
-          <LabeledControl label="消费提醒间隔（分）" required={form.billing_enabled && form.billing_user_alert_enabled} hint={form.billing_enabled ? moneyHint("billing_user_alert_interval_fen") : "需先启用余额计费；原提醒设置保留。"}>
+          <LabeledControl label="消费提醒间隔（积分）" required={form.billing_enabled && form.billing_user_alert_enabled} hint={form.billing_enabled ? moneyHint("billing_user_alert_interval_fen") : "需先启用余额计费；原提醒设置保留。"}>
             <input className="settings-input" type="number" min={1} step={1} disabled={!form.billing_enabled || !form.billing_user_alert_enabled} {...numericControl("billing_user_alert_interval_fen")} />
           </LabeledControl>
         </div>
@@ -279,6 +283,8 @@ export function PaymentSettingsPanel() {
         </SettingsPanel>
       </details>
     </SettingsTabShell>
+    <AppleConnectionSettings />
+    <AppleProductSettings />
     <MediaPriceSettings />
   </div>;
 }

@@ -16,6 +16,16 @@ SKUS: list[dict[str, Any]] = [
 
 ORDER_EXPIRE_SECONDS = 300
 
+# Fixed retail USD prices; never derive these from an accounting FX rate.
+USD_TOPUP_PRICES = {"topup_10": 1499, "topup_49": 6999, "topup_99": 13999, "topup_199": 27999}
+
+
+def topup_prices(sku: dict) -> dict[str, int]:
+    prices = {"CNY": int(sku["amount_fen"])}
+    if sku["id"] in USD_TOPUP_PRICES:
+        prices["USD"] = USD_TOPUP_PRICES[sku["id"]]
+    return prices
+
 # Kie 1 credit ≈ $0.005；按约 7 CNY/USD 折合 ¥0.035 ≈ 3.5 分（可配置）
 DEFAULT_KIE_FEN_PER_CREDIT = 3.5
 

@@ -89,7 +89,8 @@ app.add_middleware(
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     # 业务可读请求日志（跳过静态资源；高频轮询默认不打）
-    path = request.url.path
+    from app.marketplace.app_logging import safe_request_path
+    path = safe_request_path(request.url.path)
     started = time.perf_counter()
     response = await call_next(request)
     elapsed_ms = (time.perf_counter() - started) * 1000
@@ -153,32 +154,47 @@ async def _load_startup_model_settings() -> None:
 
 @app.on_event("startup")
 async def on_startup() -> None:
+    """限时完成数据库和附属服务。任何一步失败或超时都继续监听，避免健康检查把预发判死。"""
+    import asyncio
+
     database_steps = (_load_startup_model_settings,)
+    seed_steps: tuple = ()
     if settings.database_bootstrap_enabled:
         database_steps = (
             init_db,
             _apply_schema_patches,
             _load_startup_model_settings,
-            seed_templates,
-            bootstrap_admins,
-            seed_agent_skills,
         )
+        seed_steps = (seed_templates, bootstrap_admins, seed_agent_skills)
     else:
         logger.info("Database bootstrap disabled; loading model settings from the existing database")
-    await run_database_startup_steps(
-        database_steps,
-        dispose=engine.dispose,
-    )
+
+    async def run_step(label: str, awaitable, timeout: float) -> None:
+        """单步失败或超时后释放卡住的连接，不阻止后续启动。"""
+        try:
+            await asyncio.wait_for(awaitable, timeout)
+        except Exception:
+            logger.exception("%s失败或超时，API 继续监听", label)
+            try:
+                await engine.dispose()
+            except Exception:
+                logger.exception("释放数据库连接失败")
+
+    await run_step("数据库启动", run_database_startup_steps(database_steps, dispose=engine.dispose), 60)
+    if seed_steps:
+        await run_step("模板与管理员初始化", run_database_startup_steps(seed_steps, dispose=engine.dispose), 600)
     try:
         from app.services import oss as oss_svc
 
         oss_svc.ensure_browser_cors()
     except Exception:  # noqa: BLE001
-        pass
-    await start_task_runtime()
+        logger.exception("OSS CORS 设置失败")
+    from app.marketplace.app_bootstrap import start_app_services
+    await run_step("App 服务启动", start_app_services(), 15)
+    await run_step("任务运行时启动", start_task_runtime(), 15)
     from app.marketplace.bootstrap import apply_marketplace_switch
     # 补列完成后再按系统设置建市场表并启动 Worker。关闭时不建表。
-    await apply_marketplace_switch()
+    await run_step("数字资产市场启动", apply_marketplace_switch(), 20)
 
 
 @app.on_event("shutdown")
@@ -187,6 +203,8 @@ async def on_shutdown() -> None:
     from app.database import dispose_engine
 
     from app.marketplace.runtime import stop_marketplace_runtime
+    from app.marketplace.app_bootstrap import stop_app_services
+    await stop_app_services()
     await stop_marketplace_runtime()
     await stop_task_runtime()
     await dispose_engine()
@@ -211,6 +229,8 @@ async def _apply_schema_patches(engine_override: AsyncEngine | None = None) -> N
         # 现有 SQLite 测试库由 create_all 建表；以下补列只适用于 PostgreSQL。
         if conn.dialect.name != "postgresql":
             return
+        # 补列拿不到锁时尽快失败并在下次启动重试，避免一直占着启动过程。
+        await conn.execute(text("SET LOCAL lock_timeout = '5s'"))
         from app.team_schema import apply_team_schema_patches
 
         await apply_team_schema_patches(conn)
@@ -270,6 +290,11 @@ async def _apply_schema_patches(engine_override: AsyncEngine | None = None) -> N
             await conn.execute(text("ALTER TABLE users ADD COLUMN role VARCHAR(16) DEFAULT 'user'"))
         if "avatar_url" not in ucols:
             await conn.execute(text("ALTER TABLE users ADD COLUMN avatar_url VARCHAR(512) DEFAULT ''"))
+        asset_cols = await _pg_columns(conn, "marketplace_assets")
+        if asset_cols and "display_width" not in asset_cols:
+            await conn.execute(text("ALTER TABLE marketplace_assets ADD COLUMN display_width INTEGER"))
+        if asset_cols and "display_height" not in asset_cols:
+            await conn.execute(text("ALTER TABLE marketplace_assets ADD COLUMN display_height INTEGER"))
         if "phone" not in ucols:
             await conn.execute(text("ALTER TABLE users ADD COLUMN phone VARCHAR(32) DEFAULT ''"))
         if "billing_alert_last_milestone_fen" not in ucols:
@@ -404,6 +429,8 @@ async def _apply_schema_patches(engine_override: AsyncEngine | None = None) -> N
             for column, definition in additions.items():
                 if column not in columns:
                     await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {definition}"))
+        from app.marketplace.locale_schema import ensure_locale_columns
+        await conn.run_sync(ensure_locale_columns)
 
 
 async def bootstrap_admins() -> None:
