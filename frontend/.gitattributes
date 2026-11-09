@@ -1,0 +1,3 @@
+# 法务文件在所有平台检出时都保留供应方原始字节。
+public/terms.html -text
+public/privacy.html -text

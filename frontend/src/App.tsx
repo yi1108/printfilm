@@ -12,7 +12,6 @@ import MethodPage from './pages/MethodPage'
 import GenerationPage from './pages/GenerationPage'
 import GenerationTasksPage from './pages/GenerationTasksPage'
 import HelpPage from './pages/HelpPage'
-import { PrivacyPage, TermsPage } from './pages/LegalDocPage'
 import ContactPage from './pages/ContactPage'
 import SettingsPage from './pages/SettingsPage'
 import PricingPage from './pages/PricingPage'
@@ -67,8 +66,6 @@ export default function App() {
         <Route path="/tasks" element={<RequireAuth><GenerationTasksPage /></RequireAuth>} />
         <Route path="/assets" element={<AssetLibraryPage />} />
         <Route path="/help" element={<HelpPage />} />
-        <Route path="/terms" element={<TermsPage />} />
-        <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/teams" element={<RequireAuth><TeamPage /></RequireAuth>} />
