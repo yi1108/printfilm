@@ -10,7 +10,9 @@ from .app_models import AuthorBlock, CoinUnlock
 from .coin_service import app_fail, funds_call, unlock_publication
 from .dependencies import Actor, DB
 
-router = APIRouter()
+from .app_response import AppJSONResponse
+
+router = APIRouter(default_response_class=AppJSONResponse)
 
 
 class UnlockInput(BaseModel):
@@ -97,7 +99,8 @@ async def unlock_orders(db: DB, user: Actor, cursor: int | None = Query(None, gt
     return {"items": [unlock_data(row) for row in rows[:page_size]], "next_cursor": rows[page_size-1].id if len(rows) > page_size else None, "has_more": len(rows) > page_size}
 
 
-@router.get("/me/author-blocks", response_model=dict)
+@router.get("/me/author-blocks", response_model=dict, summary="查询当前用户拉黑的创作者",
+            description="登录后查询，page默认1，page_size默认20、最多50。仅返回创作者编号、名称及拉黑时间，不公开邮箱。时间为北京时间YYYY-MM-DD HH:mm:ss。")
 async def author_blocks(db: DB, user: Actor, page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=50)):
     """屏蔽列表不泄露作者邮箱或其他私人资料。"""
     from sqlalchemy import func
@@ -107,7 +110,8 @@ async def author_blocks(db: DB, user: Actor, page: int = Query(1, ge=1), page_si
     return {"items": [{"author_id": row.author_id, "author": name, "created_at": row.created_at} for row, name in rows], "meta": {"page": page, "page_size": page_size, "total": total}}
 
 
-@router.put("/me/author-blocks/{author_id}", response_model=dict)
+@router.put("/me/author-blocks/{author_id}", response_model=dict, summary="拉黑创作者（幂等）",
+            description="需要Bearer登录；author_id取内容creator.id，不是作品或发布版本ID。无请求体。重复请求不新增记录。拉黑后当前账号不再发现该作者内容，公开详情也不可访问；已购记录及已购版本播放不受影响。不能拉黑自己或不存在的账号。")
 async def block_author(author_id: int, db: DB, user: Actor):
     """屏蔽只影响个人发现，不能撤回已购内容。"""
     if author_id == user.id or not await db.get(User, author_id):
@@ -117,7 +121,8 @@ async def block_author(author_id: int, db: DB, user: Actor):
     return {"blocked": True}
 
 
-@router.delete("/me/author-blocks/{author_id}", response_model=dict)
+@router.delete("/me/author-blocks/{author_id}", response_model=dict, summary="取消拉黑创作者（幂等）",
+               description="需要Bearer登录，无请求体。重复取消仍返回blocked=false；不会自动关注或恢复已删除内容。")
 async def unblock_author(author_id: int, db: DB, user: Actor):
     """取消屏蔽是幂等操作。"""
     from sqlalchemy import delete
@@ -129,7 +134,10 @@ async def unblock_author(author_id: int, db: DB, user: Actor):
 from .schemas import ReportInput
 
 
-@router.post("/reports", response_model=dict)
+@router.post("/reports", response_model=dict,
+             summary="举报单视频或短剧分集（复用 Web 举报）",
+             description="需要 Bearer 登录。target_type 使用 work 或 series_episode，target_id 为原作品或分集 ID，不是 publication_id。statement 为10至5000字，contact 为1至200字，evidence_ids 可省略、最多10个本人已就绪的图片或文档资产。复用 Web 的可访问性校验、举报记录、私有证据、通知和后台处置。返回举报记录 id；不具备请求幂等键，超时后不要盲目重发。",
+             responses={200: {"description": "举报已受理", "content": {"application/json": {"example": {"id": 123}}}}})
 async def report_content(body: ReportInput, db: DB, user: Actor):
     """App举报复用原私有证据与管理员处理流程。"""
     if body.target_type not in ("work", "series_episode"):

@@ -30,7 +30,9 @@ def playback_base(request: Request) -> str:
     return str(request.base_url).rstrip("/")
 
 
-router = APIRouter()
+from .app_response import AppJSONResponse
+
+router = APIRouter(default_response_class=AppJSONResponse)
 SESSION_IDLE_SECONDS = 1800
 SESSION_MAX_SECONDS = 7200
 SEGMENT_SECONDS = 60

@@ -159,6 +159,7 @@ async def apply_password_reset(
     """校验 token 后更新密码；token 一次性消费。"""
     redis_client = get_redis_client()
     user_id = consume_reset_token(redis_client, token)
+    # 再次检查注销墓碑，注销前已签发的重置令牌也不能恢复账号。
     user = await get_user_by_id(db, user_id)
     if not user:
         raise InvalidTokenError("重置链接无效或已过期")

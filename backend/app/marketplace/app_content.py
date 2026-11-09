@@ -6,7 +6,7 @@ import hashlib
 import hmac
 import json
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Path, Query
 from sqlalchemy import literal, select, tuple_, union_all
 
 from app.config import get_settings
@@ -23,7 +23,9 @@ from .service import data
 from .curation import (flags as curation_flags, join_curation, ordering_columns, revision as curation_revision,
     feed_fingerprint, encode_feed_cursor, decode_feed_cursor)
 
-router = APIRouter()
+from .app_response import AppJSONResponse
+
+router = APIRouter(default_response_class=AppJSONResponse)
 
 
 def encode_cursor(timestamp, kind, record_id):
@@ -241,7 +243,55 @@ async def episodes(series_id: int, db: DB, user: Visitor, cursor: str = Query(""
         "has_more": more, "next_cursor": encode_cursor(rows[-1].created_at, "episode", rows[-1].episode_no) if more else None}
 
 
-@router.get("/me/entitlements", response_model=dict)
+async def purchased_data(db, publication, user):
+    """历史版本的媒体与权益不变，互动始终归属原作品／分集而非发布版本。"""
+    kind = publication.content_type
+    item = await db.get(Work if kind == "work" else SeriesEpisode, publication.content_id)
+    reason = ""
+    try:
+        asset = await purchased_content(db, publication, user.id)
+    except HTTPException as exc:
+        reason = exc.detail.get("message", "暂不可播放") if isinstance(exc.detail, dict) else str(exc.detail)
+        asset = await db.get(Asset, publication.asset_id)
+    media = await media_for(db, kind, publication.content_id, publication.version, "full")
+    author = await db.get(User, publication.owner_id)
+    # 下架或关闭发现入口不剥夺已购播放，但不能绕过公开可见性新增互动。
+    interactive = False
+    if not reason and app_open():
+        try:
+            await current_content(db, kind, publication.content_id, user.id)
+            from .app_settings import get_app_settings
+            interactive = bool(get_app_settings().social_enabled)
+        except HTTPException as exc:
+            if exc.status_code != 404:
+                raise
+    engagement = {"like_count": 0, "comment_count": 0, "favorite_count": 0,
+                  "share_count": 0, "liked_by_me": False, "favorited_by_me": False}
+    comments_enabled = False
+    if not reason:
+        from .app_social import _stats
+        social = await _stats(db, kind, publication.content_id, user.id)
+        engagement = {key: social[key] for key in engagement}
+        comments_enabled = bool(interactive and social["comments_enabled"])
+    return {"id": publication.content_id, "publication_id": publication.id, "content_type": kind,
+        "content_id": publication.content_id, "version": publication.version,
+        "title": item.title if item else localized("历史作品", "Historical video"),
+        "author": author_card(author, publication.owner_id), "creator": author_card(author, publication.owner_id),
+        "engagement": engagement, "social": {"comments_enabled": comments_enabled,
+                                               "interaction_available": interactive},
+        "cover_url": await cover_url(db, publication.cover_asset_id),
+        "duration_seconds": asset.duration_seconds if asset else None, **video_shape(asset),
+        "series_id": item.series_id if isinstance(item, SeriesEpisode) else None,
+        "episode_no": item.episode_no if isinstance(item, SeriesEpisode) else None,
+        "sale_type": publication.sale_type, "is_free": False, "entitled": True, "access_mode": "entitled",
+        "unlock_coins": publication.unlock_price_fen,
+        "playback_ready": bool(not reason and media and media.status == "done" and media.asset_id == publication.asset_id),
+        "playback_status": media.status if media else "pending", "restricted_reason": reason, "permanent": True}
+
+
+@router.get("/me/entitlements", response_model=dict,
+            summary="查询已购发布版本及实时创作者与互动数据",
+            description="需要登录，按当前服务端交易环境读取权益。媒体来自所购版本，互动按原作品或分集共用，不按版本拆分。下架保留已购播放，禁止新增互动；受限记录保留原因且不展示互动。")
 async def entitlements(db: DB, user: Actor, cursor: str = Query("", max_length=1024), limit: int = Query(20, ge=1, le=50)):
     """已购不受展示开关和作者屏蔽影响，仍展示历史版本及受限原因。"""
     query = select(Publication).where(entitlement_filters(user.id))
@@ -252,22 +302,16 @@ async def entitlements(db: DB, user: Actor, cursor: str = Query("", max_length=1
         query = query.where(Publication.id < publication_id)
     rows = list((await db.scalars(query.order_by(Publication.id.desc()).limit(limit + 1))).all())
     more, rows = len(rows) > limit, rows[:limit]
-    items = []
-    for publication in rows:
-        item = await db.get(Work if publication.content_type == "work" else SeriesEpisode, publication.content_id)
-        reason = ""
-        try:
-            asset = await purchased_content(db, publication, user.id)
-        except HTTPException as exc:
-            reason = exc.detail.get("message", "暂不可播放") if isinstance(exc.detail, dict) else str(exc.detail)
-            asset = await db.get(Asset, publication.asset_id)
-        media = await media_for(db, publication.content_type, publication.content_id, publication.version, "full")
-        items.append({"publication_id": publication.id, "content_type": publication.content_type,
-            "content_id": publication.content_id, "version": publication.version, "title": item.title if item else localized("历史作品", "Historical video"),
-            "cover_url": await cover_url(db, publication.cover_asset_id), "duration_seconds": asset.duration_seconds if asset else None,
-            **video_shape(asset),
-            "series_id": item.series_id if isinstance(item, SeriesEpisode) else None,
-            "episode_no": item.episode_no if isinstance(item, SeriesEpisode) else None,
-            "playback_ready": bool(not reason and media and media.status == "done"), "restricted_reason": reason,
-            "permanent": True})
-    return {"items": items, "has_more": more, "next_cursor": encode_cursor(rows[-1].created_at, "publication", rows[-1].id) if more else None}
+    return {"items": [await purchased_data(db, publication, user) for publication in rows],
+            "has_more": more, "next_cursor": encode_cursor(rows[-1].created_at, "publication", rows[-1].id) if more else None}
+
+
+@router.get("/me/entitlements/{publication_id}", response_model=dict,
+            summary="查询指定已购版本的播放器详情",
+            description="需要当前账号持有当前环境有效权益。返回与已购列表条目一致的 creator、engagement、social 和播放状态；即使当前作品下架也不回退到公开详情。无权益或不存在统一返回403。创建播放会话仍提交 publication_id。")
+async def purchased_detail(db: DB, user: Actor, publication_id: int = Path(gt=0)):
+    publication = await db.scalar(select(Publication).where(Publication.id == publication_id,
+                                                           entitlement_filters(user.id)))
+    if publication is None:
+        error("MARKETPLACE_ENTITLEMENT_REQUIRED", "请先解锁该发布版本", 403)
+    return await purchased_data(db, publication, user)

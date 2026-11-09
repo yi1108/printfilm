@@ -17,7 +17,7 @@ const stateOptions: Partial<Record<AppPanel, Array<[string, string]>>> = {
 
 /** App独立运营面板；所有余额、统计和财务判断均由服务端返回。 */
 export default function AppOperations({ revision = 0 }: { revision?: number }) {
-  const [panel, setPanel] = useState<AppPanel>('products')
+  const [panel, setPanel] = useState<AppPanel>('unlock-orders')
   const [environment, setEnvironment] = useState('Production')
   const [page, setPage] = useState(1)
   const [status, setStatus] = useState('')

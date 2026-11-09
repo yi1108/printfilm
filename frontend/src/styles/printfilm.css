@@ -1538,6 +1538,74 @@
   margin-top: 1rem;
 }
 
+/* 账号注销与资料编辑分区，危险提示保持克制且清晰可见。 */
+.pf-close-account-card {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e8c9c5;
+}
+
+.pf-close-account-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  color: var(--crimson);
+}
+
+.pf-close-account-heading > svg {
+  flex: 0 0 auto;
+  margin-top: 0.15rem;
+}
+
+.pf-close-account-heading h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+}
+
+.pf-close-account-heading p {
+  margin: 0;
+}
+
+.pf-close-account-notice {
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid #ead5d1;
+  border-radius: 12px;
+  background: #fff8f6;
+  color: #71443e;
+  font-size: 0.85rem;
+  line-height: 1.65;
+}
+
+.pf-close-account-notice p {
+  margin: 0;
+}
+
+.pf-close-account-notice p + p {
+  margin-top: 0.45rem;
+}
+
+.pf-close-account-card .pf-settings-fields {
+  max-width: 30rem;
+}
+
+.pf-btn-danger {
+  background: #a4382d;
+  border-color: #a4382d;
+  color: #fff;
+}
+
+.pf-btn-danger:hover:not(:disabled):not(.is-disabled) {
+  background: #862d24;
+  border-color: #862d24;
+  box-shadow: 0 5px 14px rgba(134, 45, 36, 0.18);
+}
+
+.pf-close-account-success {
+  color: #356442;
+  font-size: 0.9rem;
+}
+
 .pf-settings-balance {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

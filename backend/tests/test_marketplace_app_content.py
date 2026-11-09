@@ -453,3 +453,104 @@ def test_cursor_tampering_and_invalid_target_are_rejected():
         app_content.decode_cursor(cursor[:-8] + "abcdefgh")
     with pytest.raises(ValueError):
         app_playback.PlaybackInput(content_type="work", content_id=1, publication_id=2)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["work", "series_episode"])
+async def test_purchased_detail_and_list_share_live_social_without_changing_version(app_ctx, monkeypatch, kind):
+    from app.marketplace.app_social_models import AppContentStats, AppLike, AppFavorite, AppSocialSetting
+    from app.marketplace.app_engagement_models import MetricsBaseline
+    from app.marketplace.app_settings import get_app_settings
+    ctx = app_ctx
+    content = await make_work(ctx, "platform_unlock")
+    item = content.work
+    if kind == "series_episode":
+        parent = Series(owner_id=ctx.owner.id, title="series", sale_type="platform_unlock", audit_status="approved", listed=True)
+        ctx.db.add(parent)
+        await ctx.db.flush()
+        item = SeriesEpisode(owner_id=ctx.owner.id, series_id=parent.id, episode_no=2, title="episode", source="external", asset_id=content.asset.id,
+                             audit_status="approved", listed=True, unlock_price_fen=100)
+        ctx.db.add(item)
+        await ctx.db.flush()
+        content.publication.content_type, content.publication.content_id = kind, item.id
+        ctx.db.add(EpisodePreview(episode_id=item.id, asset_id=content.asset.id, version=1, status="done",
+            object_key=f"marketplace/previews-v2/episodes/{item.id}/preview.mp4"))
+        ctx.db.add(AppMedia(content_type=kind, content_id=item.id, version=1, variant="full", asset_id=content.asset.id,
+            source_key=content.asset.object_key, status="done", manifest_key="marketplace/app-hls/episode/full/index.m3u8"))
+    ctx.user = ctx.buyer
+    ctx.owner.nickname, ctx.owner.avatar_url = "视频作者", "https://example.com/avatar.png"
+    stored = "episode" if kind == "series_episode" else kind
+    ctx.db.add_all([
+        Entitlement(user_id=ctx.buyer.id, publication_id=content.publication.id, active=True),
+        AppContentStats(target_type=stored, target_id=item.id, like_count=7, favorite_count=3, comment_count=2, share_count=1),
+        MetricsBaseline(target_type=stored, target_id=item.id, like_count=6000, favorite_count=3000, share_count=900),
+        AppLike(target_type=stored, target_id=item.id, user_id=ctx.buyer.id),
+        AppFavorite(target_type=stored, target_id=item.id, user_id=ctx.buyer.id),
+        AppSocialSetting(target_type=stored, target_id=item.id, comments_enabled=True),
+    ])
+    monkeypatch.setattr(get_app_settings(), "social_enabled", True)
+    monkeypatch.setattr(get_app_settings(), "comments_enabled", True)
+    await ctx.db.flush()
+    path = f"/api/marketplace/app/v1/me/entitlements/{content.publication.id}"
+    response = await ctx.client.get(path)
+    assert response.status_code == 200, response.text
+    detail = response.json()
+    assert detail["engagement"] == {"like_count": 6007, "favorite_count": 3003, "share_count": 901,
+                                    "comment_count": 2, "liked_by_me": True, "favorited_by_me": True}
+    assert detail["creator"] == {"id": ctx.owner.id, "name": "视频作者", "avatar_url": "https://example.com/avatar.png"}
+    assert detail["social"] == {"comments_enabled": True, "interaction_available": True}
+    assert detail["id"] == detail["content_id"] == item.id and detail["content_type"] == kind
+    assert detail["playback_ready"] and detail["version"] == 1
+    listing = (await ctx.client.get("/api/marketplace/app/v1/me/entitlements")).json()["items"]
+    assert listing == [detail]
+    # 已购版本继续播放旧媒体，不因内容升级、下架、屏蔽或发现入口关闭而依赖公开详情。
+    item.version = 2
+    item.listed = False
+    ctx.db.add(AuthorBlock(user_id=ctx.buyer.id, author_id=ctx.owner.id))
+    await ctx.db.flush()
+    monkeypatch.setattr(app_content, "app_open", lambda: False)
+    monkeypatch.setattr(app_access, "app_open", lambda: False)
+    old = (await ctx.client.get(path, headers={"Accept-Language": "en"})).json()
+    assert old["version"] == 1 and old["playback_ready"] and old["access_mode"] == "entitled"
+    assert old["engagement"] == detail["engagement"] and not old["social"]["interaction_available"]
+    assert not old["social"]["comments_enabled"]
+    assert (await session(ctx, publication_id=content.publication.id)).status_code == 200
+    # 实时封禁禁止播放并隐藏互动；不删除历史购买记录。
+    item.blocked = True
+    await ctx.db.flush()
+    restricted = (await ctx.client.get(path)).json()
+    assert restricted["restricted_reason"] and not restricted["playback_ready"]
+    assert restricted["engagement"]["like_count"] == 0 and not restricted["engagement"]["liked_by_me"]
+    assert not restricted["social"]["interaction_available"]
+    assert (await session(ctx, publication_id=content.publication.id)).status_code == 403
+    assert "object_key" not in response.text and "share_bps" not in response.text
+
+
+@pytest.mark.asyncio
+async def test_purchased_detail_requires_own_active_environment_entitlement(app_ctx, monkeypatch):
+    ctx = app_ctx
+    content = await make_work(ctx, "platform_unlock")
+    path = f"/api/marketplace/app/v1/me/entitlements/{content.publication.id}"
+    assert (await ctx.client.get(path)).status_code == 401
+    ctx.user = ctx.buyer
+    assert (await ctx.client.get(path)).status_code == 403
+    assert (await ctx.client.get("/api/marketplace/app/v1/me/entitlements/99999999")).status_code == 403
+    order = ContentOrder(out_trade_no=uuid.uuid4().hex, user_id=ctx.buyer.id, publication_id=content.publication.id,
+        amount_fen=100, pay_type="platform_balance", status="paid", idempotency_key=uuid.uuid4().hex)
+    ctx.db.add(order)
+    await ctx.db.flush()
+    unlock = CoinUnlock(user_id=ctx.buyer.id, environment="Sandbox", order_id=order.id,
+        publication_id=content.publication.id, coins=100, amount_fen=100, status="paid", idempotency_key=uuid.uuid4().hex)
+    ctx.db.add(unlock)
+    await ctx.db.flush()
+    grant = CoinGrant(user_id=ctx.buyer.id, environment="Sandbox", publication_id=content.publication.id,
+        order_id=order.id, unlock_id=unlock.id, active=True)
+    ctx.db.add(grant)
+    await ctx.db.flush()
+    assert (await ctx.client.get(path)).status_code == 403
+    monkeypatch.setattr(app_access, "environment", lambda: "Sandbox")
+    assert (await ctx.client.get(path)).status_code == 200
+    grant.active = False
+    await ctx.db.flush()
+    assert (await ctx.client.get(path)).status_code == 403
+    assert (await ctx.client.get("/api/marketplace/app/v1/me/entitlements")).json()["items"] == []

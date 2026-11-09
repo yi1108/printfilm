@@ -4180,7 +4180,7 @@
     },
     "/api/marketplace/app/v1/me/author-blocks": {
       "get": {
-        "description": "屏蔽列表不泄露作者邮箱或其他私人资料。",
+        "description": "登录后查询，page默认1，page_size默认20、最多50。仅返回创作者编号、名称及拉黑时间，不公开邮箱。时间为北京时间YYYY-MM-DD HH:mm:ss。",
         "operationId": "author_blocks_api_marketplace_app_v1_me_author_blocks_get",
         "parameters": [
           {
@@ -4290,7 +4290,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Author Blocks",
+        "summary": "查询当前用户拉黑的创作者",
         "tags": [
           "App视频与观影币"
         ]
@@ -4298,7 +4298,7 @@
     },
     "/api/marketplace/app/v1/me/author-blocks/{author_id}": {
       "delete": {
-        "description": "取消屏蔽是幂等操作。",
+        "description": "需要Bearer登录，无请求体。重复取消仍返回blocked=false；不会自动关注或恢复已删除内容。",
         "operationId": "unblock_author_api_marketplace_app_v1_me_author_blocks__author_id__delete",
         "parameters": [
           {
@@ -4394,13 +4394,13 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Unblock Author",
+        "summary": "取消拉黑创作者（幂等）",
         "tags": [
           "App视频与观影币"
         ]
       },
       "put": {
-        "description": "屏蔽只影响个人发现，不能撤回已购内容。",
+        "description": "需要Bearer登录；author_id取内容creator.id，不是作品或发布版本ID。无请求体。重复请求不新增记录。拉黑后当前账号不再发现该作者内容，公开详情也不可访问；已购记录及已购版本播放不受影响。不能拉黑自己或不存在的账号。",
         "operationId": "block_author_api_marketplace_app_v1_me_author_blocks__author_id__put",
         "parameters": [
           {
@@ -4496,7 +4496,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Block Author",
+        "summary": "拉黑创作者（幂等）",
         "tags": [
           "App视频与观影币"
         ]
@@ -4504,7 +4504,7 @@
     },
     "/api/marketplace/app/v1/me/entitlements": {
       "get": {
-        "description": "已购不受展示开关和作者屏蔽影响，仍展示历史版本及受限原因。",
+        "description": "需要登录，按当前服务端交易环境读取权益。媒体来自所购版本，互动按原作品或分集共用，不按版本拆分。下架保留已购播放，禁止新增互动；受限记录保留原因且不展示互动。",
         "operationId": "entitlements_api_marketplace_app_v1_me_entitlements_get",
         "parameters": [
           {
@@ -4614,7 +4614,112 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Entitlements",
+        "summary": "查询已购发布版本及实时创作者与互动数据",
+        "tags": [
+          "App视频与观影币"
+        ]
+      }
+    },
+    "/api/marketplace/app/v1/me/entitlements/{publication_id}": {
+      "get": {
+        "description": "需要当前账号持有当前环境有效权益。返回与已购列表条目一致的 creator、engagement、social 和播放状态；即使当前作品下架也不回退到公开详情。无权益或不存在统一返回403。创建播放会话仍提交 publication_id。",
+        "operationId": "purchased_detail_api_marketplace_app_v1_me_entitlements__publication_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "publication_id",
+            "required": true,
+            "schema": {
+              "exclusiveMinimum": 0,
+              "title": "Publication Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+            "in": "header",
+            "name": "accept-language",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+              "title": "Accept-Language"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Purchased Detail Api Marketplace App V1 Me Entitlements  Publication Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "查询指定已购版本的播放器详情",
         "tags": [
           "App视频与观影币"
         ]
@@ -5490,7 +5595,7 @@
     },
     "/api/marketplace/app/v1/reports": {
       "post": {
-        "description": "App举报复用原私有证据与管理员处理流程。",
+        "description": "需要 Bearer 登录。target_type 使用 work 或 series_episode，target_id 为原作品或分集 ID，不是 publication_id。statement 为10至5000字，contact 为1至200字，evidence_ids 可省略、最多10个本人已就绪的图片或文档资产。复用 Web 的可访问性校验、举报记录、私有证据、通知和后台处置。返回举报记录 id；不具备请求幂等键，超时后不要盲目重发。",
         "operationId": "report_content_api_marketplace_app_v1_reports_post",
         "parameters": [
           {
@@ -5526,6 +5631,9 @@
           "200": {
             "content": {
               "application/json": {
+                "example": {
+                  "id": 123
+                },
                 "schema": {
                   "additionalProperties": true,
                   "title": "Response Report Content Api Marketplace App V1 Reports Post",
@@ -5533,7 +5641,7 @@
                 }
               }
             },
-            "description": "Successful Response",
+            "description": "举报已受理",
             "headers": {
               "Content-Language": {
                 "description": "Resolved display language",
@@ -5587,7 +5695,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Report Content",
+        "summary": "举报单视频或短剧分集（复用 Web 举报）",
         "tags": [
           "App视频与观影币"
         ]

@@ -1,0 +1,34 @@
+@baseUrl = https://api.example.com
+@app = {{baseUrl}}/api/marketplace/app/v1
+@token = REPLACE_WITH_TEST_ACCOUNT_TOKEN
+@authorId = 12
+@workId = 101
+@episodeId = 302
+
+### 举报单视频：写操作，仅主动提交；不要自动重试
+POST {{app}}/reports
+Authorization: Bearer {{token}}
+Content-Type: application/json
+Accept-Language: zh-CN
+
+{"target_type":"work","target_id":{{workId}},"statement":"该作品疑似未经授权使用本人视频，请平台核查。","contact":"reporter@example.com","evidence_ids":[]}
+
+### 举报分集
+POST {{app}}/reports
+Authorization: Bearer {{token}}
+Content-Type: application/json
+Accept-Language: en-US
+
+{"target_type":"series_episode","target_id":{{episodeId}},"statement":"This video may use my footage without authorization. Please investigate.","contact":"reporter@example.com","evidence_ids":[]}
+
+### 拉黑作者：authorId取creator.id
+PUT {{app}}/me/author-blocks/{{authorId}}
+Authorization: Bearer {{token}}
+
+### 查询拉黑列表
+GET {{app}}/me/author-blocks?page=1&page_size=20
+Authorization: Bearer {{token}}
+
+### 取消拉黑
+DELETE {{app}}/me/author-blocks/{{authorId}}
+Authorization: Bearer {{token}}

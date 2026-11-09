@@ -10,7 +10,9 @@ from .config import is_marketplace_enabled
 from .dependencies import Actor, DB
 from .service import now
 
-router = APIRouter()
+from .app_response import AppJSONResponse
+
+router = APIRouter(default_response_class=AppJSONResponse)
 notifications_router = APIRouter()
 billing_router = APIRouter(prefix="/api/billing/apple")
 
