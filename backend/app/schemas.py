@@ -64,6 +64,11 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(min_length=6, max_length=64)
 
 
+class CloseAccountRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=64)
+    confirmation: str = Field(min_length=1, max_length=16)
+
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 

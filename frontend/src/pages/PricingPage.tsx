@@ -394,8 +394,8 @@ export default function PricingPage() {
               <span> · {t('pricing.footBrand')}</span>
             </p>
             <nav className="pf-pricing-site-links" aria-label={t('footer.links')}>
-              <Link to="/terms">{t('footer.terms')}</Link>
-              <Link to="/privacy">{t('footer.privacy')}</Link>
+              <a href="/terms">{t('footer.terms')}</a>
+              <a href="/privacy">{t('footer.privacy')}</a>
               <Link to="/contact">{t('footer.contact')}</Link>
               <a href={GITHUB_REPO_URL} target="_blank" rel="noopener noreferrer">
                 {t('footer.github')}

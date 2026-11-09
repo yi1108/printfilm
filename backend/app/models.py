@@ -51,6 +51,8 @@ class User(Base):
     phone: Mapped[str] = mapped_column(String(32), default="")
     # 用户消费里程碑告警：上次已提醒的累计扣费档位（分）
     billing_alert_last_milestone_fen: Mapped[int] = mapped_column(Integer, default=0)
+    # 注销墓碑：已匿名化的账号不能再通过任何凭证登录。
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     projects: Mapped[list["Project"]] = relationship(back_populates="owner")

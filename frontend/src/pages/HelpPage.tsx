@@ -91,7 +91,7 @@ export default function HelpPage() {
             {t('help.moreMid')}{' '}
             <Link to="/pricing">{t('help.pricing')}</Link>
             {t('help.moreMid2')}{' '}
-            <Link to="/terms">{t('help.terms')}</Link>、<Link to="/privacy">{t('help.privacy')}</Link>
+            <a href="/terms">{t('help.terms')}</a>、<a href="/privacy">{t('help.privacy')}</a>
             {t('help.moreOr')}
             <Link to="/contact">{t('help.contact')}</Link>
             {t('help.moreSuffix')}

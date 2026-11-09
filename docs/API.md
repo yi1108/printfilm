@@ -42,6 +42,25 @@ Content-Type: application/json
 }
 ```
 
+### 注销当前账号
+
+已登录用户可调用 `POST /api/auth/close-account` 永久注销当前账号：
+
+```http
+POST /api/auth/close-account
+Authorization: Bearer <login-jwt>
+Content-Type: application/json
+
+{
+  "password": "your-current-password",
+  "confirmation": "DELETE"
+}
+```
+
+成功响应为 `{"ok": true}`。服务端立即将邮箱、昵称、手机号、头像及密码匿名化，写入 `closed_at` 注销墓碑并撤销有效团队成员资格；同一账号此前签发的 JWT 与注销前签发的密码重置令牌随即失效。必要账单、余额及历史外键记录保留，不物理删除用户行。
+
+密码错误或确认词不是精确的 `DELETE` 时返回 400；存在 `owner_user_id` 属于当前用户的团队，或当前用户发起/付费的任务尚未结束时返回 409。调用方应先转让或删除名下团队，并等待任务到达 `succeeded`、`failed` 或 `cancelled` 终态。未登录及已注销令牌返回 401。
+
 查询个人漫剧项目示例：
 
 ```http

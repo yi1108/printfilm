@@ -274,6 +274,8 @@ async def _apply_schema_patches(engine_override: AsyncEngine | None = None) -> N
             await conn.execute(
                 text("ALTER TABLE users ADD COLUMN billing_alert_last_milestone_fen INTEGER DEFAULT 0")
             )
+        if "closed_at" not in ucols:
+            await conn.execute(text("ALTER TABLE users ADD COLUMN closed_at TIMESTAMPTZ NULL"))
 
         # UsageEvent.drama_project_id for drama module billing
         uecols = await _pg_columns(conn, "usage_events")
