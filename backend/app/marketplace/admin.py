@@ -4,11 +4,33 @@ from sqlalchemy import and_, func, select
 
 from .dependencies import Admin, DB
 from .models import Asset, EpisodePreview, Entitlement, Event, MediaJob, Publication, Recruit, RegistrationCase, Report, RevenueConfig, RevenueLedger, Payout, Rights, Series, SeriesEpisode, Submission, Support, Work, WorkPreview
-from .schemas import BlockInput, CaseReview, CategoryInput, PayoutInput, ResolutionInput, ReviewInput, RevenueConfigInput, SupportInput, Version
+from .schemas import BlockInput, CaseReview, CategoryInput, ContentRevenueInput, PayoutInput, ResolutionInput, ReviewInput, RevenueConfigInput, SupportInput, Version
 from .service import (asset_owned, check_version, data, event, fail, now, notify, page, recruit_data,
                       rights_for, rights_valid, submission_data, validate_rights, work_data)
 
 router = APIRouter()
+
+
+@router.patch("/content-revenue/{kind}/{target_id}", response_model=dict,
+              summary="设置内容后续发布版本的平台分成（仅管理员）")
+async def set_content_revenue(kind: str, target_id: int, body: ContentRevenueInput, db: DB, user: Admin):
+    """仅修改运营覆盖值，不重写已冻结发布版本、订单、权益或收益。"""
+    model = {"work": Work, "series": Series, "series_episode": SeriesEpisode}.get(kind)
+    if model is None:
+        fail("内容类型无效", 404)
+    item = await db.get(model, target_id, with_for_update=True, populate_existing=True)
+    if item is None or getattr(item, "deleted_at", None):
+        fail("内容不存在", 404)
+    check_version(item, body.version)
+    if item.share_bps != body.previous_share_bps:
+        fail("分成配置已被修改，请刷新后重试", 409)
+    previous = item.share_bps
+    item.share_bps = body.share_bps
+    event(db, user.id, kind, item.id, "revenue_share_updated",
+          note=f"{previous} -> {body.share_bps}; {body.reason}", version=item.version)
+    await db.commit()
+    return {"id": item.id, "version": item.version, "share_bps": item.share_bps,
+            "applies_to": "future_publications"}
 
 
 def _notification_note(message: str, note: str) -> str:
@@ -143,7 +165,7 @@ async def records(kind: str, db: DB, user: Admin, status: str = "", curation: st
             result["episodes"] = []
             for episode in episodes:
                 rights = (await db.execute(select(Rights).where(Rights.asset_id == episode.asset_id))).scalar_one_or_none() if episode.asset_id else None
-                result["episodes"].append({**data(episode, "id", "episode_no", "title", "description", "asset_id", "cover_asset_id", "source", "source_type", "version", "audit_status", "listed", "preview_status", "playback_status"), **({"details": rights.details, "certificate_asset_id": rights.certificate_asset_id, "evidence_ids": rights.evidence_ids} if rights else {})})
+                result["episodes"].append({**data(episode, "id", "episode_no", "title", "description", "asset_id", "cover_asset_id", "share_bps", "source", "source_type", "version", "audit_status", "listed", "preview_status", "playback_status"), **({"details": rights.details, "certificate_asset_id": rights.certificate_asset_id, "evidence_ids": rights.evidence_ids} if rights else {})})
         elif kind == "submissions":
             result = await submission_data(db, item, user)
         elif kind == "entitlements":

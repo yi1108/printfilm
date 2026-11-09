@@ -49,6 +49,7 @@ def validate_document(document: dict, routes) -> int:
         "/api/marketplace/app/v1/series/{series_id}",
         "/api/marketplace/app/v1/series/{series_id}/episodes",
         "/api/marketplace/app/v1/me/entitlements",
+        "/api/marketplace/app/v1/me/entitlements/{publication_id}",
         "/api/marketplace/app/v1/playback-sessions",
         "/api/marketplace/app/v1/playback-sessions/{token}/index.m3u8",
         "/api/marketplace/app/v1/playback-sessions/{token}/segments/{segment_id}",

@@ -13,7 +13,9 @@ from .dependencies import Actor, DB, Visitor
 from .models import Series, SeriesEpisode, Work
 from .app_social_models import AppComment, AppCommentAction, AppCommentReport, AppContentStats, AppFavorite, AppLike, AppSocialSetting
 
-router = APIRouter()
+from .app_response import AppJSONResponse
+
+router = APIRouter(default_response_class=AppJSONResponse)
 TargetType = Literal["work", "works", "series", "episode", "episodes", "series_episode"]
 MAX_COMMENT_DEPTH = 5
 

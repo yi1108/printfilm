@@ -16,7 +16,7 @@ import { handoffLabel, isHandoffActive, latestEpisodeHandoffs, mergeSyncedCover,
 import { isFreeEpisode, previewStatusLabel } from './playbackPolicy'
 import { explainMarketplaceError } from './messages'
 
-type EpisodeDraft = { id?: number; version?: number; episode_no: number; title: string; description?: string; asset_id: number | null; cover_asset_id: number | null; copyright_price_fen: number; unlock_price_fen: number; share_bps?: number | null; source?: 'printfilm' | 'external' | 'original' | 'ai' | 'authorized'; preview_status?: string; preview_error?: string }
+type EpisodeDraft = { id?: number; version?: number; episode_no: number; title: string; description?: string; asset_id: number | null; cover_asset_id: number | null; copyright_price_fen: number; unlock_price_fen: number; source?: 'printfilm' | 'external' | 'original' | 'ai' | 'authorized'; preview_status?: string; preview_error?: string }
 type SeriesDraft = { id: number; version: number; title: string; description: string; category: string; category_code?: string; category_labels?: { zh: string; en: string }; tags: string[]; cover_asset_id?: number | null; sale_type: 'free' | 'copyright_contact' | 'platform_unlock'; copyright_price_fen: number; free_episode_count?: number; audit_status?: string; listed?: boolean; episodes: EpisodeDraft[]; authorization_ready?: boolean; sync_in_progress?: boolean; pending_handoffs?: Handoff[] }
 type ImportSource = { id: number; title: string; episodes: { id: number; name: string; ready: boolean }[] }
 
@@ -40,7 +40,7 @@ function EpisodePanel({ episode, count, free, open, saleType, seriesId, busy, vi
       <AssetPicker kind="image" required value={episode.cover_asset_id} onChange={cover_asset_id => update({ cover_asset_id })} title={mt("分集封面（可使用系列封面）")} />
       {saleType !== 'free' && <label>{mt("本集参考价（元）")}<input type="number" min="0" step="0.01" value={(episode.copyright_price_fen / 100) || ''} onChange={event => update({ copyright_price_fen: Math.round(Number(event.target.value || 0) * 100) })} /></label>}
       {episode.source === 'printfilm' ? <p className="pf-market-notice">{mt("PrintFilm 生成：本系列统一引用账号授权函，无需逐集签署或上传证书。")}</p> : episode.asset_id && (seriesId ? <button type="button" disabled={busy} onClick={goRights}>{mt("填写第")} {episode.episode_no}  {mt("集权属材料")}</button> : <p>{mt("请先保存草稿，再填写这一集的权属材料。保存后会回到这个页面。")}</p>)}
-      {saleType === 'platform_unlock' && <><label>{mt("本集观众解锁价（积分）")}<input type="number" min="0" max="100000000" step="1" value={Number.isNaN(episode.unlock_price_fen) ? '' : episode.unlock_price_fen} onChange={event => update({ unlock_price_fen: parsePoints(event.target.value, 100000000) ?? NaN })} /></label><label>{mt("本集平台抽成比例（万分比，可留空使用平台默认）")}<input type="number" min="0" max="10000" step="1" value={episode.share_bps ?? ''} onChange={event => update({ share_bps: event.target.value === '' ? null : Number(event.target.value) })} placeholder={mt("例如 2000，表示平台20%、创作者80%")} /><small>{mt("10000 表示 100%；本集未设置时使用平台默认比例。")}</small></label></>}
+      {saleType === 'platform_unlock' && <><label>{mt("本集观众解锁价（积分）")}<input type="number" min="0" max="100000000" step="1" value={Number.isNaN(episode.unlock_price_fen) ? '' : episode.unlock_price_fen} onChange={event => update({ unlock_price_fen: parsePoints(event.target.value, 100000000) ?? NaN })} /></label></>}
       {count > 1 && <button type="button" disabled={busy} onClick={remove}>{mt("删除本集")}</button>}
     </div>}
   </article>
@@ -155,7 +155,7 @@ export default function SeriesEditor() {
   useEffect(() => { if (!id && !category && categories.length) setCategory(categories.includes('other') ? 'other' : categories[0]) }, [id, category, categories])
   function update(index: number, patch: Partial<EpisodeDraft>) { setDirty(true); setEpisodes(value => value.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item)) }
   function episodeBody(episode: EpisodeDraft) {
-    return { episode_no: episode.episode_no, title: episode.title, description: episode.description || '', asset_id: episode.asset_id, cover_asset_id: episode.cover_asset_id, copyright_price_fen: episode.copyright_price_fen || 0, unlock_price_fen: episode.unlock_price_fen || 0, share_bps: episode.share_bps ?? null, source: episode.source || 'external' }
+    return { episode_no: episode.episode_no, title: episode.title, description: episode.description || '', asset_id: episode.asset_id, cover_asset_id: episode.cover_asset_id, copyright_price_fen: episode.copyright_price_fen || 0, unlock_price_fen: episode.unlock_price_fen || 0, source: episode.source || 'external' }
   }
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError(''); setMessage(''); if (syncBlocked || hasSyncFailure) { setBusy(false); setError(mt("请等待同步完成或重试失败任务后再保存，当前输入会保留")); return } const missing = episodes.findIndex(item => !item.title.trim()); if (missing >= 0) { setExpanded(new Set([missing])); setBusy(false); setError(mt("第 {0} 集标题未填写", [missing + 1])); return } const form = new FormData(event.currentTarget)

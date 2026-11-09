@@ -1,0 +1,204 @@
+# 配套 APP_VIDEO_FRONTEND_GUIDE.md；全部为示例。
+# 不要“一键执行全部”：充值、解锁、互动、评论均为写操作，仅在授权的专用测试环境手动执行。
+@baseUrl = https://api.example.com
+@token = REPLACE_WITH_TEST_ACCOUNT_TOKEN
+@language = zh-CN
+@app = {{baseUrl}}/api/marketplace/app/v1
+@workId = 101
+@seriesId = 201
+@episodeId = 302
+@publicationId = 912
+@feedCursor = REPLACE_WITH_SERVER_CURSOR
+@playbackToken = REPLACE_WITH_SESSION_ID
+@unlockKey = REPLACE_WITH_PERSISTED_UUID_FOR_THIS_UNLOCK
+@rechargeKey = REPLACE_WITH_PERSISTED_UUID_FOR_THIS_RECHARGE
+@intentId = 501
+@outTradeNo = REPLACE_WITH_RECHARGE_ORDER_NUMBER
+@signedJws = REPLACE_WITH_ORIGINAL_STOREKIT_JWS
+@shareToken = REPLACE_WITH_SHARE_TOKEN
+@anonymousId = test_installation_random_123456
+
+### 01 能力（游客）
+GET {{app}}/capabilities
+Accept-Language: {{language}}
+
+### 02 分类（游客）；显示label，筛选传code
+GET {{app}}/categories
+Accept-Language: {{language}}
+
+### 03 推荐列表首页；测试游客删除Authorization头
+GET {{app}}/feed?content_type=all&sort=recommended&limit=20
+Accept-Language: {{language}}
+Authorization: Bearer {{token}}
+
+### 04 分类+关键词搜索；切换条件必须清空游标
+GET {{app}}/feed?content_type=work&category_code=short_film&q=山海&sort=latest&limit=20
+Accept-Language: {{language}}
+Authorization: Bearer {{token}}
+
+### 05 推荐下一页；参数需与产生游标的查询一致，URL编码游标
+GET {{app}}/feed?content_type=all&sort=recommended&limit=20&cursor={{feedCursor}}
+Accept-Language: {{language}}
+Authorization: Bearer {{token}}
+
+### 06 单视频详情
+GET {{app}}/works/{{workId}}
+Accept-Language: {{language}}
+Authorization: Bearer {{token}}
+
+### 07 短剧系列详情（不能把系列ID提交播放）
+GET {{app}}/series/{{seriesId}}
+Accept-Language: {{language}}
+Authorization: Bearer {{token}}
+
+### 08 分集目录；后续分页使用目录自己的next_cursor
+GET {{app}}/series/{{seriesId}}/episodes?limit=20
+Accept-Language: {{language}}
+Authorization: Bearer {{token}}
+
+### 09 当前单视频播放
+POST {{app}}/playback-sessions
+Content-Type: application/json
+Accept-Language: {{language}}
+Authorization: Bearer {{token}}
+
+{"content_type":"work","content_id":{{workId}}}
+
+### 10 当前分集播放（不是series）
+POST {{app}}/playback-sessions
+Content-Type: application/json
+Accept-Language: {{language}}
+Authorization: Bearer {{token}}
+
+{"content_type":"series_episode","content_id":{{episodeId}}}
+
+### 11 历史已购/解锁后按发布版本播放
+POST {{app}}/playback-sessions
+Content-Type: application/json
+Accept-Language: {{language}}
+Authorization: Bearer {{token}}
+
+{"publication_id":{{publicationId}}}
+
+### 12 HLS清单：播放器自动请求；不要记录token
+GET {{app}}/playback-sessions/{{playbackToken}}/index.m3u8
+
+### 13 HLS分片：302正常，播放器跟随到OSS；不要给OSS附带登录Token
+GET {{app}}/playback-sessions/{{playbackToken}}/segments/0
+
+### 14 统一钱包：spendable_fen用于确认可消费积分
+GET {{baseUrl}}/api/billing/wallet
+Accept-Language: {{language}}
+Authorization: Bearer {{token}}
+
+### 15 App兼容钱包：与上一个同一余额，不相加
+GET {{app}}/me/wallet
+Accept-Language: {{language}}
+Authorization: Bearer {{token}}
+
+### 16 [扣款] 解锁前从最新详情确认publication_id与unlock_coins；重试复用key
+POST {{app}}/unlocks
+Content-Type: application/json
+Accept-Language: {{language}}
+Authorization: Bearer {{token}}
+
+{"publication_id":{{publicationId}},"expected_coins":120,"idempotency_key":"{{unlockKey}}"}
+
+### 17 Apple商品列表：当地售价由StoreKit提供
+GET {{baseUrl}}/api/billing/skus?channel=apple_iap
+Accept-Language: {{language}}
+
+### 18 [写入] 创建充值订单/意向，不等于付款
+POST {{baseUrl}}/api/billing/orders
+Content-Type: application/json
+Accept-Language: {{language}}
+Authorization: Bearer {{token}}
+
+{"sku_id":"topup_10","pay_type":"apple_iap","idempotency_key":"{{rechargeKey}}"}
+
+### 19 [入账] 原交易验单，不能填假JWS；成功后根据finish_transaction完成StoreKit交易
+POST {{baseUrl}}/api/billing/apple/transactions/verify
+Content-Type: application/json
+Accept-Language: {{language}}
+Authorization: Bearer {{token}}
+
+{"signed_transaction_info":"{{signedJws}}","intent_id":{{intentId}}}
+
+### 20 充值订单状态：查询不触发验单
+GET {{baseUrl}}/api/billing/orders/{{outTradeNo}}
+Accept-Language: {{language}}
+Authorization: Bearer {{token}}
+
+### 21 已购权益，点击按publication_id播放
+GET {{app}}/me/entitlements?limit=20
+Accept-Language: {{language}}
+Authorization: Bearer {{token}}
+
+### 21a 已购详情：返回creator、engagement、social，播放仍提交publication_id
+GET {{app}}/me/entitlements/{{publicationId}}
+Accept-Language: {{language}}
+Authorization: Bearer {{token}}
+
+### 22 视频解锁订单：下一页数字cursor，不是feed游标
+GET {{app}}/me/unlock-orders?page_size=20
+Accept-Language: {{language}}
+Authorization: Bearer {{token}}
+
+### 23 全平台积分流水：下一页数字cursor
+GET {{app}}/me/wallet/entries?page_size=20
+Accept-Language: {{language}}
+Authorization: Bearer {{token}}
+
+### 24 [写入] 点赞；分集替换为episodes/id，系列为series/id
+PUT {{app}}/works/{{workId}}/like
+Authorization: Bearer {{token}}
+Accept-Language: {{language}}
+
+### 25 [写入] 取消点赞
+DELETE {{app}}/works/{{workId}}/like
+Authorization: Bearer {{token}}
+Accept-Language: {{language}}
+
+### 26 [写入] 收藏
+PUT {{app}}/episodes/{{episodeId}}/favorite
+Authorization: Bearer {{token}}
+Accept-Language: {{language}}
+
+### 27 [写入] 取消收藏
+DELETE {{app}}/episodes/{{episodeId}}/favorite
+Authorization: Bearer {{token}}
+Accept-Language: {{language}}
+
+### 28 评论列表
+GET {{app}}/works/{{workId}}/comments?sort=latest&limit=20
+Accept-Language: {{language}}
+
+### 29 [写入] 评论（没有幂等键，超时不盲目重发）
+POST {{app}}/works/{{workId}}/comments
+Content-Type: application/json
+Authorization: Bearer {{token}}
+Accept-Language: {{language}}
+
+{"text":"专用测试账号的联调评论","parent_id":null}
+
+### 30 [写入] 游客创建分享会话；登录用户则使用Bearer并可省略anonymous_id
+POST {{app}}/works/{{workId}}/share-sessions
+Content-Type: application/json
+Accept-Language: {{language}}
+
+{"anonymous_id":"{{anonymousId}}"}
+
+### 31 [写入] 仅真实复制成功后提交；重复补报原token和原动作
+POST {{app}}/share-sessions/{{shareToken}}/events
+Content-Type: application/json
+Accept-Language: {{language}}
+
+{"action":"copied","anonymous_id":"{{anonymousId}}"}
+
+### 32 [写入] 视频举报，复用Web；分集target_type改为series_episode并传原分集ID
+POST {{app}}/reports
+Content-Type: application/json
+Authorization: Bearer {{token}}
+Accept-Language: {{language}}
+
+{"target_type":"work","target_id":{{workId}},"statement":"该作品疑似未经授权使用本人视频，请平台核查。","contact":"reporter@example.com","evidence_ids":[]}

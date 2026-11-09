@@ -13,6 +13,12 @@ class Version(Input):
     version: int = Field(ge=1)
 
 
+class ContentRevenueInput(Version):
+    previous_share_bps: int | None = Field(..., ge=0, le=10000)
+    share_bps: int | None = Field(..., ge=0, le=10000, strict=True)
+    reason: str = Field(min_length=1, max_length=2000)
+
+
 class WorkInput(Input):
     title: str = Field(min_length=1, max_length=200)
     description: str = Field(default="", max_length=5000)
@@ -22,7 +28,6 @@ class WorkInput(Input):
     price_fen: int = Field(ge=0, le=100_000_000)
     sale_type: Literal["free", "copyright_contact", "platform_unlock"] = "copyright_contact"
     unlock_price_fen: int = Field(default=0, ge=0, le=100_000_000)
-    share_bps: int | None = Field(default=None, ge=0, le=10000)
     asset_id: int | None = Field(default=None, gt=0)
     cover_asset_id: int | None = Field(default=None, gt=0)
     source: Literal["printfilm", "external", "original", "ai", "authorized"] = "original"
@@ -203,7 +208,6 @@ class SeriesInput(Input):
     sale_type: Literal["free", "copyright_contact", "platform_unlock"] = "copyright_contact"
     copyright_price_fen: int = Field(default=0, ge=0, le=100_000_000)
     free_episode_count: int = Field(default=0, ge=0, le=10000)
-    share_bps: int | None = Field(default=None, ge=0, le=10000)
 
 
 class SeriesUpdate(SeriesInput, Version):
@@ -218,7 +222,6 @@ class EpisodeInput(Input):
     cover_asset_id: int | None = Field(default=None, gt=0)
     copyright_price_fen: int = Field(default=0, ge=0, le=100_000_000)
     unlock_price_fen: int = Field(default=0, ge=0, le=100_000_000)
-    share_bps: int | None = Field(default=None, ge=0, le=10000)
     source: Literal["printfilm", "external", "original", "ai", "authorized"] = "external"
 
 

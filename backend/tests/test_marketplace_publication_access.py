@@ -312,10 +312,12 @@ async def test_series_metadata_edit_creates_new_episode_version_and_preserves_pu
     content = await make_publication(ctx)
     await grant(ctx, content)
     ctx.user = ctx.owner
+    content.series.share_bps = 3200
     response = await ctx.client.patch(f"/api/marketplace/series/{content.series.id}", json={
-        "title": "new title", "version": content.series.version, "sale_type": "platform_unlock", "share_bps": 4500})
+        "title": "new title", "version": content.series.version, "sale_type": "platform_unlock"})
     assert response.status_code == 200, response.text
     assert response.json()["episodes"][0]["version"] == 2
+    assert content.series.share_bps == 3200
     assert content.item.version == 2 and content.series.audit_status == "draft"
     assert not content.item.listed and not content.publication.listed
     assert content.publication.version == 1 and content.publication.share_bps == 2345
@@ -438,3 +440,35 @@ async def test_replacing_imported_printfilm_video_detaches_source_and_reuses_acc
     assert content.publication.asset_id == content.asset.id and content.publication.version == 1
     assert content.publication.share_bps == 2345 and content.publication.audit_status == "approved"
     assert content.publication.playback_manifest_key == "marketplace/hls/old/index.m3u8"
+
+
+@pytest.mark.parametrize("kind", ["work", "series", "series_episode"])
+async def test_content_share_is_admin_only_and_preserves_frozen_publication(publication_ctx, kind):
+    from app.marketplace import admin as admin_api
+    ctx = publication_ctx
+    content = await make_publication(ctx, episode=kind != "work")
+    target = content.series if kind == "series" else content.item
+    ctx.client._transport.app.include_router(admin_api.router, prefix="/api/admin/marketplace")
+    path = f"/api/admin/marketplace/content-revenue/{kind}/{target.id}"
+    body = {"version": target.version, "previous_share_bps": None, "share_bps": 3100, "reason": "运营调整"}
+    ctx.user = ctx.owner
+    assert (await ctx.client.patch(path, json=body)).status_code == 403
+    ctx.owner.role = "admin"
+    response = await ctx.client.patch(path, json=body)
+    assert response.status_code == 200, response.text
+    assert target.share_bps == 3100
+    assert content.publication.share_bps == 2345
+    assert content.item.version == content.publication.version == 1
+    assert content.item.listed and content.publication.listed
+    assert (await ctx.client.patch(path, json=body)).status_code == 409
+    reset = {**body, "previous_share_bps": 3100, "share_bps": None}
+    assert (await ctx.client.patch(path, json=reset)).status_code == 200
+    assert target.share_bps is None
+    audit = (await ctx.db.scalars(select(Event).where(Event.action == "revenue_share_updated"))).all()
+    assert len(audit) == 2 and all(row.actor_id == ctx.owner.id for row in audit)
+
+    listing = await ctx.client.get("/api/admin/marketplace/records/series" if kind != "work" else "/api/admin/marketplace/records/works")
+    assert listing.status_code == 200, listing.text
+    record = listing.json()["items"][0]
+    if kind == "series_episode":
+        assert "share_bps" in record["episodes"][0]

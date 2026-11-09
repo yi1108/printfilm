@@ -332,5 +332,8 @@ async def test_http_link_opens_exact_episode_and_aasa_never_exposes_media(ctx, m
         assert opened.headers["cache-control"] == "no-store"
         association = await client.get("/.well-known/apple-app-site-association")
         assert association.status_code == 200
-        assert association.json()["applinks"]["details"] == [{"appID": "ABCDE12345.com.deep.printfilm", "paths": ["/s/*"]}]
+        assert association.headers["content-type"].startswith("application/json")
+        assert association.json()["applinks"]["details"] == [{"appID": "ABCDE12345.com.deep.printfilm", "paths": [
+            "/s/*", "/marketplace/works/*", "/marketplace/series/*",
+        ]}]
         assert "manifest" not in association.text and "object_key" not in association.text

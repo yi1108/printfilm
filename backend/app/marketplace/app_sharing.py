@@ -19,7 +19,9 @@ from .app_settings import get_app_settings
 from .dependencies import DB, Visitor
 from .locale import localized
 
-router = APIRouter()
+from .app_response import AppJSONResponse
+
+router = APIRouter(default_response_class=AppJSONResponse)
 public_router = APIRouter()
 ShareTarget = Literal["works", "episodes"]
 
@@ -173,7 +175,10 @@ async def apple_association():
     _, team, bundle = sharing_configuration()
     if not team or not bundle:
         error("MARKETPLACE_SHARE_UNAVAILABLE", localized("请先在系统管理中补齐 Apple 分享关联配置。", "Complete the Apple sharing association settings first."), 503)
-    return JSONResponse({"applinks": {"apps": [], "details": [{"appID": f"{team}.{bundle}", "paths": ["/s/*"]}]}}, headers={"Cache-Control": "no-store"})
+    # Both stable share links and direct Web content links can be received by iOS.
+    return JSONResponse({"applinks": {"apps": [], "details": [{"appID": f"{team}.{bundle}", "paths": [
+        "/s/*", "/marketplace/works/*", "/marketplace/series/*",
+    ]}]}}, headers={"Cache-Control": "no-store"})
 
 
 @public_router.get("/.well-known/assetlinks.json", include_in_schema=False)

@@ -1,5 +1,7 @@
 # 积分展示约定 / Points display
 
+前端逐页面接入、接口请求/响应、播放与解锁流程图、异常重试和可点击原型见 [App 视频前端接入详解](APP_VIDEO_FRONTEND_GUIDE.md)。当前实现与旧计划文字不一致时，以该详解及对应源码为准。
+
 互动合计数量、加精置顶排序与新版游标、作品分享及 Universal Links 接入见 [互动运营与分享说明](MARKETPLACE_OPERATIONS.md)。推荐分页收到 `MARKETPLACE_FEED_UPDATED`（409）时必须清空游标并刷新首页。
 
 平台额度：1 元额度 = 100 积分。余额、冻结、欠费、消费、到账及赠额的整数 *_fen 和兼容 coins 字段直接作为积分显示，不乘除 100（10000 → 10,000 Points；25 → 25 积分）。视频解锁价格同理。iOS 页面由客户端团队同步修改。
@@ -7,6 +9,10 @@
 充值实付、Apple 原币金额、版权参考价、创作者收益、渠道成本和打款仍使用货币。credit_currency=CNY 保留原协议含义。四档到账为 10,000 / 49,000 / 104,000 / 220,000 积分，支付售价不变。后端、历史数据、退款和扣费不变，无需迁移。未知历史人工文本不改写。
 
 # App视频接口与Apple内购接入
+
+举报与拉黑创作者的独立联调说明、权限边界及请求示例见 [App举报与拉黑联调文档](APP_REPORT_AND_BLOCK_GUIDE.md)。
+
+时间契约（2026-11-09）：`/api/marketplace/app/v1` JSON 响应的 `created_at`、`updated_at`、`expires_at` 等 `*_at` 时间字段统一为北京时间（UTC+8）`YYYY-MM-DD HH:mm:ss`，不带微秒、T、Z；空值仍为 null。App 不得再次加8小时；需要转本地时间时，以 UTC+8 解析。秒数、时间戳数字、分页游标、支付签名和数据库 UTC 存储不变。此约定不改变 `/api/billing` 及后台接口格式。
 
 固定人民币/美元档位、统一余额接口、外币核算及 StoreKit 2 示例见 [IOS_RECHARGE.md](IOS_RECHARGE.md)。Apple 充值独立于视频市场开关，支持 CNY/USD；本文早期仅人民币约定以该更新为准。
 
@@ -18,7 +24,7 @@
 - 免费内容完整播放，收费内容未解锁时播放无水印短试看，最长15秒且不超过原片时长30%。收费短剧的前置免费集按现有规则判断，不以参考价为0判断免费。
 - 按单视频或分集扣币，永久权益绑定`publication_id`。作者更新不替换已购视频，主动下架不撤销旧权益；封禁、删除及版权限制仍可能阻断播放。
 - 平台余额底层使用整数积分，App兼容展示`1币＝1积分`；`balance_coins`与`balance_fen`是同一余额，不需要兑换。额度不失效、不转赠、不提现，创作者待结算收益仍单独对账打款。
-- Web和Apple共用到账额度及套餐赠送规则，不修改现有套餐价格或编号。Apple商品是消耗型充值包，不为每个分集建商品；首期仅中国大陆商店、人民币交易。
+- Web和Apple共用到账额度及套餐赠送规则，不修改现有套餐价格或编号。Apple商品是消耗型充值包，不为每个分集建商品；当前支持人民币、美元付款，额度仍按平台积分，固定档位以充值专项文档为准。
 - Apple商品绑定共同`sku_id`并冻结套餐版本。已创建的商品额度、参考价格和套餐绑定不能随意改写，调整档位须建立新商品。真实售价由StoreKit展示，记账使用Apple已验签交易的实际付款。
 - Production与Sandbox必须使用独立部署、数据库、Redis和通知地址。生产服务拒绝Sandbox资金，测试余额不能进入生产账户。
 
@@ -55,6 +61,7 @@ GET /works/{work_id}
 GET /series/{series_id}
 GET /series/{series_id}/episodes?limit=20&cursor=
 GET /me/entitlements
+GET /me/entitlements/{publication_id}
 ```
 
 `feed.content_type`为`all`、`work`或`series`，单页默认20、最多50条，返回`items`、`has_more`、`next_cursor`。短剧以系列卡片展示，目录按集号继续分页。游标由服务端生成，调用方原样传回，不自行拼接。

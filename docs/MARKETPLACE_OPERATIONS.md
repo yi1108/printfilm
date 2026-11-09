@@ -116,6 +116,19 @@ POST /api/marketplace/app/v1/episodes/456/share-sessions
 
 分享会话令牌与播放令牌均须从普通日志中去除。后端及仓库Nginx示例已处理 `/api/marketplace/app/v1/share-sessions/`，外层代理、CDN和客户端错误上报也应隐藏令牌路径；公开的 `/s/{public_id}` 是作品链接，可以正常记录访问，但打开链接不增加分享数。
 
-iOS 设置 Associated Domains：`applinks:www.example.com`。读取链接 `/s/{public_id}` 后请求该HTTPS业务地址并解析服务器重定向目标：单视频为 `/marketplace/works/{id}`；分集为 `/marketplace/series/{series_id}?episode_id={id}`。只接受配置分享域名及这两种业务路径，客户端不得把任意重定向当作可信深链。未安装App时浏览器自然落地；Web 已增加 `episode_id` 定位，不覆盖到其他分集。
+iOS 设置 Associated Domains：`applinks:www.example.com`。关联文件覆盖 `/s/*`、`/marketplace/works/*` 和 `/marketplace/series/*`。客户端同时支持稳定分享链接和直接作品链接；读取链接 `/s/{public_id}` 后请求该HTTPS业务地址并解析服务器重定向目标：单视频为 `/marketplace/works/{id}`；分集为 `/marketplace/series/{series_id}?episode_id={id}`。只接受配置分享域名及这两种业务路径，客户端不得把任意重定向当作可信深链。未安装App时浏览器自然落地；Web 已增加 `episode_id` 定位，不覆盖到其他分集。
+
+更新关联文件后，检查公网 `/.well-known/apple-app-site-association` 直接返回 200 和 JSON，不能重定向或返回首页；`appID` 来自系统管理中的 Team ID 与 Bundle ID，必须与安装包签名 entitlement 一致。若站点静态托管了关联文件，也须同步更新该文件。Apple CDN 存在缓存，服务端更新不代表设备立即生效；核对 CDN 内容后重新安装测试包，并从备忘录或信息点击两类链接验证。系列链接还需验证 `episode_id` 定位。
 
 打开链接仍检查审核、下架、封禁及版权，遵守原免费完整播放/收费试看规则。分享链接不会赋予观看权益。真实系统分享、外网代理、AASA和App唤起须使用真实域名及iOS真机验收，单元测试不能代替这些联调。
+
+
+## 后台积分解锁订单与分成权限
+
+入口：业务 → 数字资产平台运营 → 视频解锁订单。仅展示全平台视频解锁订单，支持生产／沙箱环境、购买用户编号、订单状态筛选及分页；不展示个人钱包、平台余额汇总或苹果充值配置。沙箱订单不会出现在生产环境筛选结果中。扣除积分属于购买者，与创作者收益不同，收益请到收益账本查看。
+
+作者发布、编辑单视频、系列及分集时不再提交 `share_bps`；包含此字段（即使为 null）的请求返回 422。作者更新其他资料不会清除运营已设置的比例。需要同步更新仍发送该字段的旧客户端。
+
+平台默认比例在“平台分成”页设置；单独比例在“作品审核／短剧审核 → 详情”设置，分集跟随当前选集。仅管理员可通过 `PATCH /api/admin/marketplace/content-revenue/{work|series|series_episode}/{id}` 修改，提交 `version`、`previous_share_bps`、`share_bps` 和必填 `reason`。比例为万分比，null 表示继承，0 表示平台抽成零；过期内容或比例返回 409，操作写入审计。
+
+优先级：分集 → 系列 → 平台；单视频为作品 → 平台。修改仅在后续提交发布时生成新快照采用，不追溯已提交的发布快照、已购权益、订单及收益；如需让现有内容采用新比例，按原流程更新并重新提交审核，历史买家继续持有旧版权益。无需数据迁移。
