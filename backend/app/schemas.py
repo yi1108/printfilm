@@ -449,7 +449,8 @@ class AdminQueuesOut(BaseModel):
 
 class AdminUserOut(BaseModel):
     id: int
-    email: EmailStr
+    # 管理端展示历史账号及注销墓碑；匿名 .invalid 地址不作为登录输入校验。
+    email: str = Field(max_length=255)
     nickname: str
     quota_left: int
     balance_fen: int

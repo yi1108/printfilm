@@ -7,6 +7,7 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from httpx import ASGITransport, AsyncClient
 
+from app.api.admin.users import list_users
 from app.api.auth import login, register, router as auth_router
 from app.database import get_db
 from app.deps import _user_from_bearer
@@ -276,6 +277,35 @@ async def test_close_account_http_endpoint_invalidates_bearer_token(db_session):
             json={"password": "correct-password", "confirmation": "DELETE"},
         )
         assert anonymous_response.status_code == 401
+
+
+async def test_admin_user_list_serializes_closed_account_tombstone(db_session):
+    """管理列表可以展示 .invalid 匿名地址，不让单个注销账号拖垮整页。"""
+    admin = await make_closable_user(db_session, role="admin")
+    user = await make_closable_user(db_session)
+    user_id = user.id
+    await close_account(
+        db_session,
+        user=user,
+        password="correct-password",
+        confirmation=ACCOUNT_CONFIRMATION_WORD,
+    )
+
+    result = await list_users(
+        q=str(user_id),
+        plan=None,
+        role=None,
+        page=1,
+        page_size=10,
+        _admin=admin,
+        db=db_session,
+    )
+
+    assert result.meta.total == 1
+    assert len(result.items) == 1
+    assert result.items[0].id == user_id
+    assert result.items[0].email.endswith("@deleted.printfilm.invalid")
+    assert result.items[0].nickname == "已注销用户"
 
 
 async def test_original_email_can_register_a_distinct_account_after_closure(db_session):
