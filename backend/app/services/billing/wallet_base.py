@@ -34,7 +34,8 @@ async def lock_account(db, user_id, environment=None):
     if not enabled():
         raise WalletError("UNIFIED_WALLET_UNAVAILABLE", "统一余额尚未开放。", 503)
     env = globals()["environment"](environment)
-    user = (await db.execute(select(User).where(User.id == user_id).with_for_update()
+    # 与旧钱包保持同一 NO KEY UPDATE 锁语义：互斥资金写入，但不阻塞用量外键校验。
+    user = (await db.execute(select(User).where(User.id == user_id).with_for_update(key_share=True)
                              .execution_options(populate_existing=True))).scalar_one_or_none()
     if user is None:
         raise WalletError("WALLET_ACCOUNT_NOT_FOUND", "账号不存在。", 404)

@@ -1871,6 +1871,8 @@ async def run_asset_image_job(
             from app.services.exc_format import format_exception_message
 
             err_text = format_exception_message(exc, fallback="生图失败", limit=500)
+            # flush 失败后 Session 不可继续查询；回滚未提交交付，再记录原始异常。
+            await db.rollback()
             if asset_id:
                 asset = await db.get(DramaAsset, asset_id)
                 if asset:
@@ -2025,6 +2027,8 @@ async def run_asset_video_job(
             from app.services.exc_format import format_exception_message
             from app.services.storage import RetryableMediaDownloadError
 
+            # 用量或交付 flush 可能已失败，必须先恢复事务再读取资产和保存状态。
+            await db.rollback()
             if isinstance(exc, RetryableMediaDownloadError) and exc.provider_task_id:
                 asset = await db.get(DramaAsset, asset_id)
                 if asset:
