@@ -32,7 +32,7 @@ async def apply_verified_transaction(db, txn: dict, *, expected_user_id: int | N
     """归属由预先分配的账号 UUID 决定；钱包锁内比较权威查询顺序再履约。"""
     owner = (await db.execute(select(AppleAccountToken).where(AppleAccountToken.token == txn["app_account_token"]))).scalar_one_or_none()
     if not owner or (expected_user_id is not None and owner.user_id != expected_user_id):
-        app_fail("MARKETPLACE_IAP_ACCOUNT_MISMATCH", "该苹果交易不属于当前 PrintFilm 账号，请使用购买时的账号登录。", 403)
+        app_fail("MARKETPLACE_IAP_ACCOUNT_MISMATCH", "该苹果交易不属于当前 PRINTFILM 账号，请使用购买时的账号登录。", 403)
     if intent_id is not None:
         intent = await db.get(ApplePurchaseIntent, intent_id)
         if not intent or intent.user_id != owner.user_id or intent.environment != txn["environment"] or intent.product_id != txn["product_id"]:

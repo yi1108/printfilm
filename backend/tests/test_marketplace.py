@@ -586,7 +586,7 @@ async def test_legacy_authorization_cannot_submit_new_work_version(ctx):
     work = (await ctx.client.post("/api/marketplace/works", json={**work_body(video), "source": "printfilm",
             "sale_type": "free", "cover_asset_id": cover.id})).json()
     response = await ctx.client.post(f"/api/marketplace/works/{work['id']}/submit", json={"version": work["version"]})
-    assert response.status_code == 400 and "现行 PrintFilm 授权函" in response.json()["detail"]
+    assert response.status_code == 400 and "现行 PRINTFILM 授权函" in response.json()["detail"]
     unchanged = await ctx.db.get(Work, work["id"])
     assert unchanged.audit_status == "draft" and not unchanged.listed
 

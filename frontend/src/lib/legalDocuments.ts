@@ -25,7 +25,7 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
     "title": "Terms of Use",
     "updatedAt": "November 9, 2026",
     "intro": [
-      "These Terms of Use (“Terms”) are a contract between you and Shenzhen Depei Open Source Data Technology Co., Ltd. (“PrintFilm,” “we,” “us,” or “our”). They govern your access to and use of the PrintFilm mobile application, the website at [https://www.printfilm.com](https://www.printfilm.com), and related generation, playback, and account services (together, the “Service”).",
+      "These Terms of Use (“Terms”) are a contract between you and Shenzhen Depei Open Source Data Technology Co., Ltd. (“PRINTFILM,” “we,” “us,” or “our”). They govern your access to and use of the PRINTFILM mobile application, the website at [https://www.printfilm.com](https://www.printfilm.com), and related generation, playback, and account services (together, the “Service”).",
       "By creating an account, tapping agree, purchasing credits or Studio access, or otherwise using the Service, you agree to these Terms and to our [Privacy Policy](/privacy). If you do not agree, do not use the Service."
     ],
     "sections": [
@@ -34,7 +34,7 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
         "blocks": [
           {
             "type": "paragraph",
-            "text": "PrintFilm lets you watch short films and create images and videos from prompts. Depending on the feature, the Service includes:"
+            "text": "PRINTFILM lets you watch short films and create images and videos from prompts. Depending on the feature, the Service includes:"
           },
           {
             "type": "bullets",
@@ -42,7 +42,7 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
               "A Watch feed of short videos, including free, preview, and credit-unlocked titles;",
               "Cloud generation of images and videos from text you submit, and from photos you choose to upload;",
               "On-device Studio tools, including Assistant, Voice, and Music, after a separate one-time purchase;",
-              "A PrintFilm account, credit balance, usage history, and purchased-video library;",
+              "A PRINTFILM account, credit balance, usage history, and purchased-video library;",
               "Comments, likes, shares, and other community features where we enable them."
             ]
           },
@@ -57,7 +57,7 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
         "blocks": [
           {
             "type": "paragraph",
-            "text": "You must be at least 13 years old, or the higher minimum age required where you live, to use PrintFilm. If you are under 18, you may use the Service only with the consent of a parent or legal guardian, and that person is responsible for your use. The Service is not directed to children under 13."
+            "text": "You must be at least 13 years old, or the higher minimum age required where you live, to use PRINTFILM. If you are under 18, you may use the Service only with the consent of a parent or legal guardian, and that person is responsible for your use. The Service is not directed to children under 13."
           }
         ]
       },
@@ -66,11 +66,11 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
         "blocks": [
           {
             "type": "paragraph",
-            "text": "You register with an email address and password and choose a display name. You may also add an optional phone number and profile photo. You are responsible for keeping your credentials confidential and for activity under your account. Tell us promptly at [support@printfilm.com](mailto:support@printfilm.com) if you believe your account is compromised."
+            "text": "You register with an email address and password and choose a display name. You may also add an optional phone number and profile photo. You are responsible for keeping your credentials confidential and for activity under your account. Tell us promptly at [kefu@gitcc.com](mailto:kefu@gitcc.com) if you believe your account is compromised."
           },
           {
             "type": "paragraph",
-            "text": "You may browse limited parts of Watch as a guest. Guest use does not create a credit balance or a purchased-video library. Credits, generation history, and unlocks stay with the PrintFilm account that acquired them."
+            "text": "You may browse limited parts of Watch as a guest. Guest use does not create a credit balance or a purchased-video library. Credits, generation history, and unlocks stay with the PRINTFILM account that acquired them."
           },
           {
             "type": "paragraph",
@@ -83,17 +83,17 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
         "blocks": [
           {
             "type": "paragraph",
-            "text": "If you downloaded PrintFilm from Apple’s App Store, these additional terms apply:"
+            "text": "If you downloaded PRINTFILM from Apple’s App Store, these additional terms apply:"
           },
           {
             "type": "bullets",
             "items": [
-              "These Terms are between you and PrintFilm only, not with Apple Inc. (“Apple”). Apple is not responsible for the Service or its content.",
+              "These Terms are between you and PRINTFILM only, not with Apple Inc. (“Apple”). Apple is not responsible for the Service or its content.",
               "Your use of the app must also comply with the App Store terms and the Usage Rules in the Apple Media Services terms.",
-              "Apple has no obligation to provide maintenance or support for the app. Support requests should be sent to [support@printfilm.com](mailto:support@printfilm.com).",
-              "If the app fails to conform to an applicable warranty, you may notify Apple, and Apple may refund the purchase price of the app itself, if any. To the maximum extent permitted by law, Apple has no other warranty obligation for the app. Any other claim, loss, or liability relating to the app is PrintFilm’s responsibility, subject to these Terms.",
+              "Apple has no obligation to provide maintenance or support for the app. Support requests should be sent to [kefu@gitcc.com](mailto:kefu@gitcc.com).",
+              "If the app fails to conform to an applicable warranty, you may notify Apple, and Apple may refund the purchase price of the app itself, if any. To the maximum extent permitted by law, Apple has no other warranty obligation for the app. Any other claim, loss, or liability relating to the app is PRINTFILM’s responsibility, subject to these Terms.",
               "Apple is not responsible for claims relating to the app or your possession or use of it, including product-liability claims, claims that the app fails to meet a legal requirement, and consumer-protection or privacy claims.",
-              "If a third party claims that the app or your use of it infringes that party’s intellectual-property rights, PrintFilm, not Apple, is responsible for the investigation, defense, settlement, and discharge of that claim, to the extent required by Apple’s terms.",
+              "If a third party claims that the app or your use of it infringes that party’s intellectual-property rights, PRINTFILM, not Apple, is responsible for the investigation, defense, settlement, and discharge of that claim, to the extent required by Apple’s terms.",
               "You represent that you are not located in a country subject to a U.S. Government embargo or designated as a “terrorist supporting” country, and that you are not listed on any U.S. Government list of prohibited or restricted parties.",
               "Apple and Apple’s subsidiaries are third-party beneficiaries of this section and may enforce it against you."
             ]
@@ -109,17 +109,17 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
         "blocks": [
           {
             "type": "paragraph",
-            "text": "Cloud generation and paid Watch titles use PrintFilm credits held in your account."
+            "text": "Cloud generation and paid Watch titles use PRINTFILM credits held in your account."
           },
           {
             "type": "bullets",
             "items": [
               "Credit packs are consumable in-app purchases. The price is the price displayed by Apple at checkout.",
               "Credits do not expire and have no cash value. They are not a bank balance, deposit, or e-money, and they cannot be redeemed for cash or transferred to another person, except where we expressly agree in writing, for example an enterprise arrangement requested through support.",
-              "A completed credit purchase is added to the PrintFilm account that was signed in at checkout. Sign in to that same account to see the balance and purchase history. Using Restore Purchases does not grant those credits a second time.",
+              "A completed credit purchase is added to the PRINTFILM account that was signed in at checkout. Sign in to that same account to see the balance and purchase history. Using Restore Purchases does not grant those credits a second time.",
               "When generation starts, we may place a hold based on an estimate and then settle the charge from actual use, including tokens processed for the request. Image generation and video generation can cost different amounts. The usage screen shows the record we have for your account.",
               "If Apple approves a refund, we may reverse unused credits from that purchase and adjust related access. Credits already spent on a completed generation or unlock are not restored unless we are required to do so.",
-              "The same account balance may be available on the PrintFilm website. Credits bought outside the iOS app, where that is offered, can be used in the app. Inside the iOS app, you buy credits only through Apple."
+              "The same account balance may be available on the PRINTFILM website. Credits bought outside the iOS app, where that is offered, can be used in the app. Inside the iOS app, you buy credits only through Apple."
             ]
           },
           {
@@ -146,7 +146,7 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
         "blocks": [
           {
             "type": "paragraph",
-            "text": "Some Watch titles can be previewed and then unlocked with credits. The app shows the credit price before you confirm. An unlock is for the published version you purchased and is tied to your PrintFilm account. It is not a transfer of copyright in the film. If a title is removed, restricted, or no longer playable, we may provide the access our playback rules allow for that purchased version, or the remedy required by law. Unlocking spends credits and is separate from buying a credit pack."
+            "text": "Some Watch titles can be previewed and then unlocked with credits. The app shows the credit price before you confirm. An unlock is for the published version you purchased and is tied to your PRINTFILM account. It is not a transfer of copyright in the film. If a title is removed, restricted, or no longer playable, we may provide the access our playback rules allow for that purchased version, or the remedy required by law. Unlocking spends credits and is separate from buying a credit pack."
           }
         ]
       },
@@ -181,7 +181,7 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
         "blocks": [
           {
             "type": "paragraph",
-            "text": "You keep ownership of the prompts, photos, comments, and other materials you submit (“Your Content”), subject to rights others already have in those materials. You grant PrintFilm a worldwide, non-exclusive license to host, reproduce, process, display, and distribute Your Content and the outputs created from it only as needed to operate, secure, moderate, and improve the Service, and to show content you choose to publish in Watch or comments."
+            "text": "You keep ownership of the prompts, photos, comments, and other materials you submit (“Your Content”), subject to rights others already have in those materials. You grant PRINTFILM a worldwide, non-exclusive license to host, reproduce, process, display, and distribute Your Content and the outputs created from it only as needed to operate, secure, moderate, and improve the Service, and to show content you choose to publish in Watch or comments."
           },
           {
             "type": "paragraph",
@@ -206,7 +206,7 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
           },
           {
             "type": "paragraph",
-            "text": "When we receive a report of content that violates these Terms, we will act on it within 24 hours where the report gives us enough information to identify the content, including by removing the content and restricting the account of a user who posted it. You can also email [support@printfilm.com](mailto:support@printfilm.com)."
+            "text": "When we receive a report of content that violates these Terms, we will act on it within 24 hours where the report gives us enough information to identify the content, including by removing the content and restricting the account of a user who posted it. You can also email [kefu@gitcc.com](mailto:kefu@gitcc.com)."
           }
         ]
       },
@@ -215,11 +215,11 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
         "blocks": [
           {
             "type": "paragraph",
-            "text": "PrintFilm, the app, the website, our name and logo, and the software and design of the Service are owned by us or our licensors. These Terms do not give you any right to use our branding, except to identify the Service truthfully. You may not copy the Service or bypass technical limits."
+            "text": "PRINTFILM, the app, the website, our name and logo, and the software and design of the Service are owned by us or our licensors. These Terms do not give you any right to use our branding, except to identify the Service truthfully. You may not copy the Service or bypass technical limits."
           },
           {
             "type": "paragraph",
-            "text": "If you believe content on the Service infringes your copyright, email [support@printfilm.com](mailto:support@printfilm.com) with: your name and contact details; a description of the work; the URL or in-app location of the material; a statement that you have a good-faith belief the use is not authorized; and a statement, under penalty of perjury where applicable, that the information is accurate and that you are the owner or the owner’s agent. We may remove the material and, where appropriate, notify the account holder."
+            "text": "If you believe content on the Service infringes your copyright, email [kefu@gitcc.com](mailto:kefu@gitcc.com) with: your name and contact details; a description of the work; the URL or in-app location of the material; a statement that you have a good-faith belief the use is not authorized; and a statement, under penalty of perjury where applicable, that the information is accurate and that you are the owner or the owner’s agent. We may remove the material and, where appropriate, notify the account holder."
           }
         ]
       },
@@ -250,7 +250,7 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
         "blocks": [
           {
             "type": "paragraph",
-            "text": "To the maximum extent permitted by law, PrintFilm and its directors, employees, and suppliers will not be liable for indirect, incidental, special, consequential, or punitive damages, or for loss of profits, data, goodwill, or content, arising out of the Service or these Terms."
+            "text": "To the maximum extent permitted by law, PRINTFILM and its directors, employees, and suppliers will not be liable for indirect, incidental, special, consequential, or punitive damages, or for loss of profits, data, goodwill, or content, arising out of the Service or these Terms."
           },
           {
             "type": "paragraph",
@@ -267,7 +267,7 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
         "blocks": [
           {
             "type": "paragraph",
-            "text": "You will indemnify and hold PrintFilm harmless from claims, damages, and reasonable legal fees arising out of Your Content, your use of outputs, or your breach of these Terms, except to the extent caused by our own breach or unlawful conduct, and except where the law does not allow this indemnity."
+            "text": "You will indemnify and hold PRINTFILM harmless from claims, damages, and reasonable legal fees arising out of Your Content, your use of outputs, or your breach of these Terms, except to the extent caused by our own breach or unlawful conduct, and except where the law does not allow this indemnity."
           }
         ]
       },
@@ -316,7 +316,7 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
         "blocks": [
           {
             "type": "paragraph",
-            "text": "Shenzhen Depei Open Source Data Technology Co., Ltd.\nEmail: [support@printfilm.com](mailto:support@printfilm.com)\nWebsite: [https://www.printfilm.com](https://www.printfilm.com)\nSupport: [https://www.printfilm.com/support](https://www.printfilm.com/support)"
+            "text": "Shenzhen Depei Open Source Data Technology Co., Ltd.\nEmail: [kefu@gitcc.com](mailto:kefu@gitcc.com)\nPhone: [0755-27337894](tel:+8675527337894)\nWeChat: gitcc188\nWebsite: [https://www.printfilm.com](https://www.printfilm.com)\nSupport: [Contact us](/contact)"
           }
         ]
       }
@@ -327,8 +327,8 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
     "title": "Privacy Policy",
     "updatedAt": "November 9, 2026",
     "intro": [
-      "Shenzhen Depei Open Source Data Technology Co., Ltd. (“PrintFilm,” “we,” “us,” or “our”) respects your privacy. This policy explains how we collect, use, and share information when you use the PrintFilm iOS app, [https://www.printfilm.com](https://www.printfilm.com), and related generation, playback, and account services (the “Service”).",
-      "If you do not agree with this policy, do not use the Service. Our [Terms of Use](/terms) explain the rules for using PrintFilm."
+      "Shenzhen Depei Open Source Data Technology Co., Ltd. (“PRINTFILM,” “we,” “us,” or “our”) respects your privacy. This policy explains how we collect, use, and share information when you use the PRINTFILM iOS app, [https://www.printfilm.com](https://www.printfilm.com), and related generation, playback, and account services (the “Service”).",
+      "If you do not agree with this policy, do not use the Service. Our [Terms of Use](/terms) explain the rules for using PRINTFILM."
     ],
     "sections": [
       {
@@ -336,7 +336,7 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
         "blocks": [
           {
             "type": "paragraph",
-            "text": "The controller of your personal information is Shenzhen Depei Open Source Data Technology Co., Ltd. You can contact us at [support@printfilm.com](mailto:support@printfilm.com)."
+            "text": "The controller of your personal information is Shenzhen Depei Open Source Data Technology Co., Ltd. You can contact us at [kefu@gitcc.com](mailto:kefu@gitcc.com)."
           }
         ]
       },
@@ -377,7 +377,7 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
           },
           {
             "type": "paragraph",
-            "text": "**Support messages.** If you email [support@printfilm.com](mailto:support@printfilm.com), we keep the message and the contact details you send, including information you choose to include about a problem."
+            "text": "**Support messages.** If you email [kefu@gitcc.com](mailto:kefu@gitcc.com), we keep the message and the contact details you send, including information you choose to include about a problem."
           },
           {
             "type": "paragraph",
@@ -478,7 +478,7 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
           },
           {
             "type": "paragraph",
-            "text": "Where the GDPR or UK GDPR requires a transfer tool, we use an approved mechanism, such as the European Commission’s standard contractual clauses and the UK addendum or International Data Transfer Agreement, together with safeguards appropriate to the transfer. You may ask for a summary of the relevant safeguard by emailing [support@printfilm.com](mailto:support@printfilm.com)."
+            "text": "Where the GDPR or UK GDPR requires a transfer tool, we use an approved mechanism, such as the European Commission’s standard contractual clauses and the UK addendum or International Data Transfer Agreement, together with safeguards appropriate to the transfer. You may ask for a summary of the relevant safeguard by emailing [kefu@gitcc.com](mailto:kefu@gitcc.com)."
           }
         ]
       },
@@ -538,7 +538,7 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
           },
           {
             "type": "paragraph",
-            "text": "To use any of these rights, email [support@printfilm.com](mailto:support@printfilm.com) from the address on your account, or use Close Account in the app for deletion. We may need to confirm that the request comes from you. We will respond within the time required by applicable law, generally within 30 days, and we will tell you if we need more time."
+            "text": "To use any of these rights, email [kefu@gitcc.com](mailto:kefu@gitcc.com) from the address on your account, or use Close Account in the app for deletion. We may need to confirm that the request comes from you. We will respond within the time required by applicable law, generally within 30 days, and we will tell you if we need more time."
           }
         ]
       },
@@ -547,7 +547,7 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
         "blocks": [
           {
             "type": "paragraph",
-            "text": "PrintFilm is not directed to children under 13, and we do not knowingly collect personal information from children under 13. If you believe a child under 13 has given us personal information, email [support@printfilm.com](mailto:support@printfilm.com) and we will delete it. People under 18 should use the Service only with a parent or guardian’s consent."
+            "text": "PRINTFILM is not directed to children under 13, and we do not knowingly collect personal information from children under 13. If you believe a child under 13 has given us personal information, email [kefu@gitcc.com](mailto:kefu@gitcc.com) and we will delete it. People under 18 should use the Service only with a parent or guardian’s consent."
           }
         ]
       },
@@ -565,7 +565,7 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
         "blocks": [
           {
             "type": "paragraph",
-            "text": "Shenzhen Depei Open Source Data Technology Co., Ltd.\nEmail: [support@printfilm.com](mailto:support@printfilm.com)\nWebsite: [https://www.printfilm.com](https://www.printfilm.com)\nPrivacy Policy: [https://www.printfilm.com/privacy](/privacy)\nTerms of Use: [https://www.printfilm.com/terms](/terms)"
+            "text": "Shenzhen Depei Open Source Data Technology Co., Ltd.\nEmail: [kefu@gitcc.com](mailto:kefu@gitcc.com)\nPhone: [0755-27337894](tel:+8675527337894)\nWeChat: gitcc188\nWebsite: [https://www.printfilm.com](https://www.printfilm.com)\nPrivacy Policy: [https://www.printfilm.com/privacy](/privacy)\nTerms of Use: [https://www.printfilm.com/terms](/terms)"
           }
         ]
       }

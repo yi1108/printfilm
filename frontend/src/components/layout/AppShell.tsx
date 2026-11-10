@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useI18n } from '../../i18n'
 import { GITHUB_REPO_URL } from '../../lib/siteLinks'
+import { BRAND_NAME, COMPANY_NAME_ZH, SUPPORT_EMAIL, SUPPORT_PHONE, SUPPORT_PHONE_HREF, WECHAT_ID } from '../../lib/siteContact'
 import SiteNav, { type NavActive } from './SiteNav'
 import './topbar.css'
 
@@ -35,7 +36,12 @@ export default function AppShell({ children, active, wide, flush, hideFooter }: 
               {t('footer.github')}
             </a>
           </nav>
-          <p>© {new Date().getFullYear()} PRINTFILM. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} {COMPANY_NAME_ZH} · {BRAND_NAME}</p>
+          <p className="pf-shell-footer-contacts">
+            <a href={`mailto:${SUPPORT_EMAIL}`}>{t('footer.email')}：{SUPPORT_EMAIL}</a>
+            <a href={SUPPORT_PHONE_HREF}>{t('footer.phone')}：{SUPPORT_PHONE}</a>
+            <span>{t('footer.wechat')}：{WECHAT_ID}</span>
+          </p>
         </footer>
       ) : null}
     </div>

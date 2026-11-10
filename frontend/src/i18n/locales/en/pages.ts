@@ -1,4 +1,5 @@
 /** 英文：首页、帮助、联系、工具、定价、历史、漫剧列表 */
+import { SUPPORT_EMAIL, SUPPORT_PHONE, SUPPORT_PHONE_HREF, WECHAT_ID } from '../../../lib/siteContact.ts'
 
 export const enPages = {
   home: {
@@ -166,7 +167,7 @@ export const enPages = {
     introLink: 'help center',
     introSuffix: ' first.',
     formTitle: 'Send feedback',
-    formLead: 'Submit opens your mail client with a draft to support@printfilm.com. Please send it after you review.',
+    formLead: `Submit opens your mail client with a draft to ${SUPPORT_EMAIL}. Please send it after you review.`,
     topic: 'Topic',
     email: 'Your email',
     emailPlaceholder: 'So we can reply',
@@ -182,26 +183,46 @@ export const enPages = {
     mailEmail: 'Contact email: {email}',
     mailEmailEmpty: '(not provided)',
     mailEmpty: '(no details)',
+    copyWechat: 'Copy WeChat ID',
+    copied: 'Copied',
     channels: [
       {
+        id: 'email',
         title: 'Email support',
         desc: 'We usually reply in 1–2 business days. Please include your account email and order ID if you have one.',
-        href: 'mailto:support@printfilm.com',
-        actionLabel: 'support@printfilm.com',
+        href: `mailto:${SUPPORT_EMAIL}`,
+        actionLabel: SUPPORT_EMAIL,
       },
       {
+        id: 'phone',
+        title: 'Phone support',
+        desc: 'Call us on weekdays for account, billing, or partnership questions.',
+        href: SUPPORT_PHONE_HREF,
+        actionLabel: SUPPORT_PHONE,
+      },
+      {
+        id: 'wechat',
+        title: 'WeChat support',
+        desc: 'Mention PRINTFILM and your question so we can direct you quickly.',
+        copyText: WECHAT_ID,
+        actionLabel: WECHAT_ID,
+      },
+      {
+        id: 'help',
         title: 'Help center',
         desc: 'Billing, downloads, drama, and tools are covered in self-serve help.',
         href: '/help',
         actionLabel: 'Go to help',
       },
       {
+        id: 'enterprise',
         title: 'Enterprise / wire transfer',
         desc: 'For bulk credits, business partnerships, or invoices, email your company name and request.',
-        href: 'mailto:support@printfilm.com?subject=PRINTFILM%20Enterprise',
+        href: `mailto:${SUPPORT_EMAIL}?subject=PRINTFILM%20Enterprise`,
         actionLabel: 'Email partnerships',
       },
       {
+        id: 'github',
         title: 'Open source',
         desc: 'Source, issues, and deployment docs are on GitHub. Stars, issues, and PRs welcome.',
         href: 'https://github.com/yi1108/printfilm',

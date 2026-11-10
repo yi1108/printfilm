@@ -249,7 +249,7 @@ docker-compose.full.yml   Build from source
 ## Community
 
 - GitHub: https://github.com/yi1108/printfilm
-- WeChat: add **`gitpp88`** (note “join group”): deploy help / drama chat / template sharing
+- WeChat: add **`gitcc188`** (note “join group”): deploy help / drama chat / template sharing
 
 ## Star History
 

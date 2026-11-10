@@ -5,7 +5,7 @@ const businessMessages: Record<string, string> = {
   MARKETPLACE_STORAGE_UNAVAILABLE: '文件服务暂未配置或暂时不可用，请稍后重试或联系客服。',
   MARKETPLACE_PAYMENT_UNAVAILABLE: '支付服务暂不可用，请稍后重试。',
   MARKETPLACE_REVENUE_CONFIG_REQUIRED: '平台投放收益暂未开放，请联系客服确认。',
-  MARKETPLACE_RIGHTS_REQUIRED: '请先确认版权信息：PrintFilm 作品签署授权函，其他平台作品提交版权证明。',
+  MARKETPLACE_RIGHTS_REQUIRED: '请先确认版权信息：PRINTFILM 作品签署授权函，其他平台作品提交版权证明。',
   MARKETPLACE_EPISODE_NOT_READY: '视频尚未准备好，请稍后刷新查看。',
   MARKETPLACE_ENTITLEMENT_REQUIRED: '请先购买该发布版本的在线播放权益。',
   MARKETPLACE_SOURCE_NOT_READY: '源成片尚未就绪，请完成视频生成后再同步。',

@@ -1,4 +1,5 @@
 /** 中文：首页、帮助、联系、工具、定价、历史、漫剧列表 */
+import { SUPPORT_EMAIL, SUPPORT_PHONE, SUPPORT_PHONE_HREF, WECHAT_ID } from '../../../lib/siteContact.ts'
 
 export const zhPages = {
   home: {
@@ -166,7 +167,7 @@ export const zhPages = {
     introLink: '帮助中心',
     introSuffix: '。',
     formTitle: '留言反馈',
-    formLead: '填写后将打开您的邮件客户端，预填发往 support@printfilm.com 的草稿，请确认后发送。',
+    formLead: `填写后将打开您的邮件客户端，预填发往 ${SUPPORT_EMAIL} 的草稿，请确认后发送。`,
     topic: '问题类型',
     email: '联系邮箱',
     emailPlaceholder: '便于我们回复',
@@ -182,26 +183,46 @@ export const zhPages = {
     mailEmail: '联系邮箱：{email}',
     mailEmailEmpty: '（未填写）',
     mailEmpty: '（无详细描述）',
+    copyWechat: '复制微信号',
+    copied: '已复制',
     channels: [
       {
-        title: '邮箱支持',
+        id: 'email',
+        title: '客服邮箱',
         desc: '工作日一般 1–2 个工作日内回复；请附上账号邮箱与订单号（如有）。',
-        href: 'mailto:support@printfilm.com',
-        actionLabel: 'support@printfilm.com',
+        href: `mailto:${SUPPORT_EMAIL}`,
+        actionLabel: SUPPORT_EMAIL,
       },
       {
+        id: 'phone',
+        title: '客服电话',
+        desc: '账号、充值与业务合作咨询，可在工作日拨打。',
+        href: SUPPORT_PHONE_HREF,
+        actionLabel: SUPPORT_PHONE,
+      },
+      {
+        id: 'wechat',
+        title: '微信客服',
+        desc: '添加微信时请备注 PRINTFILM 与咨询事项，便于快速对接。',
+        copyText: WECHAT_ID,
+        actionLabel: WECHAT_ID,
+      },
+      {
+        id: 'help',
         title: '帮助中心',
         desc: '充值、下载、漫剧与工具等常见问题可先在帮助中心自助查询。',
         href: '/help',
         actionLabel: '前往帮助中心',
       },
       {
+        id: 'enterprise',
         title: '企业合作 / 对公转账',
         desc: '企业批量充值、商务合作或发票需求，请邮件说明公司名称与需求，我们会安排对接。',
-        href: 'mailto:support@printfilm.com?subject=PRINTFILM%20Enterprise',
+        href: `mailto:${SUPPORT_EMAIL}?subject=PRINTFILM%20Enterprise`,
         actionLabel: '发送合作邮件',
       },
       {
+        id: 'github',
         title: '开源仓库',
         desc: '源码、Issue 与部署说明见 GitHub。欢迎 Star、提问题或贡献。',
         href: 'https://github.com/yi1108/printfilm',

@@ -1,11 +1,28 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { HelpCircle, Mail, Building2, GitBranch } from 'lucide-react'
+import { HelpCircle, Mail, Building2, GitBranch, Phone, MessageCircle } from 'lucide-react'
 import AppShell from '../components/layout/AppShell'
 import { useI18n } from '../i18n'
 import { GITHUB_REPO_URL } from '../lib/siteLinks'
+import { SUPPORT_EMAIL, WECHAT_ID } from '../lib/siteContact'
 
-const CHANNEL_ICONS = [Mail, HelpCircle, Building2, GitBranch] as const
+const CHANNEL_ICONS = {
+  email: Mail,
+  phone: Phone,
+  wechat: MessageCircle,
+  help: HelpCircle,
+  enterprise: Building2,
+  github: GitBranch,
+} as const
+
+type ContactChannelView = {
+  id: string
+  title: string
+  desc: string
+  href?: string
+  actionLabel?: string
+  copyText?: string
+}
 
 /** 联系我们：渠道说明 + 本地反馈表单（引导发邮件） */
 export default function ContactPage() {
@@ -20,7 +37,20 @@ export default function ContactPage() {
   const [email, setEmail] = useState('')
   const [message, setMessage] = useState('')
   const [sent, setSent] = useState(false)
+  const [copied, setCopied] = useState(false)
 
+  /** 复制客服微信号，并保留页面中的成功反馈。 */
+  async function copyWechat() {
+    try {
+      await navigator.clipboard.writeText(WECHAT_ID)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1800)
+    } catch {
+      setCopied(false)
+    }
+  }
+
+  /** 根据反馈内容生成发往统一客服邮箱的邮件草稿。 */
   function onSubmit(e: FormEvent) {
     e.preventDefault()
     const body = [
@@ -29,7 +59,7 @@ export default function ContactPage() {
       '',
       message.trim() || t('contact.mailEmpty'),
     ].join('\n')
-    const href = `mailto:support@printfilm.com?subject=${encodeURIComponent(
+    const href = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(
       `[PRINTFILM] ${topic}`,
     )}&body=${encodeURIComponent(body)}`
     window.location.href = href
@@ -53,9 +83,9 @@ export default function ContactPage() {
         </header>
 
         <div className="pf-contact-channels">
-          {m.contact.channels.map((ch, i) => {
-            const Icon = CHANNEL_ICONS[i] || Mail
-            const isExternal = Boolean(ch.href && /^(mailto:|https?:)/i.test(ch.href))
+          {m.contact.channels.map((ch: ContactChannelView) => {
+            const Icon = CHANNEL_ICONS[ch.id as keyof typeof CHANNEL_ICONS] || Mail
+            const isExternal = Boolean(ch.href && /^(mailto:|tel:|https?:)/i.test(ch.href))
             return (
               <article key={ch.title} className="pf-contact-card">
                 <span className="pf-contact-card-icon" aria-hidden>
@@ -63,7 +93,11 @@ export default function ContactPage() {
                 </span>
                 <h2>{ch.title}</h2>
                 <p>{ch.desc}</p>
-                {ch.href ? (
+                {ch.copyText ? (
+                  <button type="button" className="pf-contact-card-link" onClick={() => void copyWechat()}>
+                    {copied ? t('contact.copied') : `${t('contact.copyWechat')} ${ch.copyText}`}
+                  </button>
+                ) : ch.href ? (
                   isExternal ? (
                     <a
                       className="pf-contact-card-link"
@@ -126,7 +160,7 @@ export default function ContactPage() {
             {sent ? (
               <p className="pf-contact-sent pf-muted">
                 {t('contact.sentPrefix')}{' '}
-                <a href="mailto:support@printfilm.com">support@printfilm.com</a>
+                <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
               </p>
             ) : null}
           </form>

@@ -217,6 +217,23 @@
   color: var(--pf-muted);
 }
 
+.pf-shell-footer .pf-shell-footer-contacts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem 1.25rem;
+  margin-top: 0.65rem;
+}
+
+.pf-shell-footer-contacts a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.pf-shell-footer-contacts a:hover {
+  text-decoration: underline;
+}
+
 /* ??? Workspace home (????????) ??? */
 .pf-ws-hero {
   position: relative;
@@ -2119,10 +2136,17 @@
 }
 
 .pf-contact-card-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
   font-size: 0.86rem;
   font-weight: 700;
   color: var(--pf-ink);
   text-decoration: none;
+  cursor: pointer;
 }
 
 .pf-contact-card-link:hover {
