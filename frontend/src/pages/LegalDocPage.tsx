@@ -87,24 +87,24 @@ function LegalBody({ doc }: { doc: LegalDocument }) {
   )
 }
 
-/** 用户协议页。 */
-export function TermsPage() {
+/** 按当前界面语言渲染指定法务文档。 */
+function LegalPage({ slug }: { slug: 'terms' | 'privacy' }) {
+  const { locale } = useI18n()
   return (
     <AppShell>
       <div className="pf-legal-page">
-        <LegalBody doc={getLegalDoc('terms')} />
+        <LegalBody doc={getLegalDoc(slug, locale)} />
       </div>
     </AppShell>
   )
 }
 
+/** 用户协议页。 */
+export function TermsPage() {
+  return <LegalPage slug="terms" />
+}
+
 /** 隐私政策页。 */
 export function PrivacyPage() {
-  return (
-    <AppShell>
-      <div className="pf-legal-page">
-        <LegalBody doc={getLegalDoc('privacy')} />
-      </div>
-    </AppShell>
-  )
+  return <LegalPage slug="privacy" />
 }

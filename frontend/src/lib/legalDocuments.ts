@@ -1,4 +1,7 @@
-/** 由供应方法务 HTML 转换的结构化正文；渲染时不注入原始 HTML。 */
+import { PRIVACY_ZH } from './legalPrivacyZh.ts'
+import { TERMS_ZH } from './legalTermsZh.ts'
+
+/** 法务英文结构化正文；渲染时不注入原始 HTML。 */
 export type LegalBlock =
   | { type: 'paragraph'; text: string }
   | { type: 'bullets'; items: string[] }
@@ -570,7 +573,12 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
   }
 }
 
-/** 返回指定法务文档，路由只接受 terms 或 privacy。 */
-export function getLegalDoc(slug: 'terms' | 'privacy'): LegalDocument {
-  return LEGAL_DOCS[slug]
+const LEGAL_DOCS_ZH: Record<'terms' | 'privacy', LegalDocument> = {
+  terms: TERMS_ZH,
+  privacy: PRIVACY_ZH,
+}
+
+/** 按界面语言返回指定法务文档，路由只接受 terms 或 privacy。 */
+export function getLegalDoc(slug: 'terms' | 'privacy', locale = 'zh'): LegalDocument {
+  return locale === 'en' ? LEGAL_DOCS[slug] : LEGAL_DOCS_ZH[slug]
 }

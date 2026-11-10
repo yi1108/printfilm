@@ -1955,10 +1955,11 @@
 
 .pf-legal-doc {
   padding: 1.5rem 1.25rem 1rem;
-  border: 1px solid #eadfe3;
-  border-radius: 16px;
-  background: #fbf7f8;
-  color: #1c1418;
+  border: 1px solid var(--pf-line);
+  border-radius: 18px;
+  background: var(--pf-bg);
+  color: var(--pf-ink);
+  box-shadow: var(--pf-shadow);
 }
 
 .pf-legal-hero {
@@ -1969,7 +1970,7 @@
 .pf-legal-crumb {
   margin: 0 0 1rem;
   font-size: 0.82rem;
-  color: #5c4e55;
+  color: var(--pf-muted);
 }
 
 .pf-legal-crumb a {
@@ -1980,7 +1981,7 @@
 
 .pf-legal-brand {
   margin: 0 0 0.5rem;
-  color: #c2410c;
+  color: var(--pf-ink);
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -1988,28 +1989,29 @@
 
 .pf-legal-hero h1 {
   margin: 0 0 0.5rem;
-  font-size: 34px;
-  line-height: 1.15;
+  font-size: clamp(1.65rem, 3vw, 2rem);
+  line-height: 1.2;
   letter-spacing: -0.02em;
 }
 
 .pf-legal-meta {
   margin: 0;
-  color: #5c4e55;
+  color: var(--pf-muted);
   font-size: 0.9rem;
 }
 
 .pf-legal-sections {
   padding: 0.5rem 1.75rem 2rem;
-  border: 1px solid #eadfe3;
-  border-radius: 16px;
+  border: 1px solid var(--pf-line);
+  border-radius: 18px;
   background: #fff;
+  box-shadow: var(--pf-shadow);
 }
 
 .pf-legal-intro p,
 .pf-legal-section p,
 .pf-legal-section li {
-  color: #1c1418;
+  color: var(--pf-ink);
   font-size: 1rem;
   line-height: 1.65;
 }
@@ -2039,7 +2041,7 @@
 }
 
 .pf-legal-doc a {
-  color: #c2410c;
+  color: var(--pf-ink);
   text-decoration-thickness: 1px;
   text-underline-offset: 0.16em;
 }
@@ -2050,11 +2052,11 @@
   gap: 0.75rem 1.25rem;
   margin-top: 1.5rem;
   padding: 1rem 0.25rem 0;
-  border-top: 1px solid #eadfe3;
+  border-top: 1px solid var(--pf-line);
 }
 
 .pf-legal-foot-nav a {
-  color: #5c4e55;
+  color: var(--pf-muted);
   font-size: 0.82rem;
   font-weight: 600;
   text-decoration: none;

@@ -4,7 +4,7 @@ import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { createServer } from 'vite'
 
-import { LEGAL_DOCS } from '../src/lib/legalDocuments.ts'
+import { getLegalDoc, LEGAL_DOCS } from '../src/lib/legalDocuments.ts'
 
 const root = new URL('../', import.meta.url)
 
@@ -24,6 +24,7 @@ test('React 法务页使用 AppShell 和结构化正文，不嵌套独立 HTML',
   assert.match(page, /AppShell/)
   assert.match(page, /pf-legal-page/)
   assert.match(page, /LEGAL_DOCS|getLegalDoc/)
+  assert.match(page, /getLegalDoc\(slug, locale\)/)
   assert.doesNotMatch(page, /dangerouslySetInnerHTML|<iframe|srcDoc/)
 })
 
@@ -49,6 +50,31 @@ test('参考文件的全部条款转换为结构化内容且保留关键规则',
   assert.ok(followingIndex > listIndex, '列表后的段落必须保留在列表之后')
 })
 
+test('Terms 与 Privacy 跟随界面语言提供结构一致的中英文版本', () => {
+  for (const slug of ['terms', 'privacy']) {
+    const zh = getLegalDoc(slug, 'zh')
+    const en = getLegalDoc(slug, 'en')
+    assert.notEqual(zh.title, en.title)
+    assert.equal(zh.sections.length, en.sections.length)
+    zh.sections.forEach((section, index) => {
+      assert.equal(section.blocks.length, en.sections[index].blocks.length)
+      assert.deepEqual(
+        section.blocks.map((block) => block.type),
+        en.sections[index].blocks.map((block) => block.type),
+      )
+    })
+  }
+  const terms = getLegalDoc('terms', 'zh')
+  const privacy = getLegalDoc('privacy', 'zh')
+  assert.equal(terms.title, '用户协议')
+  assert.equal(privacy.title, '隐私政策')
+  assert.match(JSON.stringify(terms), /24 小时/)
+  assert.match(JSON.stringify(terms), /Apple 及其子公司是本节条款的第三方受益人/)
+  assert.match(JSON.stringify(privacy), /通常.*30 天/)
+  assert.match(JSON.stringify(privacy), /通常.*7 年/)
+  assert.match(JSON.stringify(privacy), /密码和页面显示的确认词/)
+})
+
 test('法务内容支持站内链接、邮箱和重点文本的安全渲染', async () => {
   const page = await text('src/pages/LegalDocPage.tsx')
   const content = await text('src/lib/legalDocuments.ts')
@@ -58,15 +84,17 @@ test('法务内容支持站内链接、邮箱和重点文本的安全渲染', as
   assert.match(page, /function LegalInlineText/)
 })
 
-test('页面样式参考原文件并适配现有设计体系', async () => {
+test('法务页面复用系统背景、文字、边框、卡片和阴影设计令牌', async () => {
   const styles = await text('src/styles/printfilm.css')
   const legal = styles.match(/\/\* Legal documents \*\/(?<body>[\s\S]*?)(?=\/\* Contact channels \*\/)/)
   assert.ok(legal, '缺少独立法务样式分区')
-  assert.match(legal.groups.body, /#fbf7f8/)
-  assert.match(legal.groups.body, /#eadfe3/)
-  assert.match(legal.groups.body, /#c2410c/)
+  assert.match(legal.groups.body, /var\(--pf-bg\)/)
+  assert.match(legal.groups.body, /var\(--pf-ink\)/)
+  assert.match(legal.groups.body, /var\(--pf-muted\)/)
+  assert.match(legal.groups.body, /var\(--pf-line\)/)
+  assert.match(legal.groups.body, /var\(--pf-shadow\)/)
   assert.match(legal.groups.body, /max-width: 820px/)
-  assert.match(legal.groups.body, /border-radius: 16px/)
+  assert.doesNotMatch(legal.groups.body, /#fbf7f8|#eadfe3|#c2410c/)
 })
 
 test('站内 Legal 入口使用 React 文档导航', async () => {
