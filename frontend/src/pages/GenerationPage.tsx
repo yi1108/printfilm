@@ -1,3 +1,4 @@
+import { points } from '../lib/points'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { ArrowRight, AudioLines, Check, Clock3, Download, Eye, ImagePlus, Layers, Loader2, Mic, Plus, RectangleHorizontal, RectangleVertical, Sparkles, Square, X } from 'lucide-react'
@@ -10,6 +11,7 @@ import PromptMentionPopover from '../components/tools/PromptMentionPopover'
 import { AssetDetailDialog } from '../components/assets/AssetDetailDialog'
 import { useToolRunDetail } from '../hooks/useToolRunDetail'
 import { mediaIcons, type MediaKind, useGenerationText } from '../lib/generationMedia'
+import { formatGenerationErrorMessage } from '../lib/generationError'
 import { fetchMediaBlob, triggerBlobDownload } from '../lib/clientDownload'
 import { useMediaModelsCatalog } from '../hooks/useMediaModelsCatalog'
 import { MediaCostNotice } from '../components/billing/MediaCostNotice'
@@ -257,7 +259,7 @@ function GenerationWorkspace({ kind }: { kind: MediaKind }) {
         <div className="gen-submit-group">
           {kind === 'video' ? <div className="gen-estimate" aria-live="polite">
             {estimateError ? <><strong>{text('预计消耗暂不可用', 'Estimate unavailable')}</strong><button type="button" onClick={retryEstimate}>{text('重新计算', 'Retry estimate')}</button></> : quote ? <>
-              <span>{text('预计消耗', 'Estimated cost')} <strong>{quote.billing_enabled ? `¥${(quote.estimate_fen / 100).toFixed(2)}` : text('本次不扣费', 'No charge')}</strong></span>
+              <span>{text('预计消耗', 'Estimated cost')} <strong>{quote.billing_enabled ? points(quote.estimate_fen) : text('本次不扣费', 'No charge')}</strong></span>
               <small>{text(quote.billing_enabled ? quote.billing_mode === 'fixed_media' ? `${duration.replace('s', '')} 秒 × 1 条 · 按当前价格结算` : '按当前配置估算，最终按实际用量结算' : '当前站点未开启计费', quote.billing_enabled ? quote.billing_mode === 'fixed_media' ? `${duration.replace('s', '')} sec × 1 video · Current pricing` : 'Estimated; settled on actual usage' : 'Billing is disabled on this site')}</small>
             </> : <span>{text(estimating ? '正在计算预计消耗…' : referenceError || '选择模型和参数后显示预计消耗', estimating ? 'Estimating cost…' : referenceError ? 'Add valid reference media to estimate cost' : 'Choose a model and settings to estimate cost')}</span>}
           </div> : <span>{text('生成记录自动保存', 'Creations saved automatically')}</span>}
@@ -287,7 +289,7 @@ function GenerationWorkspace({ kind }: { kind: MediaKind }) {
     {detail && detailAsset && <AssetDetailDialog asset={detailAsset} onClose={closeDetail}
       notice={<section className="pf-asset-detail-prompt"><div className="pf-asset-detail-text">
         <p role="status">{text(detail.status === 'succeeded' ? '已完成' : detail.status === 'failed' ? '生成失败' : detail.status === 'cancelled' ? '已取消' : '正在生成，结果会自动更新。', detail.status === 'succeeded' ? 'Completed' : detail.status === 'failed' ? 'Generation failed' : detail.status === 'cancelled' ? 'Cancelled' : 'Generating. Results will update automatically.')}</p>
-        {(detail.error || detailError) && <p role="alert">{detail.error || detailError}</p>}
+        {(detail.error || detailError) && <p role="alert">{formatGenerationErrorMessage(detail.error || detailError)}</p>}
       </div></section>}
       actions={detail.urls.length > 1 && <div className="pf-asset-detail-utilities" role="group" aria-label={text('生成结果', 'Generation results')}>
         {detail.urls.map((url, index) => <button type="button" key={url} className="pf-btn pf-btn-sm" aria-pressed={resultIndex === index} onClick={() => selectResult(index)}>{text(`结果 ${index + 1}`, `Result ${index + 1}`)}</button>)}

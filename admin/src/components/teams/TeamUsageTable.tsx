@@ -15,7 +15,7 @@ import { TeamQueryFeedback } from "./TeamQueryFeedback";
 import { teamDate } from "@/lib/teamLabels";
 import { useAdminTeamQuery } from "@/hooks/useAdminTeamQuery";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
-import { fenToYuan } from "@/lib/utils";
+import { points } from "@/lib/points";
 
 /** 团队消费明细与筛选合计；成员深链可继续查看已退出成员的历史记录。 */
 export function TeamUsageTable({ teamId }: { teamId: number }) {
@@ -48,7 +48,7 @@ export function TeamUsageTable({ teamId }: { teamId: number }) {
     {memberId && <div className="flex items-center gap-3 text-sm"><Badge variant="info">仅查看成员 #{memberId}</Badge><Button type="button" variant="ghost" size="sm" onClick={() => { const next = new URLSearchParams(params); next.delete("member_id"); setParams(next, { replace: true }); setPage(1); }}>查看全部成员</Button></div>}
     <AdminListStats items={[
       { label: "筛选结果记录数", value: data?.summary.record_count ?? "—" },
-      { label: "筛选结果已结算消费", value: data ? `¥${fenToYuan(data.summary.settled_charge_fen)}` : "—", hint: "按全部筛选结果汇总，不受分页影响；不含待结算金额" },
+      { label: "筛选结果已结算消费", value: data ? `${points(data.summary.settled_charge_fen)}` : "—", hint: "按全部筛选结果汇总，不受分页影响；不含待结算金额" },
     ]} />
     <TeamQueryFeedback loading={loading} error={error} empty={!data?.items.length} onRetry={reload} />
     {data && data.items.length > 0 && <Table><TableHeader><TableRow>
@@ -59,7 +59,7 @@ export function TeamUsageTable({ teamId }: { teamId: number }) {
       <TableCell><div>{row.project_title || (row.project_id ? "项目已删除" : "无项目关联")}</div><div className="mt-1 text-xs text-[var(--admin-muted)]">{row.project_id ? `项目 #${row.project_id} · ` : ""}{row.task_run_id ? `任务 #${row.task_run_id}` : "无任务关联"}</div></TableCell>
       <TableCell><div>{row.billing_label}</div><div className="mt-1 text-xs text-[var(--admin-muted)]">{row.model || "—"}</div></TableCell>
       <TableCell className="tabular-nums">{row.total_tokens.toLocaleString()}</TableCell>
-      <TableCell className="font-semibold tabular-nums">¥{fenToYuan(row.charge_fen)}</TableCell>
+      <TableCell className="font-semibold tabular-nums">{points(row.charge_fen)}</TableCell>
       <TableCell><Badge variant={row.settled ? "success" : "warning"}>{row.settled ? "已结算" : "待结算"}</Badge></TableCell>
     </TableRow>)}</TableBody></Table>}
     {data && <PaginationBar page={page} pageSize={pageSize} total={data.meta.total} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} />}

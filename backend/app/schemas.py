@@ -64,6 +64,11 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(min_length=6, max_length=64)
 
 
+class CloseAccountRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=64)
+    confirmation: str = Field(min_length=1, max_length=16)
+
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
@@ -444,7 +449,8 @@ class AdminQueuesOut(BaseModel):
 
 class AdminUserOut(BaseModel):
     id: int
-    email: EmailStr
+    # 管理端展示历史账号及注销墓碑；匿名 .invalid 地址不作为登录输入校验。
+    email: str = Field(max_length=255)
     nickname: str
     quota_left: int
     balance_fen: int
@@ -485,6 +491,9 @@ class AdminOrderOut(BaseModel):
     sku_id: str
     amount_fen: int
     credit_fen: int
+    payment_currency: str | None = None
+    payment_amount_minor: int | None = None
+    payment_exchange_rate: str | None = None
     pay_type: str
     status: str
     trade_no: str | None

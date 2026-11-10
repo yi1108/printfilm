@@ -379,7 +379,7 @@ function DramaListInner({ workflow }: { workflow: DramaWorkflow }) {
           </div>
         ) : null}
       </div>
-      {publishProjectId && capabilities?.enabled && <DramaPublishModal projectId={publishProjectId} onClose={() => setPublishProjectId(null)} />}
+      {publishProjectId && capabilities?.enabled && <DramaPublishModal projectId={publishProjectId} selectReady onClose={() => setPublishProjectId(null)} />}
     </AppShell>
   )
 }

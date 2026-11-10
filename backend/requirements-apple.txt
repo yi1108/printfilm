@@ -1,0 +1,2 @@
+# Apple 官方渠道验签依赖，由统一资金服务完成充值履约。
+app-store-server-library==3.1.2

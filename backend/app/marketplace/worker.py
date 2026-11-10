@@ -17,7 +17,7 @@ from sqlalchemy import and_, or_, select, update
 from app.config import get_settings
 from app.database import AsyncSessionLocal, engine
 from . import storage
-from .config import get_marketplace_settings, is_marketplace_enabled
+from .config import get_marketplace_settings, is_marketplace_enabled, video_duration_limit
 from .models import Asset, MarketBase, MediaJob, PlaybackJob, Publication, Recruit, Series, SeriesEpisode, Upload, Work
 from .service import now, notify
 
@@ -136,7 +136,7 @@ async def process_asset(asset: dict) -> dict:
         # MP4 is the primary upload format.  Keep probing independent from
         # upload filename and accept the three supported video containers.
         formats = "mov,mp4,matroska,webm" if asset["kind"] == "video" else "png_pipe,jpeg_pipe,webp_pipe"
-        probe = json.loads(await command(upstream.ffprobe_path, "-v", "error", "-protocol_whitelist", "file,pipe", "-format_whitelist", formats, "-show_format", "-show_streams", "-of", "json", str(source), timeout=60))
+        probe = json.loads(await command(upstream.ffprobe_path, "-v", "error", "-protocol_whitelist", "file,pipe", "-format_whitelist", formats, "-show_format", "-show_streams", "-show_data", "-of", "json", str(source), timeout=60))
         videos = [stream for stream in probe.get("streams", []) if stream.get("codec_type") == "video"]
         if not videos:
             raise ValueError("文件不包含有效画面")
@@ -156,7 +156,7 @@ async def process_asset(asset: dict) -> dict:
         if not any(name in format_name.split(",") for name in ("mov", "mp4", "matroska", "webm")):
             raise ValueError("只支持 MP4、MOV、WebM 视频")
         duration = float(probe.get("format", {}).get("duration", 0))
-        if not 0 < duration <= settings.max_duration_seconds:
+        if not 0 < duration <= video_duration_limit():
             raise ValueError("视频时长无效或超过30分钟限制")
         # Upload processing only validates the source and records metadata.
         # Free works play the original object, while paid works create their
@@ -164,7 +164,9 @@ async def process_asset(asset: dict) -> dict:
         # HLS is packaged only after approval.  Generating previews for every
         # upload here made free content appear perpetually "processing" and
         # needlessly changed video quality.
-        return {**result, "duration_seconds": duration}
+        from .drama_geometry import stream_display_size
+        display_width, display_height = stream_display_size(videos[0])
+        return {**result, "duration_seconds": duration, "display_width": display_width, "display_height": display_height}
 
 
 async def heartbeat(job_id: int, token: str) -> None:
@@ -197,6 +199,35 @@ async def claim() -> tuple[int, str, dict] | None:
         snapshot = {key: getattr(asset, key) for key in ("id", "filename", "object_key", "kind", "size_bytes", "content_type")}
         await db.commit()
         return item.id, item.lease_token, snapshot
+
+
+async def backfill_display_size_once() -> bool:
+    """每次最多补一条已入库但没有画幅的视频；失败写成 0，避免反复下载坏文件。"""
+    async with AsyncSessionLocal() as db:
+        asset = (await db.execute(select(Asset).where(Asset.kind == "video", Asset.status == "ready", Asset.display_width.is_(None)).order_by(Asset.id).limit(1))).scalar_one_or_none()
+        if not asset:
+            return False
+        snapshot = {"id": asset.id, "filename": asset.filename, "object_key": asset.object_key}
+    width = height = 0
+    try:
+        with tempfile.TemporaryDirectory(prefix="job-", dir=cache_root()) as directory:
+            source = Path(directory) / ("source" + Path(snapshot["filename"] or "video.mp4").suffix.lower())
+            await asyncio.to_thread(storage.download, snapshot["object_key"], source)
+            upstream = get_settings()
+            probe = json.loads(await command(upstream.ffprobe_path, "-v", "error", "-protocol_whitelist", "file,pipe", "-show_format", "-show_streams", "-show_data", "-of", "json", str(source), timeout=60))
+            videos = [stream for stream in probe.get("streams", []) if stream.get("codec_type") == "video"]
+            if videos:
+                from .drama_geometry import stream_display_size
+                width, height = stream_display_size(videos[0])
+    except Exception:
+        logger.warning("视频画幅补齐失败 asset=%s", snapshot["id"])
+        width = height = 0
+    async with AsyncSessionLocal() as db:
+        row = await db.get(Asset, snapshot["id"])
+        if row is not None and row.display_width is None:
+            row.display_width, row.display_height = width, height
+            await db.commit()
+    return True
 
 
 async def run_once() -> bool:
@@ -369,6 +400,18 @@ async def refresh_storage_settings() -> None:
     reload_settings()
 
 
+async def run_app_media_if_ready() -> bool:
+    """复用市场并发槽，App关闭或未显式迁移时不查询其媒体及财务表。"""
+    from .app_access import app_open
+    if not app_open():
+        return False
+    from .app_bootstrap import schema_ready
+    if not await schema_ready():
+        return False
+    from .app_media import run_app_media_once
+    return await run_app_media_once()
+
+
 async def run_loop(*, standalone: bool = False) -> None:
     """后端内嵌与独立命令共用循环；不释放共享数据库连接池。"""
     from sqlalchemy import text
@@ -390,7 +433,9 @@ async def run_loop(*, standalone: bool = False) -> None:
                         from .handoff import run_handoff_once
                         await run_handoff_once()
                         await run_once()
+                        await backfill_display_size_once()
                         await package_publication_once()
+                        await run_app_media_if_ready()
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -403,9 +448,15 @@ async def main() -> None:
     if not is_marketplace_enabled():
         logger.info("下游模块未启用，Worker 不启动")
         return
-    async with engine.begin() as conn:
-        await conn.run_sync(MarketBase.metadata.create_all)
     try:
+        from .app_schema import legacy_marketplace_tables
+        async with engine.begin() as conn:
+            await conn.run_sync(lambda connection: MarketBase.metadata.create_all(connection, tables=legacy_marketplace_tables()))
+        from .app_settings import is_app_enabled
+        if is_app_enabled():
+            from .app_bootstrap import verify_schema
+            if await verify_schema():
+                raise RuntimeError("App数据库结构未准备，请先执行 App 显式增量迁移并检查。")
         await run_loop(standalone=True)
     finally:
         await engine.dispose()

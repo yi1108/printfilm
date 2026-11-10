@@ -8,6 +8,7 @@ from app.database import get_db
 from app.deps import get_current_admin
 from app.models import Order, User
 from app.schemas import AdminOrderListOut, AdminOrderOut, PageMeta
+from app.services.stripe_payments import payment_snapshot
 
 router = APIRouter()
 
@@ -52,6 +53,7 @@ async def list_orders(
     items: list[AdminOrderOut] = []
     for order, email in rows:
         data = AdminOrderOut.model_validate(order)
+        data = data.model_copy(update=payment_snapshot(order))
         data.user_email = email
         items.append(data)
 

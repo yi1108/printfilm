@@ -3,6 +3,13 @@ import { fetchMediaBlob, triggerBlobDownload } from './clientDownload'
 
 const VIDEO_EXT = /\.(mp4|webm|mov)(\?|#|$)/i
 const AUDIO_EXT = /\.(mp3|wav|m4a|aac|ogg|flac|webm)(\?|#|$)/i
+const IMAGE_EXT = /\.(png|jpe?g|gif|webp|avif|bmp|svg)(\?|#|$)/i
+
+/** 视频 poster 仅使用图片，旧画布误存的 MP4 封面不能挡住首帧。 */
+export function videoPosterUrl(url?: string | null): string | undefined {
+  const value = (url || '').trim()
+  return IMAGE_EXT.test(value.split(/[?#]/, 1)[0]) || /^data:image\//i.test(value) ? value : undefined
+}
 
 /** 成片 URL 是否可按视频播放 */
 export function isPlayableVideoUrl(url: string) {

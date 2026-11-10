@@ -339,7 +339,7 @@ async def _get_or_create_app_row(db: AsyncSession) -> AppSettings:
     row = (await db.execute(select(AppSettings).where(AppSettings.id == "default"))).scalar_one_or_none()
     if row:
         return row
-    row = AppSettings(id="default", config_json={"flat": _settings_to_dict()})
+    row = AppSettings(id="default", config_json={"flat": _encrypt_flat_config(_settings_to_dict())})
     db.add(row)
     await db.flush()
     return row
@@ -382,11 +382,13 @@ async def _ensure_bootstrapped_channels(db: AsyncSession) -> list[SystemModelCha
         rows.append(row)
     logical_models, defaults = _bootstrap_logical_from_channels(channels)
     app_row = await _get_or_create_app_row(db)
-    app_row.config_json = {
-        "flat": _settings_to_dict(),
-        "logical_models": [model.model_dump() for model in logical_models],
-        "default_models": default_models_to_dict(defaults),
-    }
+    # A first direct settings PATCH may have already saved payment values.
+    # Preserve them when initializing model channels, and encrypt env secrets.
+    config = dict(app_row.config_json or {})
+    config["flat"] = _encrypt_flat_config(_effective_flat(_decrypt_flat_config(config)))
+    config.setdefault("logical_models", [model.model_dump() for model in logical_models])
+    config.setdefault("default_models", default_models_to_dict(defaults))
+    app_row.config_json = config
     await db.commit()
     return rows
 
@@ -431,7 +433,27 @@ async def _ensure_tokenfree_channel(db: AsyncSession, existing: list[SystemModel
 
 def _settings_to_dict(settings: Settings | None = None) -> dict[str, Any]:
     src = settings or get_settings()
-    return {field: getattr(src, field) for field in model_config_field_names()}
+    result = {field: getattr(src, field) for field in model_config_field_names()}
+    # Preserve legacy environment/file credentials when first adopting DB settings.
+    from app.marketplace.app_settings import get_app_settings
+    from app.marketplace.apple_configuration import material
+    cfg = get_app_settings()
+    for key in result:
+        if key.startswith("apple_") and key not in _overlay:
+            result[key] = getattr(cfg, key, result[key])
+    result["apple_app_id"] = result["apple_app_id"] or 0
+    if "apple_private_key" not in _overlay or "apple_root_certificates" not in _overlay:
+        try:
+            private, roots = material(cfg)
+            if "apple_private_key" not in _overlay:
+                result["apple_private_key"] = private
+            if "apple_root_certificates" not in _overlay and roots:
+                from cryptography import x509
+                from cryptography.hazmat.primitives import serialization
+                result["apple_root_certificates"] = "".join(x509.load_der_x509_certificate(root).public_bytes(serialization.Encoding.PEM).decode() for root in roots)
+        except (OSError, ValueError):
+            pass
+    return result
 
 
 def _decrypt_flat_config(raw: dict[str, Any] | None) -> dict[str, Any]:
@@ -533,6 +555,10 @@ async def _compose_runtime_state(db: AsyncSession) -> tuple[list[SystemModelChan
     # 4.5 档用价目名
     flat["model_image_45"] = (flat.get("model_image_45") or "seedream-4-5").strip()
     flat["model_image_45"] = _TOKENFREE_IMAGE_IDS.get(flat["model_image_45"].lower(), flat["model_image_45"])
+    # Initial channel bootstrap can expire the server-updated timestamp. Fetch
+    # it explicitly instead of causing async ORM IO while serializing output.
+    await db.flush()
+    await db.refresh(app_row, attribute_names=["updated_at"])
     return channels, logical_models, default_models, flat, app_row
 
 
@@ -562,6 +588,8 @@ async def load_model_settings_cache(db: AsyncSession) -> None:
                               reference_limit_settings(config.get("media_reference_limits")))
     _refresh_overlay({"flat": flat})
     reload_settings()
+    from app.marketplace.app_settings import get_app_settings
+    get_app_settings.cache_clear()
 
 
 def _build_readiness(
@@ -593,6 +621,8 @@ def _build_readiness(
 
 
 def _to_admin_flat_out(flat: dict[str, Any], *, source: str, updated_at, channels, logical_models, defaults) -> AdminModelSettingsOut:
+    from app.services.stripe_payments import is_ready
+
     payload = {field: flat.get(field) for field in model_config_field_names()}
     for field, flag in SECRET_FIELD_FLAGS.items():
         payload[field] = ""
@@ -600,6 +630,9 @@ def _to_admin_flat_out(flat: dict[str, Any], *, source: str, updated_at, channel
     payload["source"] = source
     payload["updated_at"] = updated_at
     payload["readiness"] = _build_readiness(channels, logical_models, defaults)
+    effective = get_settings().model_copy(update=flat)
+    payload["stripe_ready"] = is_ready(effective) and (effective.stripe_currency != "auto" or is_ready(effective, language="en"))
+    payload["stripe_webhook_url"] = f"{effective.public_base_url.rstrip('/')}/api/billing/stripe/webhook"
     return AdminModelSettingsOut.model_validate(payload)
 
 
@@ -633,11 +666,15 @@ async def patch_admin_model_settings(
     db: AsyncSession,
     body: AdminModelSettingsPatch,
 ) -> tuple[AdminModelSettingsOut, list[str]]:
+    from app.services.stripe_payments import validate_settings_patch
+
+    patch = body.model_dump(exclude_unset=True)
+    validate_settings_patch(patch)
     app_row = await _get_or_create_app_row(db)
     config = dict(app_row.config_json or {})
     stored_flat = _decrypt_flat_config(config)
     current = _effective_flat(stored_flat if stored_flat else None)
-    patch = body.model_dump(exclude_unset=True)
+    previous_apple_environment = current["apple_environment"]
     applied: list[str] = []
 
     for field in SECRET_FIELDS:
@@ -656,10 +693,43 @@ async def patch_admin_model_settings(
         current[field] = value
         applied.append(field)
 
+    from app.marketplace.sharing_config import validate_android_association
+    (current["marketplace_share_android_package_name"],
+     current["marketplace_share_android_sha256_fingerprints"]) = validate_android_association(
+        current.get("marketplace_share_android_package_name", ""),
+        current.get("marketplace_share_android_sha256_fingerprints", ""))
+    if current.get("marketplace_sharing_enabled"):
+        from app.marketplace.sharing_config import validate_share_origin
+        current["marketplace_share_base_url"] = validate_share_origin(current.get("marketplace_share_base_url", ""))
+    apple_changed = any(key.startswith(("apple_", "clear_apple_")) for key in applied)
+    if apple_changed:
+        from app.marketplace.apple_configuration import validate_material, configuration_status
+        from app.marketplace.app_settings import get_app_settings
+        validate_material(current["apple_private_key"], current["apple_root_certificates"])
+        candidate = get_app_settings().model_copy(update={key: value for key, value in current.items() if key.startswith("apple_")})
+        if current["apple_iap_enabled"]:
+            status = configuration_status(candidate)
+            if not status["configured"]:
+                raise ValueError("Apple 新购配置不完整：" + "、".join(status["missing"]))
+    turning_app_on = (current.get("marketplace_app_enabled") is True and "marketplace_app_enabled" in applied) or (apple_changed and current["apple_iap_enabled"])
+    if turning_app_on:
+        from app.marketplace.app_bootstrap import ensure_schema
+        try:
+            missing = await ensure_schema()
+        except RuntimeError as exc:
+            raise ValueError(str(exc)) from exc
+        if missing:
+            raise ValueError("App 数据库结构未准备好：" + "，".join(missing))
     config["flat"] = _encrypt_flat_config(current)
     app_row.config_json = config
     await db.commit()
     await load_model_settings_cache(db)
+    if apple_changed:
+        if current["apple_environment"] != previous_apple_environment:
+            from app.marketplace.apple_runtime import stop_apple_runtime
+            await stop_apple_runtime()
+        from app.marketplace.app_bootstrap import start_app_services
+        await start_app_services()
     if "marketplace_enabled" in applied:
         from app.marketplace.bootstrap import apply_marketplace_switch
         await apply_marketplace_switch()

@@ -2,6 +2,7 @@
 import asyncio
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import Response
 from sqlalchemy import select
 
 from . import storage
@@ -11,6 +12,54 @@ from .models import Asset, Recruit, Series, SeriesEpisode, Submission, Support, 
 from .service import event, fail, is_public_work, recruit_open, rights_for, rights_valid, submission_rights_match
 
 router = APIRouter()
+
+
+def _inline_type(payload: bytes, declared: str) -> str:
+    """上传时类型不准时，按文件头判断，保证图片和 PDF 能在页面里打开。"""
+    if declared and declared != "application/octet-stream":
+        return declared
+    if payload.startswith(b"%PDF"):
+        return "application/pdf"
+    if payload.startswith(b"\x89PNG"):
+        return "image/png"
+    if payload.startswith(b"\xff\xd8"):
+        return "image/jpeg"
+    if payload.startswith(b"GIF8"):
+        return "image/gif"
+    if payload.startswith(b"RIFF") and b"WEBP" in payload[:16]:
+        return "image/webp"
+    return declared or "application/octet-stream"
+
+
+@router.get("/media/asset/{record_id}/inline", dependencies=[Depends(storage_ready)])
+async def asset_inline(record_id: int, db: DB, user: Visitor, purpose: str = "original"):
+    """把已审核通过的文件以 inline 流返回，避免浏览器把预览当成下载。"""
+    asset = await db.get(Asset, record_id)
+    admin = bool(user and user.role == "admin")
+    if not asset or not user or (not admin and asset.owner_id != user.id):
+        fail("文件不存在或无权访问", 404)
+    if asset.status != "ready":
+        fail("媒体尚未就绪", 409)
+    if purpose not in ("original", "preview", "review", "cover"):
+        fail("媒体用途无效")
+    key, content_type = None, asset.content_type or ""
+    if purpose == "original" or (purpose == "preview" and asset.kind == "video"):
+        image = asset.kind != "video" and bool(asset.cover_key)
+        key = asset.cover_key if image else asset.object_key
+        content_type = "image/png" if image else content_type
+    elif purpose == "cover":
+        key = asset.cover_key or asset.object_key
+        content_type = "image/jpeg" if asset.kind == "video" else ("image/png" if asset.cover_key else content_type)
+    else:
+        key = getattr(asset, f"{purpose}_key", None)
+    if not key:
+        fail("该预览尚未生成", 409)
+    payload = await asyncio.to_thread(storage.read, key)
+    event(db, user.id, "asset", asset.id, "preview_" + purpose)
+    await db.commit()
+    return Response(content=payload, media_type=_inline_type(payload, content_type), headers={
+        "Content-Disposition": "inline", "Cache-Control": "private, no-store",
+    })
 
 
 @router.get(

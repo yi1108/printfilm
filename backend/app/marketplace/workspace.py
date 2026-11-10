@@ -26,7 +26,7 @@ async def owner_works(db, user, page_number: int, page_size: int) -> dict:
             from .series import _series_data
             series = await db.get(Series, row.item_id)
             detail = await _series_data(db, series, private=True)
-            payload = {"kind": "series", "id": series.id, "title": series.title, "category": series.category,
+            payload = {"kind": "series", "id": series.id, "title": series.title, "category": series.category, "category_code": detail["category_code"], "category_label": detail["category_label"], "category_labels": detail["category_labels"],
                        "sale_type": series.sale_type, "price_fen": series.copyright_price_fen,
                        "episode_count": detail["episode_count"], "cover_asset_id": series.cover_asset_id,
                        "audit_status": series.audit_status, "listed": series.listed, "blocked": series.blocked,
@@ -68,6 +68,9 @@ async def mine(kind: str, db: DB, user: Actor, page_number: int = Query(1, alias
             result = data(item, "id", "kind", "filename", "status", "fingerprint", "duration_seconds", "error", "created_at")
         else:
             result = data(item, *[column.name for column in model.__table__.columns])
+        if isinstance(item, Notification):
+            from .notification_locale import render
+            result.update(render(item))
         items.append(result)
     return {"items": items, "meta": meta}
 
@@ -96,8 +99,18 @@ async def support(db: DB):
     """公开客服说明；二维码使用独立短时签名接口。"""
     item = await db.get(Support, 1)
     if not item or not item.enabled or not item.qr_asset_id:
-        return {"available": False, "message": "客服暂不可用"}
-    return {"available": True, **data(item, "name", "wechat", "hours")}
+        from .locale import localized
+        return {"available": False, "message": localized("客服暂不可用", "Support is currently unavailable.")}
+    return {"available": True, **support_fields(item)}
+
+
+def support_fields(item):
+    from .locale import current_locale
+    english = current_locale.get() == "en"
+    return {"name": (item.name_en or item.name) if english else item.name,
+            "hours": (item.hours_en or item.hours) if english else item.hours,
+            "wechat": item.wechat, "name_en": item.name_en, "hours_en": item.hours_en,
+            "name_zh": item.name, "hours_zh": item.hours}
 
 
 @router.post(
@@ -121,7 +134,8 @@ async def consult(body: Target, db: DB, user: Actor):
             fail("仅需求方可发起投稿购买咨询", 403)
         if item.withdrawn or item.blocked or post.blocked or not rights_valid(rights, full=True) or not submission_rights_match(item, rights):
             fail("投稿尚未完成完整权属核验或已撤回、封禁")
-        price, title = item.quote_fen, f"《{post.title}》投稿 #{item.id}"
+        from .locale import localized
+        price, title = item.quote_fen, localized(f"《{post.title}》投稿 #{item.id}", f"Submission #{item.id} for “{post.title}”")
     elif isinstance(item, Recruit):
         if not recruit_open(item) and user.id != item.owner_id:
             fail("需求已结束，不能发起新咨询")
@@ -133,9 +147,11 @@ async def consult(body: Target, db: DB, user: Actor):
                 or item.audit_status != "approved" or series.blocked or item.blocked):
             fail("该分集尚未开放版权咨询", 409)
         price = item.copyright_price_fen or series.copyright_price_fen
-        title = f"《{series.title}》第{item.episode_no}集 · {item.title}"
+        from .locale import localized
+        title = localized(f"《{series.title}》第{item.episode_no}集 · {item.title}", f"“{series.title}” Episode {item.episode_no} · {item.title}")
     else:
-        title = f"版权登记案件 #{item.id}"
+        from .locale import localized
+        title = localized(f"版权登记案件 #{item.id}", f"Rights registration case #{item.id}")
     settings = await db.get(Support, 1)
     if not settings or not settings.enabled or not settings.qr_asset_id:
         fail("客服暂不可用", 503)
@@ -143,9 +159,11 @@ async def consult(body: Target, db: DB, user: Actor):
     await db.commit()
     notice = ("接单请先联系客服，并提供招募编号。由客服协助确认需求、预算、授权和交付要求，具体合作在线下协商确认。咨询不代表已接单或成交。"
               if isinstance(item, Recruit) else "请联系客服确认价格、授权范围和交付方式。咨询不代表成交或授权。")
+    from .locale import localized
+    english_notice = ("Contact support first and provide the brief ID. Support will help confirm the requirements, budget, license and delivery. Cooperation is agreed offline; an inquiry does not constitute acceptance or a sale."
+                      if isinstance(item, Recruit) else "Contact support to confirm the price, license and delivery. An inquiry does not constitute a sale or license. Copyright transfers require a separate transfer process and may incur fees.")
     return {"reference": f"{body.target_type.upper()}-{item.id}", "title": title, "price_fen": price,
-            "name": settings.name, "wechat": settings.wechat, "hours": settings.hours,
-            "notice": notice}
+            **support_fields(settings), "notice": localized(notice, english_notice), "notice_labels": {"zh": notice, "en": english_notice}}
 
 
 @router.post(

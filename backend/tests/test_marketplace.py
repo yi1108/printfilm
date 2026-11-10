@@ -63,10 +63,13 @@ async def test_admin_categories_config_validation_versions_and_historical_works(
         assert response.status_code == 422, response.text
     saved = await ctx.client.put(admin, json={'version': 0, 'names': ['广告', ' 短片 ']})
     assert saved.status_code == 200, saved.text
-    assert saved.json() == {'version': 1, 'names': ['广告', '短片']}
+    assert saved.json()['version'] == 1 and saved.json()['names'] == ['广告', '短片']
+    assert [item['code'] for item in saved.json()['items'] if item['enabled']] == ['advertising', 'short_film']
     assert (await ctx.client.put(admin, json={'version': 0, 'names': ['科普']})).status_code == 409
     ctx.user = None
-    assert (await ctx.client.get(public)).json() == saved.json()
+    public_config = (await ctx.client.get(public)).json()
+    assert public_config['names'] == saved.json()['names']
+    assert public_config['items'] == [item for item in saved.json()['items'] if item['enabled']]
     ctx.user = ctx.owner
     assert (await ctx.client.post('/api/marketplace/works', json=work_body())).status_code == 400
     assert (await ctx.client.post('/api/marketplace/works', json={**work_body(), 'category': '广告'})).status_code == 200
@@ -1129,7 +1132,8 @@ async def test_real_ffmpeg_processing_with_oss_transport_stub(monkeypatch, tmp_p
     result = await worker.process_asset({"id": 999, "filename": "source.mp4", "object_key": "unit-test", "kind": "video", "size_bytes": source.stat().st_size, "content_type": "video/mp4"})
     assert result["duration_seconds"] == 31
     assert result["fingerprint"] == worker.fingerprint(source)
-    assert set(result) == {"duration_seconds", "fingerprint"}
+    assert set(result) == {"duration_seconds", "fingerprint", "display_width", "display_height"}
+    assert (result["display_width"], result["display_height"]) == (320, 180)
     assert results == {}  # 不为每次上传额外制作试看、审片或自动封面。
     probe = json.loads(await worker.command(settings.ffprobe_path, "-v", "error", "-show_format", "-show_streams", "-of", "json", str(source)))
     assert float(probe["format"]["duration"]) == 31

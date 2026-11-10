@@ -23,6 +23,14 @@
 
 共享壳层：`SiteNav` / `AppShell`（`frontend/src/components/layout/`），样式 token 见 `frontend/src/index.css` 与 `frontend/src/styles/printfilm.css`。
 
+## 2026-11-09 法务页面与账号注销
+
+用户协议和隐私政策分别通过 `/terms`、`/privacy` 公开访问。2026-11-10 按产品要求将供应方 HTML 转为结构化内容，改为 `LegalDocPage` + `legalDocuments.ts` 的 React 实现，接入 `AppShell` 与站内链接。Terms 20 节、Privacy 13 节按原顺序提供中英文版本，并跟随系统 i18n 切换；页面复用 `--pf-bg`、`--pf-ink`、`--pf-muted`、`--pf-line`、`--pf-shadow` 等现有设计令牌和响应式卡片样式。正文使用安全节点渲染，不使用 iframe、独立 HTML 处理中间件或 `dangerouslySetInnerHTML`。开发及生产环境均由前端路由处理。
+
+个人中心「账号信息」下线注销占位按钮，提供不可逆操作说明、必要账单保留说明、当前密码与精确 `DELETE` 确认。服务端成功后清除本地令牌、广播登录态变化并回到首页；旧 JWT 在服务端同步失效。名下团队及未完成任务会阻止注销，错误保留在表单内，提交期间禁止重复操作。
+
+源码验收覆盖密码/确认词、资料匿名化、账务保留、团队成员资格撤销、团队及任务 409、旧 JWT 和重置令牌失效、真实鉴权请求，以及 Legal React 路由、完整章节、内容顺序、链接、样式和 SPA 响应。部署需应用 `users.closed_at` 增量字段，发布前端路由与样式，并重启全部后端实例；本地验收不代表已经线上发布。
+
 ## 2026-10-26 漫剧自建算力模式与多集创建
 
 产品入口统一命名为「漫剧自建算力模式」（英文 Self-hosted Drama），业务路由与既有项目数据保留。新建项目弹窗采用故事主栏与设置旁栏，收紧标题、输入框和留白层级；窄屏顺序排列，底部操作始终可见，画面风格继续使用独立选择弹窗。

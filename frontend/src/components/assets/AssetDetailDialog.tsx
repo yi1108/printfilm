@@ -5,7 +5,7 @@ import { Copy, Download, Maximize2, Minimize2, X } from 'lucide-react'
 import { resolveDramaMediaUrl } from '../../api/drama'
 import { assetDetailInfo, formatMediaDuration, type AssetDetailRecord } from '../../lib/assetDetails'
 import { formatDateTime } from '../../i18n'
-import { canvasMediaFilename, downloadCanvasMedia, downloadCanvasText, isPlayableVideoUrl } from '../../lib/canvasNodeMedia'
+import { canvasMediaFilename, downloadCanvasMedia, downloadCanvasText, isPlayableVideoUrl, videoPosterUrl } from '../../lib/canvasNodeMedia'
 import { AssetVisual } from './AssetLibrary'
 import { DetailPrompt, DetailReferences, DetailReferencePreview, readableDetailPrompt, type ReferencePreview } from './AssetDetailReferences'
 import './asset-detail.css'
@@ -66,7 +66,7 @@ export function AssetDetailDialog({ asset, open = true, onClose, actions, childr
   return <Modal open={open} onClose={onClose} size="xl" className="pf-asset-detail-shell">
     <div className={`pf-asset-detail-dialog${zoomed ? ' is-zoomed' : ''}`}>
       <section className={`pf-asset-detail-media is-${kind}`} aria-label="媒体预览">
-        {kind === 'video' && url ? <video key={url} src={url} poster={resolveDramaMediaUrl(asset.cover)} controls playsInline preload="metadata" onTimeUpdate={event => { const currentTime = event.currentTarget.currentTime; setPlayback(current => ({ ...current, current: currentTime })) }} onLoadedMetadata={(event) => { const media = event.currentTarget; setDimensions(media.videoWidth > 0 && media.videoHeight > 0 ? `${media.videoWidth} × ${media.videoHeight}` : ''); setMediaDuration(formatMediaDuration(media.duration)); setPlayback({ current: media.currentTime, duration: Number.isFinite(media.duration) ? media.duration : 0 }) }} />
+        {kind === 'video' && url ? <video key={url} src={url} poster={videoPosterUrl(resolveDramaMediaUrl(asset.cover))} controls playsInline preload="metadata" onTimeUpdate={event => { const currentTime = event.currentTarget.currentTime; setPlayback(current => ({ ...current, current: currentTime })) }} onLoadedMetadata={(event) => { const media = event.currentTarget; setDimensions(media.videoWidth > 0 && media.videoHeight > 0 ? `${media.videoWidth} × ${media.videoHeight}` : ''); setMediaDuration(formatMediaDuration(media.duration)); setPlayback({ current: media.currentTime, duration: Number.isFinite(media.duration) ? media.duration : 0 }) }} />
           : kind === 'audio' ? <div className="pf-asset-detail-audio"><AssetVisual asset={asset} />{url && <audio key={url} src={url} controls preload="metadata" onLoadedMetadata={(event) => setMediaDuration(formatMediaDuration(event.currentTarget.duration))} />}</div>
           : kind === 'text' ? <pre>{text || '暂无文本'}</pre>
           : url ? <img key={url} src={url} alt={title} onLoad={(event) => { const media = event.currentTarget; setDimensions(`${media.naturalWidth} × ${media.naturalHeight}`) }} />

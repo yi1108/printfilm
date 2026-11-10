@@ -13,7 +13,7 @@ import { TeamQueryFeedback } from "./TeamQueryFeedback";
 import { useAdminTeamQuery } from "@/hooks/useAdminTeamQuery";
 import { teamDate } from "@/lib/teamLabels";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
-import { fenToYuan } from "@/lib/utils";
+import { points } from "@/lib/points";
 
 /** 团队钱包流水：独立于模型消费记录，包含充值、任务记账与后台调账。 */
 export function TeamWalletLedgerTable({ teamId }: { teamId: number }) {
@@ -40,8 +40,8 @@ export function TeamWalletLedgerTable({ teamId }: { teamId: number }) {
     </TableRow></TableHeader><TableBody>{data.items.map((row) => <TableRow key={row.id}>
       <TableCell className="whitespace-nowrap text-xs">{teamDate(row.created_at)}</TableCell>
       <TableCell><Badge variant={row.ref_type === "admin_adjust" ? "warning" : "info"}>{kindLabels[row.kind] || row.kind}</Badge></TableCell>
-      <TableCell className="font-semibold tabular-nums">{row.delta_fen >= 0 ? "+" : "−"}¥{fenToYuan(Math.abs(row.delta_fen))}</TableCell>
-      <TableCell className="tabular-nums">¥{fenToYuan(row.balance_after_fen)}</TableCell>
+      <TableCell className="font-semibold tabular-nums">{row.delta_fen >= 0 ? "+" : "−"}{points(Math.abs(row.delta_fen))}</TableCell>
+      <TableCell className="tabular-nums">{points(row.balance_after_fen)}</TableCell>
       <TableCell><div>{row.operator_nickname || "—"}</div><div className="mt-1 text-xs text-[var(--admin-muted)]">{row.operator_email} · #{row.actor_user_id}</div></TableCell>
       <TableCell className="max-w-xs break-words whitespace-normal"><div>{row.note || "—"}</div><div className="mt-1 break-all text-xs text-[var(--admin-muted)]">流水 #{row.id}{row.ref_id && row.ref_type !== "admin_adjust" ? ` · ${row.ref_type} #${row.ref_id}` : ""}</div></TableCell>
     </TableRow>)}</TableBody></Table>}

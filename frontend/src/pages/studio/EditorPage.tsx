@@ -1,5 +1,7 @@
+import { marketText as mt } from '../../features/marketplace/translate'
+import { useMarketplaceLocale } from '../../features/marketplace/useMarketplaceLocale'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../api'
 import type { Project, Shot } from '../../api'
 import BillingErrorNotice from '../../components/billing/BillingErrorNotice'
@@ -7,13 +9,16 @@ import AppShell from '../../components/layout/AppShell'
 import ComingSoon from '../../components/ui/ComingSoon'
 import { STATUS_CN, shotsByNo } from '../../lib/status'
 import { downloadSingleVideo } from '../../lib/clientDownload'
+import { withReturn } from '../../features/marketplace/ui'
 
 const PANEL_TABS = ['文案', '画面', '配音', '转场'] as const
 
 export default function EditorPage() {
+  useMarketplaceLocale()
   const { id } = useParams()
   const projectId = Number(id)
   const nav = useNavigate()
+  const location = useLocation()
   const [project, setProject] = useState<Project | null>(null)
   const [activeShotId, setActiveShotId] = useState<number | null>(null)
   const [tab, setTab] = useState<(typeof PANEL_TABS)[number]>('文案')
@@ -261,9 +266,9 @@ export default function EditorPage() {
             type="button"
             className="pf-btn pf-btn-ghost pf-btn-sm"
             disabled={!project.final_video_url}
-            onClick={() => nav(`/marketplace/from-printfilm?project=${project.id}`)}
+            onClick={() => nav(withReturn(`/marketplace/from-printfilm?project=${project.id}`, `${location.pathname}${location.search}`))}
           >
-            发布到数字资产市场
+            {mt("发布到数字资产市场")}
           </button>
         </div>
       </div>

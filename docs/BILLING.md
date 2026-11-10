@@ -9,7 +9,7 @@
 - 按上游 **真实 TokenFree 成本**（或无法拿到 usage 时的保守估价）计费。
 - 用户支付价 = TokenFree 官方成本，**不再加价**。
 - 钱包单位：**分（fen）**。
-- 充值：易支付 [pay.gitcc.com](https://pay.gitcc.com/)，支付宝 `alipay` / 微信 `wxpay`。
+- 充值：易支付 [pay.gitcc.com](https://pay.gitcc.com/)，支付宝 `alipay` / 微信 `wxpay`；也支持 Stripe 托管 Checkout（`stripe`，需服务端启用）。
 - **所有 AI 调用**均关联 `task_run_id`（单次聊天/API/工具调用创建轻量 TaskRun）。
 - 本地按时长估算的视频 tokens 使用 `tokens_estimated` 标记，不能被识别为上游实测用量；实际费用仍优先取上游账单。
 - 画布视频下载中断时保留原上游任务号，按退避策略重试获取成片，不重新创建视频生成请求；超过重试上限后保留原任务号供排查。
@@ -196,14 +196,70 @@ EPAY_RETURN_URL=https://your-site.example.com/pricing?paid=1
 
 下单：服务端 `POST {EPAY_API_URL}/mapi.php`（扫码），MD5 签名。异步 notify 验签成功 → 订单入账（幂等）。
 
+## Stripe Checkout
+
+Stripe 使用现有人民币充值套餐，按网站语言收款：中文 `cny`、英文 `usd`。`amount_fen` 和 `credit_fen` 仍为人民币分，钱包到账（含赠送额度）由套餐确定。外币付款金额由服务端按后台人工设置的汇率自动换算，不必逐个套餐配置外币价格；不自动抓取实时汇率，且关闭 Stripe Adaptive Pricing，避免重复换算。银行卡资料在 Stripe 托管页面填写，前端不需要 Stripe publishable key，服务端密钥不得放入前端环境变量。
+
+在管理端 **系统设置 → 支付计费 → Stripe 支付接入** 中填写配置，先使用 Stripe 测试环境：
+
+- 启用 Stripe 支付。
+- API 密钥：Stripe 测试环境的 `sk_test_...`。
+- Webhook 签名密钥：对应事件端点的 `whsec_...`。
+- 前端返回地址：本地可填 `http://localhost:5173`，生产填写实际 HTTPS 前端站点地址。
+- 收款币种固定按网站语言选择。填写美元汇率「1 美元 = 多少人民币」；未配置时中文 CNY 仍可用，英文 USD 暂不可用。
+
+例如管理员手动设置 `1 USD = 7.20 CNY`，则人民币售价 ¥990 的套餐需支付 US$137.50；这只是说明计算方式的假设汇率，不是实时市场报价。公式为 `外币金额 = 人民币售价 ÷ 配置汇率`，使用 Decimal 计算并四舍五入至美分。后台汇率支持最多六位小数，必须为正数；人民币收款不需要汇率。
+
+创建订单时保存 `payment_currency`、`payment_amount_minor` 和 `payment_exchange_rate`。收银台及回调只使用该订单固定的付款币种、外币最小单位金额和汇率，后续修改配置不会改变已创建订单。付款成功仍按原套餐 `credit_fen` 增加人民币余额，不用新的汇率倒算到账金额。历史三个字段均为空的订单按原人民币价格处理。
+
+保存后刷新当前服务的运行配置，无需重启后端。密钥加密保存到数据库，读取设置时密钥始终返回空串，仅返回是否已配置。密钥输入留空表示保留原值；使用对应的明确清除操作才会删除，数据库中的显式清空也会覆盖环境变量旧值。
+
+以下后端环境变量可作为首次部署的可选初始值；管理端保存的数据库配置优先：
+
+```dotenv
+STRIPE_ENABLED=true
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_FRONTEND_URL=http://localhost:5173
+STRIPE_CURRENCY=auto
+STRIPE_USD_CNY_RATE=
+```
+
+前端返回地址留空使用 `PUBLIC_BASE_URL`。仅当 Stripe 已启用、密钥齐全、返回地址有效且选定币种能生成有效报价时，`GET /api/billing/skus` 的 `pay_types` 才包含 `stripe`，每个套餐额外返回 `stripe_quote`。管理端的 `stripe_ready` 就绪状态仅检查配置完整性，不代表已与 Stripe 完成支付联调；可复制的 `stripe_webhook_url` 取自 **站点工具 → 后端公网基址**（`PUBLIC_BASE_URL`），与用户端支付返回站点分别配置。
+
+登录后调用 `POST /api/billing/orders`，请求体为 `{"sku_id":"topup_49","pay_type":"stripe","language":"zh"}`，英文模式传 `language="en"`。响应中的 `pay_mode` 为 `redirect`，浏览器跳转 `payurl` 进入 Stripe Checkout。Checkout 有效期为 31 分钟，在 Stripe 最少 30 分钟的要求上预留 1 分钟网络延迟与时钟余量。完成和取消分别返回 `/pricing?payment=success&order=...` 与 `/pricing?payment=cancelled&order=...`；成功地址还包含 `session_id`。浏览器返回参数仅用于展示和查询订单，不能作为到账依据。收银台尚在创建、未绑定会话时，关闭订单返回 409，稍后可重试。
+
+在 Stripe Dashboard 的 Webhooks 中配置当前账户的 **Snapshot** 事件端点：`https://your-site.example.com/api/billing/stripe/webhook`，监听以下事件，并把该端点的签名密钥填入管理端的 Webhook 签名密钥：
+
+- `checkout.session.completed`
+- `checkout.session.async_payment_succeeded`
+- `checkout.session.async_payment_failed`
+- `checkout.session.expired`
+
+服务端使用原始请求体和 `Stripe-Signature` 验签，校验会话关联、订单归属、订单固定的付款币种和金额及支付状态后入账。同一订单的重复通知只入账一次。已关闭订单若收到有效的实际支付成功通知，仍会补记到账，避免付款后因回调延迟丢失余额。异步支付未成功前不增加余额。
+
+外币功能增加三个可空订单字段。默认启动会执行增量结构检查；已有库关闭 `DATABASE_BOOTSTRAP_ENABLED` 时，在 `backend` 目录先执行 `.venv\Scripts\python.exe scripts/prepare_stripe_payment_schema.py`，再运行相同命令加 `--check` 只读核验，之后重启后端。迁移只添加这三个字段，不改写历史订单；可重复执行。回退时先切回 CNY，等待已创建的外币订单完成或过期，再回退代码，并保留新增列。删除列会丢失财务报价记录，因此不提供自动删除字段的 DOWN 操作。
+
+本地联调时，安装并登录 [Stripe CLI](https://docs.stripe.com/stripe-cli)，启动后端后运行：
+
+```powershell
+stripe listen --events checkout.session.completed,checkout.session.async_payment_succeeded,checkout.session.async_payment_failed,checkout.session.expired --forward-to localhost:8000/api/billing/stripe/webhook
+```
+
+把 CLI 输出的 `whsec_...` 填入管理端的 Webhook 签名密钥并保存，无需重启；CLI 签名密钥与 Dashboard 端点密钥不同。打开充值页，选择 Stripe 并创建订单，使用 Stripe 测试卡 `4242 4242 4242 4242`、任意未来有效期和测试 CVC 完成支付。确认返回页实际查询到订单 `paid`，余额只增加一次且存在对应充值流水；重发该订单事件后余额不再增加。再验证取消支付和会话过期不增加余额。不要用测试卡发起真实环境交易。
+
+上线前需切换为正式环境密钥，配置可公网访问的 HTTPS webhook，并用正式配置完成端到端验收。代码测试不代表已完成真实 Stripe 商户联调。实现依据见 [Checkout Session API](https://docs.stripe.com/api/checkout/sessions/create)、[Webhook 验签与重试](https://docs.stripe.com/webhooks)、[支付币种](https://docs.stripe.com/currencies)。
+
 ## API
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/api/billing/usage/summary` | 本月 token / 费用 / 余额 |
 | GET | `/api/billing/orders` | 充值订单列表 |
-| POST | `/api/billing/orders` | `{sku_id, pay_type}` → 扫码支付 |
+| GET | `/api/billing/skus` | 充值套餐与可用 `pay_types` |
+| POST | `/api/billing/orders` | `{sku_id, pay_type}` → 易支付扫码或 Stripe Checkout 跳转 |
 | POST | `/api/billing/epay/notify` | 易支付回调 |
+| POST | `/api/billing/stripe/webhook` | Stripe 原始请求体验签回调 |
 | GET | `/api/admin/usage-events` | 管理端用量明细分页 |
 | GET | `/api/admin/tasks/{id}` | 任务详情含 `usage_lines` 与计费字段 |
 | GET | `/api/admin/stats` | 充值、扣费、调用趋势与用户排行 |
@@ -212,6 +268,7 @@ EPAY_RETURN_URL=https://your-site.example.com/pricing?paid=1
 ## 管理端
 
 - **设置 → 支付与计费**：配置支付接入、用户计费及消费提醒；图片与视频价格独立发布。
+- **系统设置 → 支付计费 → Stripe 支付接入**：管理 Stripe 开关、API 密钥、Webhook 签名密钥和前端返回地址，密钥留空保留、明确清除才删除，保存后生效。
 - **订单与流水** → 「用量明细」Tab：按用户/任务/领域筛选 `usage_events`。
 - **任务队列** → 列表「费用」列显示 `billing_charged_fen`（冻结中显示预扣）。
 - **任务详情** → 「计费」Tab：预扣/实扣/退回 + 用量行列表。
@@ -230,3 +287,12 @@ EPAY_RETURN_URL=https://your-site.example.com/pricing?paid=1
 
 
 团队模式现按所有者个人账户统一付款，同时限制团队总月额度与成员月额度；任务保存受理时付款人，转让不改变旧任务扣款对象。团队充值/独立调账入口已停用，历史账目兼容规则见 [TEAM_MODE.md](TEAM_MODE.md)。
+
+
+### Stripe 按网站语言选择币种
+
+后台 Stripe 固定按网站语言选择币种（stripe_currency=auto）：中文使用 CNY，英文使用 USD。只需要在后台设置 stripe_usd_cny_rate（1 USD 对应多少 CNY，精确小数字符串）；美元支付最小单位 = 人民币套餐分 ÷ 汇率，四舍五入到美分。站内额度和赠送仍使用原套餐 credit_fen。无需 Stripe 产品价格或 Adaptive Pricing。
+
+用户端报价 GET /api/billing/skus?language=zh|en，下单 POST /api/billing/orders 传 language，均默认 zh。前端切换语言后重新取服务端报价，加载期间不可购买旧语言报价。服务端选择币种并固定订单金额、汇率；前端传入金额或币种不生效。Checkout 也使用对应的中文/英文界面，并关闭 Adaptive Pricing，防止客户地区再次改变报价。旧订单不因语言或后台汇率变化而改价。
+
+未配置美元汇率时，中文 Stripe 仍可使用；英文隐藏 Stripe 并显示配置提示，直接用英文下单返回 503。后台 stripe_ready 表示两种语言配置均完整。后台界面只提供美元汇率，保存时统一使用按语言选择模式；历史订单仍使用原始币种快照。

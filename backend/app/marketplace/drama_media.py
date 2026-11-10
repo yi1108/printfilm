@@ -13,7 +13,8 @@ from urllib.parse import unquote, urlparse
 from app.config import get_settings
 from app.services.storage import STATIC_ROOT
 from . import storage
-from .config import get_marketplace_settings
+from .config import get_marketplace_settings, video_duration_limit
+from .drama_geometry import display_dimensions as _dimensions, fit_dimensions, validate_aspects
 from .worker import cache_root, command, fingerprint
 
 _FORMATS = "mov,mp4,matroska,webm"
@@ -62,10 +63,8 @@ def _local_source(locator: str) -> Path | None:
 
 
 def _source_key(locator: str) -> str:
-    """只接受配置桶、明确配置的 CDN 基址或上游 generated 对象键。"""
+    """只接受当前配置的 OSS 桶或 CDN。目录名可以和现在的 oss_folder 不同。"""
     settings = get_settings()
-    folder = settings.oss_folder.strip().strip("/") or "kepu"
-    prefix = folder + "/generated/"
     text = locator.strip()
     if text.startswith(("http://", "https://")):
         parsed = urlparse(text)
@@ -88,9 +87,39 @@ def _source_key(locator: str) -> str:
             raise _error("SOURCE_NOT_READY", "源视频不属于配置的 OSS 桶")
     else:
         key = text
-    if not settings.oss_bucket or not key.startswith(prefix) or "\\" in key or ".." in key.split("/") or "?" in key or "#" in key:
-        raise _error("SOURCE_NOT_READY", "源视频不属于上游生成目录")
+    if not settings.oss_bucket or not key or "\\" in key or ".." in key.split("/") or "?" in key or "#" in key:
+        raise _error("SOURCE_NOT_READY", "源视频不属于当前 OSS")
     return key
+
+
+def _generated_local(locator: str) -> Path | None:
+    """当前 OSS 或 CDN 地址若能对上 static 里已有的 generated 文件，就当本地成片。"""
+    text = locator.strip()
+    if not text.startswith(("http://", "https://")):
+        return None
+    try:
+        key = _source_key(text)
+    except ValueError:
+        return None
+    parts = key.split("/")
+    if "generated" not in parts:
+        return None
+    rest = "/".join(parts[parts.index("generated"):])
+    path = (STATIC_ROOT / rest).resolve()
+    try:
+        path.relative_to(STATIC_ROOT.resolve())
+    except ValueError:
+        return None
+    return path if path.is_file() else None
+
+
+def _local_stamp(path: Path) -> dict:
+    """读取本地成片的大小和指纹。文件在读取过程中变化则要求重新选择。"""
+    before = _stat_stamp(path)
+    digest = fingerprint(path)
+    if before != _stat_stamp(path):
+        raise _error("SOURCE_CHANGED", "源视频正在更新，请稍后重新选择")
+    return {"kind": "local", "locator": str(path), **before, "fingerprint": digest}
 
 
 def _stat_stamp(path: Path) -> dict:
@@ -106,12 +135,10 @@ def source_stamp(locator: str) -> dict:
     if not text:
         raise _error("SOURCE_NOT_READY", "分镜视频尚未生成")
     local = _local_source(text)
+    if local is None:
+        local = _generated_local(text)
     if local is not None:
-        before = _stat_stamp(local)
-        digest = fingerprint(local)
-        if before != _stat_stamp(local):
-            raise _error("SOURCE_CHANGED", "源视频正在更新，请稍后重新选择")
-        result = {"kind": "local", "locator": str(local), **before, "fingerprint": digest}
+        result = _local_stamp(local)
     else:
         key = _source_key(text)
         result = {"kind": "oss", "locator": key, "key": key, **storage.source_metadata(key)}
@@ -178,28 +205,6 @@ def _signature(info: dict) -> tuple:
             video.get("side_data_list", []), video.get("tags", {}).get("rotate"))
 
 
-def _dimensions(info: dict) -> tuple[int, int]:
-    video = info["video"]
-    rotation = float(video.get("tags", {}).get("rotate") or 0)
-    for side in video.get("side_data_list", []):
-        if "rotation" in side:
-            rotation = float(side["rotation"])
-    width, height = info["width"], info["height"]
-    if round(rotation) % 180:
-        width, height = height, width
-    sar = video.get("sample_aspect_ratio") or "1:1"
-    try:
-        pixel_ratio = float(Fraction(sar.replace(":", "/"))) if sar not in ("N/A", "0:1") else 1.0
-    except (ValueError, ZeroDivisionError):
-        pixel_ratio = 1.0
-    # 扩大显示尺寸以消除非方形像素，绝不缩小来源像素。
-    if pixel_ratio > 1:
-        width = math.ceil(width * pixel_ratio)
-    elif 0 < pixel_ratio < 1:
-        height = math.ceil(height / pixel_ratio)
-    return width, height
-
-
 async def _concat(paths: list[Path], output: Path, timeout: float) -> None:
     listing = output.with_suffix(".txt")
     listing.write_text("\n".join(f"file '{path.name}'" for path in paths), encoding="utf-8")
@@ -209,10 +214,8 @@ async def _concat(paths: list[Path], output: Path, timeout: float) -> None:
 
 
 async def _encode(paths: list[Path], infos: list[dict], output: Path, timeout: float) -> None:
+    """保持显示比例与最大源尺寸，等比补边兼容小幅尺寸偏差并统一编码。"""
     sizes = [_dimensions(info) for info in infos]
-    ratio = sizes[0][0] / sizes[0][1]
-    if any(abs(width / height / ratio - 1) > 0.005 for width, height in sizes):
-        raise _error("SOURCE_INCOMPATIBLE", "分镜画幅比例不一致，请先统一画幅后发布")
     width = math.ceil(max(size[0] for size in sizes) / 2) * 2
     height = math.ceil(max(size[1] for size in sizes) / 2) * 2
     if width * height > 50_000_000:
@@ -239,10 +242,11 @@ async def _encode(paths: list[Path], infos: list[dict], output: Path, timeout: f
             args += ["-map", "0:a:0" if info["audio"] else "1:a:0", "-af",
                      f"aresample=48000:async=1:first_pts=0,apad,atrim=duration={info['duration']}",
                      "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2"]
-        # 同画幅因像素取整略有差异时补边，避免把人物画面拉伸。
+        # 模型实际尺寸略有偏差时等比补边，避免裁切或拉伸人物画面。
+        fit_width, fit_height = fit_dimensions(info, width, height)
         args += ["-sn", "-dn", "-t", str(info["duration"]), "-vf",
-                 f"scale={width}:{height}:force_original_aspect_ratio=decrease:flags=lanczos,"
-                 f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,setpts=PTS-STARTPTS", "-r", str(fps),
+                 f"scale={fit_width}:{fit_height}:flags=lanczos,setsar=1,"
+                 f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setpts=PTS-STARTPTS", "-r", str(fps),
                  "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p",
                  "-threads", "2", "-video_track_timescale", "90000", "-movflags", "+faststart", str(dest)]
         await command(*args, timeout=timeout)
@@ -275,7 +279,7 @@ async def prepare_drama_video(snapshot: dict, dest_key: str, progress=None) -> d
             sources.append(source)
             infos.append(await _probe(source))
         total = sum(info["duration"] for info in infos)
-        if total > settings.max_duration_seconds:
+        if total > video_duration_limit():
             raise _error("SOURCE_NOT_READY", "整集视频超过市场视频时长限制")
         output = root / "episode.mp4"
         timeout = min(7200, max(120, total * 8 + 60))
@@ -289,10 +293,7 @@ async def prepare_drama_video(snapshot: dict, dest_key: str, progress=None) -> d
             except ValueError as exc:
                 raise _error("SOURCE_INCOMPATIBLE", "分镜编码无法无损封装为市场视频") from exc
         else:
-            dimensions = [_dimensions(info) for info in infos]
-            ratio = dimensions[0][0] / dimensions[0][1]
-            if any(abs(width / height / ratio - 1) > 0.005 for width, height in dimensions):
-                raise _error("SOURCE_INCOMPATIBLE", "分镜画幅比例不一致，请先统一画幅后发布")
+            validate_aspects(infos, clips)
             compatible = all(_signature(info) == _signature(infos[0]) for info in infos[1:])
             copied = False
             if compatible:
@@ -311,36 +312,55 @@ async def prepare_drama_video(snapshot: dict, dest_key: str, progress=None) -> d
         size = output.stat().st_size
         if not 0 < size <= settings.max_video_bytes:
             raise _error("SOURCE_NOT_READY", "完整成片超过市场视频大小限制")
-        if result["duration"] > settings.max_duration_seconds:
+        if result["duration"] > video_duration_limit():
             raise _error("SOURCE_NOT_READY", "完整成片超过市场视频时长限制")
+        try:
+            width, height = _dimensions(result)
+        except ValueError as exc:
+            raise _error("SOURCE_INCOMPATIBLE", "成片旋转角度不受支持，请先导出为标准横屏或竖屏视频") from exc
         digest = await _thread(fingerprint, output)
         await _thread(storage.upload, dest_key, output, "video/mp4")
         return {"size_bytes": size, "content_type": "video/mp4", "fingerprint": digest, "duration_seconds": result["duration"],
-                "width": result["width"], "height": result["height"]}
+                "width": width, "height": height}
 
 
 async def prepare_drama_cover(locator: str, dest_key: str, stamp: dict | None = None) -> dict:
-    """安全复制可选封面，重编码为 PNG；失败由调用方提示用户补充封面。"""
+    """安全复制项目封面；卡片以视频展示时取首帧，统一保存为市场私有 PNG。"""
     if not dest_key.startswith("marketplace/") or ".." in dest_key.split("/") or "\\" in dest_key:
         raise _error("SOURCE_NOT_READY", "市场封面目标目录无效")
     expected = stamp if stamp is not None else await _thread(source_stamp, locator)
-    if not 0 < int(expected.get("size_bytes", 0)) <= get_marketplace_settings().max_document_bytes:
-        raise _error("SOURCE_NOT_READY", "封面为空或超过图片大小限制")
+    limits = get_marketplace_settings()
+    if not 0 < int(expected.get("size_bytes", 0)) <= limits.max_video_bytes:
+        raise _error("SOURCE_NOT_READY", "源封面为空或超过媒体大小限制")
     with tempfile.TemporaryDirectory(prefix="job-", dir=cache_root()) as directory:
         root = Path(directory)
         source, output = root / "cover-source", root / "cover.png"
         await _thread(_copy_source, {"locator": locator, "stamp": expected}, source)
         try:
+            formats = "png_pipe,jpeg_pipe,webp_pipe,image2," + _FORMATS
             probe = json.loads(await command(get_settings().ffprobe_path, "-v", "error", "-protocol_whitelist", "file,pipe",
-                "-format_whitelist", "png_pipe,jpeg_pipe,webp_pipe,image2", "-show_streams", "-of", "json", str(source), timeout=60))
-            image = next(stream for stream in probe.get("streams", []) if stream.get("codec_type") == "video")
+                "-format_whitelist", formats, "-show_streams", "-show_format", "-of", "json", str(source), timeout=60))
+            image = next(stream for stream in probe.get("streams", []) if stream.get("codec_type") == "video"
+                         and not stream.get("disposition", {}).get("attached_pic"))
             width, height = int(image["width"]), int(image["height"])
-            if image.get("codec_name") not in ("png", "mjpeg", "webp") or min(width, height) < 2 or width * height > 50_000_000:
+            video_source = bool(set(probe.get("format", {}).get("format_name", "").split(",")) & set(_FORMATS.split(",")))
+            if min(width, height) < 2 or width * height > 50_000_000:
                 raise ValueError("invalid image")
+            if not video_source and (image.get("codec_name") not in ("png", "mjpeg", "webp")
+                                     or expected["size_bytes"] > limits.max_document_bytes):
+                raise ValueError("invalid image")
+            if video_source:
+                duration = float(probe.get("format", {}).get("duration", 0))
+                if not math.isfinite(duration) or not 0 < duration <= video_duration_limit():
+                    raise ValueError("invalid video")
+            width, height = _dimensions({"video": image, "width": width, "height": height})
+            if width * height > 50_000_000:
+                raise ValueError("invalid display size")
             await command(get_settings().ffmpeg_path, "-y", "-v", "error", "-protocol_whitelist", "file,pipe",
-                "-format_whitelist", "png_pipe,jpeg_pipe,webp_pipe,image2", "-i", str(source), "-frames:v", "1", str(output), timeout=60)
+                "-format_whitelist", formats, "-i", str(source), "-map", f"0:{image['index']}", "-an", "-sn", "-dn",
+                "-vf", f"scale={width}:{height}:flags=lanczos,setsar=1", "-frames:v", "1", str(output), timeout=60)
         except (ValueError, KeyError, StopIteration) as exc:
-            raise _error("SOURCE_NOT_READY", "源封面不是有效的 PNG、JPG 或 WebP 图片，请重新上传封面") from exc
+            raise _error("SOURCE_NOT_READY", "源封面不是有效图片或项目视频，请重新上传封面") from exc
         size = output.stat().st_size
         if not 0 < size <= get_marketplace_settings().max_document_bytes:
             raise _error("SOURCE_NOT_READY", "处理后的封面超过图片大小限制")

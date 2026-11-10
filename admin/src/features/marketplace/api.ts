@@ -56,3 +56,15 @@ export function useMarketplaceEnabled() {
 export async function assetUrl(id: number, purpose = 'original') {
   return (await request<{ url: string }>(`/api/marketplace/media/asset/${id}/${purpose}`)).url
 }
+
+/** 管理端在页面内预览图片或 PDF，不把 OSS 地址交给浏览器下载。 */
+export async function assetFile(id: number, purpose = 'original'): Promise<Blob> {
+  const response = await fetch(`/api/marketplace/media/asset/${id}/inline?purpose=${encodeURIComponent(purpose)}`, { headers: { Authorization: `Bearer ${getToken() ?? ''}` } })
+  if (!response.ok) {
+    const value = await response.json().catch(() => ({}))
+    throw new Error(typeof value.detail === 'string' ? value.detail : '文件暂时无法预览')
+  }
+  const type = response.headers.get('content-type') || 'application/octet-stream'
+  const blob = await response.blob()
+  return blob.type ? blob : new Blob([blob], { type })
+}

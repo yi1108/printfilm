@@ -1,9 +1,11 @@
+import { points } from '../../lib/points'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import QRCode from 'qrcode'
 import Modal from '../ui/Modal'
 import PaymentBrandIcon from './PaymentBrandIcon'
 import { api } from '../../api'
 import { teamsApi } from '../../api/teams'
+import { cnyAmountDisplay } from '../../lib/billingPayments'
 
 export type PayCheckout = {
   out_trade_no: string
@@ -26,11 +28,6 @@ type Props = {
   checkout: PayCheckout | null
   onClose: () => void
   onPaid: () => void
-}
-
-/** 将分转换为支付弹窗显示的两位小数金额。 */
-function yuan(fen: number) {
-  return (fen / 100).toFixed(2)
 }
 
 /** 将剩余秒数格式化为分秒倒计时。 */
@@ -235,12 +232,12 @@ export default function PaymentModal({ open, checkout, onClose, onPaid, teamId }
 
         <div className="pf-pay-sku-box">
           <strong>{checkout.sku_name}</strong>
-          <span>到账 ¥{yuan(checkout.credit_fen)}</span>
+          <span>到账 {points(checkout.credit_fen)}</span>
         </div>
 
         <div className="pf-pay-amount">
           <span>支付金额</span>
-          <em>¥{yuan(checkout.amount_fen)}</em>
+          <em>{cnyAmountDisplay(checkout.amount_fen)}</em>
         </div>
 
         <div className="pf-pay-qr-wrap">
@@ -273,7 +270,7 @@ export default function PaymentModal({ open, checkout, onClose, onPaid, teamId }
           <p className={`pf-pay-wait${status === 'paid' ? ' is-paid' : ''}`}>
             <span className="pf-pay-dot" aria-hidden />
             {status === 'paid'
-              ? '支付成功，余额即将更新'
+              ? '支付成功，积分即将更新'
               : status === 'expired'
                 ? '订单已超时'
                 : '等待支付结果，请勿关闭页面'}

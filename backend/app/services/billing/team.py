@@ -42,6 +42,9 @@ async def check_team_budget(db: AsyncSession, task: TaskRun, estimate: int, *, c
         task.billing_status = "skipped"
         return {"unit_estimate_fen": 0, "requested_total_fen": 0, "pending_commitment_fen": 0, "required_total_fen": 0, "balance_fen": int(wallet.balance_fen or 0)}
     additional = max(0, int(estimate)) * max(1, int(count))
+    from . import wallet as funds
+    if funds.enabled():
+        await funds.ensure_can_spend(db, wallet)
     pending = await pending_task_commitment_fen(db, wallet.id, exclude_task_id=task.id)
     if int(wallet.balance_fen or 0) < pending + additional:
         raise ValueError("团队所有者余额不足，请联系所有者为个人账户充值")
@@ -65,6 +68,9 @@ async def freeze_team_task(db: AsyncSession, task: TaskRun) -> int:
         from app.services.billing.team_legacy import freeze_team_task as legacy_freeze
         return await legacy_freeze(db, task)
     if task.billing_status in ("frozen", "settled"):
+        from . import wallet as funds, wallet_tasks
+        if funds.enabled() and task.billing_status == "frozen" and not task.provider_task_id:
+            await wallet_tasks.validate_task_funding(db, task.billing_payer_user_id, task.id)
         return int(task.billing_estimate_fen or 0)
     if task.billing_enabled_snapshot is False or task.billing_status == "skipped":
         task.billing_status = "skipped"
@@ -76,6 +82,12 @@ async def freeze_team_task(db: AsyncSession, task: TaskRun) -> int:
     if wallet is None:
         raise ValueError("付款所有者不存在")
     need = int(task.billing_estimate_fen or 0)
+    from . import wallet as funds, wallet_tasks
+    if funds.enabled():
+        await wallet_tasks.reserve_task(db, wallet.id, task.id, need, note=f"team:{task.team_id} actor:{task.requested_by}")
+        task.billing_status = "frozen"
+        await db.flush()
+        return need
     if int(wallet.balance_fen or 0) < need:
         raise ValueError("团队所有者余额不足，请联系所有者为个人账户充值")
     wallet.frozen_fen = int(wallet.frozen_fen or 0) + need
@@ -120,6 +132,13 @@ async def settle_team_task(db: AsyncSession, task: TaskRun) -> dict[str, int]:
         usage.reserved_fen = max(0, int(usage.reserved_fen or 0) - reserved)
         usage.spent_fen = int(usage.spent_fen or 0) + charged
     frozen = reserved if task.billing_status == "frozen" else 0
+    from . import wallet as funds, wallet_tasks
+    if funds.enabled() and not disabled:
+        result = await wallet_tasks.settle_task(db, wallet.id, task.id, charged, note=f"team:{task.team_id} actor:{task.requested_by}")
+        task.billing_status = "settled"
+        task.billing_charged_fen, task.billing_refunded_fen = result["charged"], result["refunded"]
+        await db.flush()
+        return {"charged": result["charged"], "refunded": result["refunded"]}
     refund = max(0, frozen - charged)
     wallet.frozen_fen = max(0, int(wallet.frozen_fen or 0) - frozen)
     if refund:

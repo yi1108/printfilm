@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import UserAvatar from '../../components/UserAvatar'
-import ComingSoon from '../../components/ui/ComingSoon'
+import CloseAccountCard from './CloseAccountCard'
 import LanguageSwitch from '../../components/layout/LanguageSwitch'
 import { api, type User } from '../../api'
 import { dispatchUserUpdated } from '../../lib/userEvents'
@@ -171,10 +171,8 @@ export default function AccountProfileCard({ user, onUserChange }: AccountProfil
         >
           {saveBusy ? t('common.saving') : t('settings.saveProfile')}
         </button>
-        <button type="button" className="pf-btn pf-btn-ghost pf-btn-sm" disabled>
-          {t('settings.requestDelete')} <ComingSoon />
-        </button>
       </div>
+      <CloseAccountCard />
     </section>
   )
 }

@@ -22,7 +22,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PageHeader } from "@/components/ui/page";
 import { useAdminDetailQuery } from "@/hooks/useAdminDetailQuery";
 import { PROJECT_STATUS_OPTIONS, projectStatusLabel, taskStatusLabel, taskTypeLabel } from "@/lib/statusLabels";
-import { fenToYuan } from "@/lib/utils";
+import { points } from "@/lib/points";
 
 type ListRes = { items: AdminProject[]; meta: PageMeta };
 
@@ -152,7 +152,7 @@ export function ProjectsPage() {
                 </TableCell>
                 <TableCell>{p.progress}%</TableCell>
                 <TableCell>{p.shot_count}</TableCell>
-                <TableCell>¥{fenToYuan(p.charge_fen ?? 0)}</TableCell>
+                <TableCell>{points(p.charge_fen ?? 0)}</TableCell>
                 <TableCell className="text-xs text-muted-foreground">
                   {new Date(p.created_at).toLocaleString()}
                 </TableCell>
@@ -244,7 +244,7 @@ export function ProjectsPage() {
             <AdminDetailSection title="费用汇总">
               <AdminDetailStatGrid
                 items={[
-                  { label: "扣费", value: `¥${fenToYuan(usage?.charge_fen ?? detail.charge_fen ?? 0)}` },
+                  { label: "扣费", value: `${points(usage?.charge_fen ?? detail.charge_fen ?? 0)}` },
                   { label: "调用", value: usage?.calls ?? 0 },
                   { label: "Tokens", value: usage?.tokens ?? 0 },
                   {
@@ -319,7 +319,7 @@ export function ProjectsPage() {
                           <td>{taskTypeLabel(t.task_type)}</td>
                           <td>{taskStatusLabel(t.status)}</td>
                           <td>
-                            ¥{fenToYuan(t.billing_charged_fen)} / ¥{fenToYuan(t.billing_estimate_fen)}
+                            {points(t.billing_charged_fen)} / {points(t.billing_estimate_fen)}
                           </td>
                         </tr>
                       ))

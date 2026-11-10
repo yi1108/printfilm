@@ -1,6 +1,6 @@
 import { Activity, Film, TrendingUp } from "lucide-react";
 import type { AdminStats } from "@/api/client";
-import { fenToYuan } from "@/lib/utils";
+import { points } from "@/lib/points";
 import { dashboardRangeLabel, type DashboardFilterState } from "@/pages/dashboard/DashboardFilters";
 import { DashboardKpiCard } from "@/pages/dashboard/DashboardKpiCard";
 import { sumDailyUsage } from "@/pages/dashboard/dashboardMetrics";
@@ -28,8 +28,8 @@ export function DashboardPeriodKpis({ stats, filters, loading }: DashboardPeriod
       />
       <DashboardKpiCard
         label={`${rangeLabel}扣费`}
-        value={stats ? `¥${fenToYuan(period.charge_fen)}` : placeholder}
-        hint={stats ? `本月 ¥${fenToYuan(stats.usage_charge_month_fen ?? 0)}` : "用户扣费"}
+        value={stats ? `${points(period.charge_fen)}` : placeholder}
+        hint={stats ? `本月 ${points(stats.usage_charge_month_fen ?? 0)}` : "用户扣费"}
         icon={TrendingUp}
         tone="blue"
       />

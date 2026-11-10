@@ -28,6 +28,21 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+@router.get("/settings/apple/status", summary="检查 Apple 支付配置（不发起支付）")
+async def apple_settings_status(_admin: User = Depends(get_current_admin)):
+    from app.config import get_settings
+    from app.marketplace.app_settings import get_app_settings
+    from app.marketplace.apple_configuration import configuration_status
+    from app.marketplace.apple_runtime import apple_runtime_state
+    from app.services.billing.wallet import enabled
+    base = get_settings().public_base_url.rstrip("/")
+    return {**configuration_status(get_app_settings()),
+            "notification_url": f"{base}/api/billing/apple/notifications",
+            "notification_https": base.startswith("https://"),
+            "unified_wallet_enabled": enabled(),
+            "runtime_running": apple_runtime_state()["running"]}
+
+
 class MediaPricePublishBody(BaseModel):
     """发布并启用新的媒体价格版本。"""
 

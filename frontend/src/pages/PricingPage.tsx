@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { points } from '../lib/points'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  Building2,
   ArrowUpRight,
   Check,
   CreditCard,
-  Infinity,
+  Infinity as InfinityIcon,
   LoaderCircle,
   RefreshCw,
   ShieldCheck,
@@ -20,9 +20,15 @@ import TopupHistoryModal from '../components/billing/TopupHistoryModal'
 import { api, type BillingSku, type UsageSummary, type Wallet } from '../api'
 import { useI18n } from '../i18n'
 import { GITHUB_REPO_URL } from '../lib/siteLinks'
+import {
+  availableBillingPayTypes,
+  billingPaymentReturn,
+  billingReturnHint, skuPriceDisplay,
+  stripeCheckoutUrl,
+  stripeSkuQuote,
+  type BillingPayType,
+} from '../lib/billingPayments'
 import './pricing.css'
-
-type PayType = 'alipay' | 'wxpay'
 
 type SkuView = BillingSku & { recommended?: boolean }
 
@@ -30,25 +36,14 @@ type SkuView = BillingSku & { recommended?: boolean }
 const HERO_FEATURES = [
   { key: 'featInstant', Icon: Zap },
   { key: 'featSafe', Icon: ShieldCheck },
-  { key: 'featForever', Icon: Infinity },
+  { key: 'featForever', Icon: InfinityIcon },
 ] as const
-
-// 分转元，到账金额固定展示两位小数。
-function yuan(fen: number) {
-  return (fen / 100).toFixed(2)
-}
-
-// 充值价格与赠送金额保留真实小数，整数金额省略小数位。
-function yuanShort(fen: number) {
-  const v = fen / 100
-  return Number.isInteger(v) ? String(v) : v.toFixed(2)
-}
 
 /** 定价与充值页 */
 export default function PricingPage() {
   /* 路由与语言、账户数据、充值配置及支付弹窗的展示状态。 */
   const nav = useNavigate()
-  const { t, m } = useI18n()
+  const { t, m, locale } = useI18n()
   const [params] = useSearchParams()
   const [wallet, setWallet] = useState<Wallet | null>(null)
   const [usage, setUsage] = useState<UsageSummary | null>(null)
@@ -56,16 +51,20 @@ export default function PricingPage() {
   const [skus, setSkus] = useState<SkuView[]>([])
   const [skusLoading, setSkusLoading] = useState(true)
   const [skusError, setSkusError] = useState(false)
+  const [stripeUnavailable, setStripeUnavailable] = useState(false)
+  const [skuLocale, setSkuLocale] = useState<string | null>(null)
+  const skuRequest = useRef(0)
   const [walletLoading, setWalletLoading] = useState(Boolean(localStorage.getItem('token')))
   const [walletError, setWalletError] = useState(false)
-  const [payType, setPayType] = useState<PayType>('alipay')
+  const [payType, setPayType] = useState<BillingPayType>('alipay')
+  const [payTypes, setPayTypes] = useState<BillingPayType[]>([])
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [hint, setHint] = useState('')
-  const [payTip, setPayTip] = useState('')
   const [checkout, setCheckout] = useState<PayCheckout | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const loggedIn = Boolean(localStorage.getItem('token'))
+  const paymentReturn = useMemo(() => billingPaymentReturn(params), [params])
 
   const displaySkus = useMemo(() => {
     return skus.map((s) => ({
@@ -100,17 +99,28 @@ export default function PricingPage() {
 
   // 独立加载服务端 SKU，重试时不影响账户余额或当前支付方式。
   const loadSkus = useCallback(async () => {
+    const requestId = ++skuRequest.current
     setSkusLoading(true)
     setSkusError(false)
+    setStripeUnavailable(false)
     try {
-      const result = await api.billingSkus()
+      const result = await api.billingSkus(locale)
+      if (requestId !== skuRequest.current) return
+      setStripeUnavailable(result.stripe_unavailable_reason === 'usd_rate_missing')
+      setSkuLocale(locale)
       setSkus((result.skus || []) as SkuView[])
+      const offered = availableBillingPayTypes(result.pay_types || [])
+      setPayTypes(offered)
+      setPayType((current) => offered.includes(current) ? current : offered[0] || 'alipay')
     } catch {
-      setSkusError(true)
+      if (requestId === skuRequest.current) {
+        setSkusError(true)
+        setSkuLocale(locale)
+      }
     } finally {
-      setSkusLoading(false)
+      if (requestId === skuRequest.current) setSkusLoading(false)
     }
-  }, [])
+  }, [locale])
 
   useEffect(() => {
     void loadSkus()
@@ -120,18 +130,63 @@ export default function PricingPage() {
       const timerId = window.setInterval(() => refresh(), 2500)
       return () => window.clearInterval(timerId)
     }
-  }, [loadSkus, refresh])
+  }, [loadSkus, refresh, params, t])
+
+  // Checkout redirects can arrive before the webhook. Only the authenticated order confirms arrival.
+  useEffect(() => {
+    if (!loggedIn || !paymentReturn) return
+    let stopped = false
+    let timer: number | undefined
+    let attempts = 0
+    setError('')
+    setHint(t('pricing.paymentChecking'))
+    const checkOrder = async () => {
+      try {
+        const order = await api.getBillingOrder(paymentReturn.order)
+        if (stopped) return
+        setHint(t(billingReturnHint(order.status, paymentReturn.outcome)))
+        setError('')
+        if (order.status === 'paid') {
+          await refresh()
+          return
+        }
+        if (order.status === 'closed') return
+      } catch {
+        if (stopped) return
+        setHint('')
+        setError(t('pricing.paymentCheckFailed'))
+      }
+      if (!stopped && ++attempts < 48) timer = window.setTimeout(() => void checkOrder(), 2500)
+    }
+    void checkOrder()
+    return () => {
+      stopped = true
+      window.clearTimeout(timer)
+    }
+  }, [loggedIn, paymentReturn, refresh, t])
 
   // 保持服务端下单、支付渠道、订单字段和登录回跳行为。
   async function pay(sku: BillingSku) {
+    if (skuLocale !== locale || skusLoading) return
     if (!loggedIn) {
       nav(`/auth?next=${encodeURIComponent(`/pricing#sku-${sku.id}`)}`)
+      return
+    }
+    if (!payTypes.includes(payType)) return
+    if (payType === 'stripe' && !stripeSkuQuote(sku.stripe_quote)) {
+      setError(t('pricing.stripeQuoteUnavailable'))
       return
     }
     setBusy(sku.id)
     setError('')
     try {
-      const order = await api.createBillingOrder(sku.id, payType)
+      const order = await api.createBillingOrder(sku.id, payType, locale)
+      if (order.pay_type === 'stripe') {
+        const url = stripeCheckoutUrl(order.payurl)
+        if (!url) throw new Error(t('pricing.paymentLinkFailed'))
+        window.location.assign(url)
+        return
+      }
       const label = m.pricing.skus[sku.id as keyof typeof m.pricing.skus] || sku.name
       setCheckout({
         out_trade_no: order.out_trade_no,
@@ -154,14 +209,8 @@ export default function PricingPage() {
   }
 
   // 选择已经开放的支付渠道。
-  function pickPay(type: PayType) {
+  function pickPay(type: BillingPayType) {
     setPayType(type)
-    setPayTip('')
-  }
-
-  // 未开放渠道仅显示提示，不创建订单。
-  function pickUnavailable(label: string) {
-    setPayTip(t('pricing.unavailable', { label }))
   }
 
   // 支付成功后关闭结算弹窗并刷新账户数据。
@@ -226,63 +275,30 @@ export default function PricingPage() {
                 </div>
               </header>
 
-              {payTip ? <p className="pf-pricing-pay-tip" role="status">{payTip}</p> : null}
+              {!skusLoading && !skusError && payTypes.length === 0 ? (
+                <p className="pf-pricing-pay-tip" role="status">{t('pricing.noPayMethods')}</p>
+              ) : null}
 
               <div className="pf-pricing-pay-grid">
-                <button
+                {payTypes.map((type) => <button
                   type="button"
-                  className={`pf-pricing-pay-tile${payType === 'alipay' ? ' is-active' : ''}`}
-                  onClick={() => pickPay('alipay')}
-                  aria-pressed={payType === 'alipay'}
+                  key={type}
+                  className={`pf-pricing-pay-tile${payType === type ? ' is-active' : ''}`}
+                  onClick={() => pickPay(type)}
+                  aria-pressed={payType === type}
                 >
-                  <PaymentBrandIcon brand="alipay" size="md" />
-                  <span className="pf-pricing-pay-tile-label">{t('pricing.alipay')}</span>
-                  {payType === 'alipay' ? (
+                  {type === 'stripe' ? (
+                    <span className="pf-pricing-pay-tile-icon" aria-hidden><CreditCard size={24} /></span>
+                  ) : <PaymentBrandIcon brand={type} size="md" />}
+                  <span className="pf-pricing-pay-tile-label">{t(`pricing.${type === 'wxpay' ? 'wechat' : type}`)}</span>
+                  {payType === type ? (
                     <span className="pf-pricing-pay-tile-check" aria-hidden>
                       <Check size={14} strokeWidth={3} />
                     </span>
                   ) : null}
-                </button>
-
-                <button
-                  type="button"
-                  className={`pf-pricing-pay-tile${payType === 'wxpay' ? ' is-active' : ''}`}
-                  onClick={() => pickPay('wxpay')}
-                  aria-pressed={payType === 'wxpay'}
-                >
-                  <PaymentBrandIcon brand="wxpay" size="md" />
-                  <span className="pf-pricing-pay-tile-label">{t('pricing.wechat')}</span>
-                  {payType === 'wxpay' ? (
-                    <span className="pf-pricing-pay-tile-check" aria-hidden>
-                      <Check size={14} strokeWidth={3} />
-                    </span>
-                  ) : null}
-                </button>
-
-                <button
-                  type="button"
-                  className="pf-pricing-pay-tile is-disabled"
-                  title={t('pricing.soonTitle')}
-                  onClick={() => pickUnavailable(t('pricing.unionpay'))}
-                >
-                  <PaymentBrandIcon brand="unionpay" size="md" />
-                  <span className="pf-pricing-pay-tile-label">{t('pricing.unionpay')}</span>
-                  <span className="pf-pricing-pay-tile-soon">{t('common.comingSoon')}</span>
-                </button>
-
-                <button
-                  type="button"
-                  className="pf-pricing-pay-tile is-disabled"
-                  title={t('pricing.transferTitle')}
-                  onClick={() => pickUnavailable(t('pricing.transfer'))}
-                >
-                  <span className="pf-pricing-pay-tile-icon" aria-hidden>
-                    <Building2 size={22} strokeWidth={1.8} />
-                  </span>
-                  <span className="pf-pricing-pay-tile-label">{t('pricing.transfer')}</span>
-                  <span className="pf-pricing-pay-tile-sub">{t('pricing.enterprise')}</span>
-                </button>
+                </button>)}
               </div>
+              {stripeUnavailable && skuLocale === locale && <p className="pf-muted" role="status">{t('pricing.stripeUsdUnavailable')}</p>}
             </section>
 
             <section className="pf-pricing-skus" id="pricing-skus" aria-labelledby="pricing-skus-title" aria-busy={skusLoading}>
@@ -291,7 +307,7 @@ export default function PricingPage() {
                 <p>{t('pricing.why1')}</p>
               </header>
 
-              {skusLoading ? (
+              {skusLoading || skuLocale !== locale ? (
                 <div className="pf-pricing-sku-grid" role="status" aria-label={t('pricing.loadingSkus')}>
                   {[0, 1, 2, 3].map((index) => <div className="pf-pricing-sku-skeleton" key={index} aria-hidden><i /><i /><i /><i /></div>)}
                   <span className="pf-pricing-sr-only">{t('pricing.loadingSkus')}</span>
@@ -315,6 +331,11 @@ export default function PricingPage() {
                   // 金额与赠送余额全部取自服务端 SKU。
                   const bonus = sku.credit_fen - sku.amount_fen
                   const recommended = Boolean(sku.recommended)
+                  const stripeSelected = payType === 'stripe'
+                  const quote = stripeSelected ? stripeSkuQuote(sku.stripe_quote) : null
+                  const missingStripeQuote = stripeSelected && !quote
+                  // 各支付方式统一「货币代码 + 两位小数」；Stripe 报价缺失时价格区显示占位并禁止下单。
+                  const price = skuPriceDisplay({ stripeSelected, quote, amountFen: sku.amount_fen })
                   const label = m.pricing.skus[sku.id as keyof typeof m.pricing.skus] || sku.name
                   const tierHint =
                     m.pricing.skuHints[sku.id as keyof typeof m.pricing.skuHints] || t('pricing.foreverHint')
@@ -330,21 +351,24 @@ export default function PricingPage() {
                       </div>
                       <p className="pf-pricing-sku-hint">{tierHint}</p>
                       <div className="pf-pricing-sku-price">
-                        <span className="yen">¥</span>
-                        <strong>{yuanShort(sku.amount_fen)}</strong>
+                        <span className="yen">{price?.currency ?? '—'}</span>
+                        <strong>{price?.amount ?? '—'}</strong>
                       </div>
                       <p className="pf-pricing-sku-credit">
-                        <span>{t('pricing.credit')}</span><em>¥{yuan(sku.credit_fen)}</em>
+                        <span>{t('pricing.credit')}</span><em>{points(sku.credit_fen)}</em>
                       </p>
+                      {missingStripeQuote ? <p className="pf-pricing-sku-exchange" role="status">{t('pricing.stripeQuoteUnavailable')}</p> : quote && quote.payment_currency !== 'cny' ? (
+                        <p className="pf-pricing-sku-exchange">{t('pricing.stripeExchange', { currency: quote.payment_currency.toUpperCase(), rate: quote.payment_exchange_rate })}</p>
+                      ) : null}
                       {bonus > 0 ? (
-                        <p className="pf-pricing-sku-bonus"><Zap size={12} aria-hidden />{t('pricing.bonus', { amount: yuanShort(bonus) })}</p>
+                        <p className="pf-pricing-sku-bonus"><Zap size={12} aria-hidden />{t('pricing.bonus', { amount: points(bonus) })}</p>
                       ) : (
                         <p className="pf-pricing-sku-bonus is-empty">&nbsp;</p>
                       )}
                       <button
                         type="button"
                         className={`pf-pricing-sku-cta${recommended ? ' is-primary' : ''}`}
-                        disabled={Boolean(busy)}
+                        disabled={Boolean(busy) || payTypes.length === 0 || missingStripeQuote}
                         onClick={() => pay(sku)}
                         aria-busy={busy === sku.id}
                       >

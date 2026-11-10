@@ -1,3 +1,4 @@
+import { points } from "@/lib/points";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import type { AdminLedger, AdminOrder } from "@/api/client";
@@ -5,7 +6,8 @@ import { AdminDetailMeta, AdminDetailSection } from "@/components/admin/AdminDet
 import { AdminEntityLink } from "@/components/admin/AdminEntityLink";
 import { AdminModal } from "@/components/admin/AdminModal";
 import { Button } from "@/components/ui/button";
-import { fenToYuan } from "@/lib/utils";
+
+import { orderPaymentLabel } from "@/lib/orderPayment";
 import { ledgerKindLabel, orderStatusLabel, payTypeLabel } from "@/lib/statusLabels";
 
 /** 钱包关联对象链接：兼容数字订单 ID 与历史商户单号。 */
@@ -78,8 +80,9 @@ export function OrderDetailDialog({
                 ),
               },
               { label: "SKU", value: orderDetail.sku_id },
-              { label: "金额", value: `¥${fenToYuan(orderDetail.amount_fen)}` },
-              { label: "入账", value: `¥${fenToYuan(orderDetail.credit_fen)}` },
+              { label: "支付金额", value: orderPaymentLabel(orderDetail) },
+              { label: "到账积分", value: points(orderDetail.credit_fen) },
+              ...(orderDetail.payment_currency && orderDetail.payment_currency !== "cny" ? [{ label: "订单汇率", value: `1 ${orderDetail.payment_currency.toUpperCase()} = ${orderDetail.payment_exchange_rate || "—"} CNY` }] : []),
               { label: "支付方式", value: payTypeLabel(orderDetail.pay_type) },
               { label: "状态", value: orderStatusLabel(orderDetail.status) },
               { label: "渠道单号", value: orderDetail.trade_no || "—" },
@@ -127,8 +130,8 @@ export function LedgerDetailDialog({
                 ),
               },
               { label: "类型", value: ledgerKindLabel(ledgerDetail.kind) },
-              { label: "变动", value: `¥${fenToYuan(ledgerDetail.delta_fen)}` },
-              { label: "余额后", value: `¥${fenToYuan(ledgerDetail.balance_after)}` },
+              { label: "变动", value: points(ledgerDetail.delta_fen) },
+              { label: "剩余积分", value: points(ledgerDetail.balance_after) },
               { label: "关联", value: <LedgerRefLink row={ledgerDetail} /> },
               { label: "备注", value: ledgerDetail.note || "—" },
               {

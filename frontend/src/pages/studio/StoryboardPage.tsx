@@ -1,5 +1,7 @@
+import { marketText as mt } from '../../features/marketplace/translate'
+import { useMarketplaceLocale } from '../../features/marketplace/useMarketplaceLocale'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api, defaultsFromTemplate } from '../../api'
 import type { Project, Shot, Template } from '../../api'
 import AppShell from '../../components/layout/AppShell'
@@ -19,6 +21,7 @@ import {
 import { scenePromptForDisplay } from '../../promptDisplay'
 import { dialog } from '../../lib/dialog'
 import { downloadSingleVideo } from '../../lib/clientDownload'
+import { withReturn } from '../../features/marketplace/ui'
 import { handleBillingError } from '../../lib/billingError'
 import BillingErrorNotice from '../../components/billing/BillingErrorNotice'
 import {
@@ -125,9 +128,11 @@ function isProjectBusy(project: Project | null): boolean {
 }
 
 export default function StoryboardPage() {
+  useMarketplaceLocale()
   const { id } = useParams()
   const projectId = Number(id)
   const nav = useNavigate()
+  const location = useLocation()
   const [project, setProject] = useState<Project | null>(null)
   const [template, setTemplate] = useState<Template | null>(null)
   const [busy, setBusy] = useState(false)
@@ -1044,8 +1049,8 @@ title="用当前镜头重新拼接"
                     <button type="button" className="pf-btn pf-btn-ghost pf-btn-sm" onClick={openFinalPreview}>
                       预览成片
                     </button>
-                    <button type="button" className="pf-btn pf-btn-ghost pf-btn-sm" onClick={() => nav(`/marketplace/from-printfilm?project=${project.id}`)}>
-                      发布到数字资产市场
+                    <button type="button" className="pf-btn pf-btn-ghost pf-btn-sm" onClick={() => nav(withReturn(`/marketplace/from-printfilm?project=${project.id}`, `${location.pathname}${location.search}`))}>
+                      {mt("发布到数字资产市场")}
                     </button>
                   </>
                 ) : (

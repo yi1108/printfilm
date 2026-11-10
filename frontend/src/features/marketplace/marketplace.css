@@ -291,7 +291,10 @@ body:has(.pf-market-shell) .pf-wx-fab-root { display:none; }
 @media(max-width:640px) { .pf-market-kind-choice { grid-template-columns:1fr; } }
 .pf-market-series-mark { display:grid; place-items:center; width:100%; height:100%; min-height:160px; color:#8ea084; }
 .pf-market-handoff { display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; padding:12px 0; border-bottom:1px solid var(--pf-line); }
-.pf-market-handoff div { display:flex; gap:8px; flex-wrap:wrap; }
+.pf-market-handoff > div,.pf-market-publish-actions,.pf-market-series-step div { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.pf-market-series-step,.pf-market-handoff .pf-market-series-step { flex-basis:100%; display:flex; flex-direction:column; align-items:stretch; gap:10px; padding:12px; border:1px solid var(--pf-line); border-radius:10px; background:var(--pf-bg); }
+.pf-market-series-step p { margin:0; color:var(--pf-muted); font-size:13px; }
+.pf-market-series-step label { display:flex; flex-direction:column; gap:6px; min-width:220px; }
 .pf-market-purchase-notice { padding:15px 17px; margin:16px 0; border:1px solid #e2e8d8; background:#f5f8ee; border-radius:12px; line-height:1.8; }
 .pf-market-purchase-notice strong { font-size:14px; }.pf-market-purchase-notice p { font-size:12px; color:var(--pf-muted); }
 .pf-series-layout { display:grid; grid-template-columns:minmax(640px,1fr) 320px; gap:28px; align-items:start; }
@@ -312,3 +315,33 @@ body:has(.pf-market-shell) .pf-wx-fab-root { display:none; }
   .pf-series-stage .pf-market-video { max-height:70vh; }
   .pf-series-grid { grid-template-columns:repeat(6,minmax(0,1fr)); }
 }
+/* 英文长标签允许换行，避免窄屏按钮和授权弹窗溢出。 */
+.pf-market-shell[lang="en"] .pf-market-nav,
+.pf-market-shell[lang="en"] .pf-discover-categories { flex-wrap: wrap; overflow: visible; }
+.pf-market-shell[lang="en"] .pf-market-nav a { white-space: normal; }
+.pf-market-shell[lang="en"] .pf-market-form-actions,
+.pf-market-shell[lang="en"] .pf-market-actions,
+.pf-market-shell[lang="en"] .pf-market-publish-actions { flex-wrap: wrap; }
+.pf-market-shell[lang="en"] button,
+.pf-market-shell[lang="en"] .pf-btn { height: auto; min-height: 32px; white-space: normal; overflow-wrap: anywhere; }
+.pf-market-letter-reference { margin-block: 1rem; }
+.pf-market-letter-reference > p { padding: 12px 16px; border-radius: 12px; background: var(--pf-bg-soft, #f2f5e9); color: inherit; line-height: 1.6; }
+.pf-market-letter-modal, .pf-drama-publish { overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .pf-market-shell[lang="en"] .pf-market-top { align-items: flex-start; flex-direction: column; gap: 16px; }
+  .pf-market-shell[lang="en"] .pf-market-nav { gap: 8px; }
+  .pf-market-shell[lang="en"] .pf-market-nav a { padding: 10px 8px; font-size: 12px; }
+  .pf-market-shell[lang="en"] .pf-market-field-row { grid-template-columns: minmax(0, 1fr); }
+  .pf-market-shell[lang="en"] .pf-market-filter-top { flex-wrap: wrap; }
+  .pf-market-shell[lang="en"] .pf-market-search { min-width: 0; width: 100%; }
+  .pf-market-shell[lang="en"] .pf-market-title { overflow-wrap: anywhere; }
+}
+
+/* Platform curation and business-link sharing. */
+.pf-market-curation-badges { display: inline-flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.pf-market-curation-badge { display: inline-flex; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; line-height: 1.5; background: #e9f0df; color: #35512c; }
+.pf-market-curation-badge.is-pinned { background: #f4ebd6; color: #765720; }
+.pf-market-share { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0; }
+.pf-market-share button { display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px; border: 1px solid var(--pf-market-border, #dce3d4); border-radius: 10px; color: inherit; background: transparent; cursor: pointer; }
+.pf-market-share button:disabled { opacity: .6; cursor: wait; }
+.pf-market-share small { overflow-wrap: anywhere; }

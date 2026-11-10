@@ -1,5 +1,6 @@
 import type { ToolRunRecord } from '../api/tools.ts'
 import type { AssetDetailRecord } from './assetDetails.ts'
+import { formatGenerationErrorMessage } from './generationError.ts'
 
 /** 只接收参数标量，忽略请求引用、对象和内部追踪信息。 */
 function scalar(value: unknown): string | number | boolean | undefined {
@@ -21,7 +22,7 @@ export function toolRunDetailAsset(record: ToolRunRecord, resultIndex = 0): Asse
   const duration = seconds(params.duration_sec ?? params.duration)
   const labels: Record<string, string> = { video: '视频生成', image: '图片生成', audio: '音频生成', text: '文字生成' }
   const statuses: Record<string, string> = { queued: '任务正在排队，结果会自动更新。', running: '任务正在生成，结果会自动更新。', succeeded: '任务已完成，暂无可预览的媒体结果。', failed: '生成失败。', cancelled: '任务已取消。' }
-  const textContent = record.text_content || record.error || statuses[record.status] || `任务状态：${record.status}`
+  const textContent = record.text_content || formatGenerationErrorMessage(record.error) || statuses[record.status] || `任务状态：${record.status}`
 
   return {
     id: record.id,

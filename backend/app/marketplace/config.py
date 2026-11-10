@@ -36,6 +36,13 @@ def is_marketplace_enabled() -> bool:
     return bool(get_settings().marketplace_enabled)
 
 
+def video_duration_limit() -> int:
+    """完整视频最长秒数。系统设置保存后以数据库为准，未保存时用 MARKETPLACE_MAX_DURATION_SECONDS。"""
+    from app.config import get_settings
+    value = int(get_settings().marketplace_max_duration_seconds or 0)
+    return value if value > 0 else 1800
+
+
 def resolve_cjk_font() -> str:
     """优先使用已配置且存在的字体；否则用仓库内置或系统中的中文字体。"""
     configured = Path(get_marketplace_settings().watermark_font)

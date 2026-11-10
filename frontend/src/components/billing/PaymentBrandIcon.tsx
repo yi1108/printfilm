@@ -1,4 +1,4 @@
-type PayBrand = 'alipay' | 'wxpay' | 'unionpay'
+type PayBrand = 'alipay' | 'wxpay'
 
 type Props = {
   brand: PayBrand
@@ -10,7 +10,6 @@ type Props = {
 const BRAND_META: Record<PayBrand, { src: string; alt: string }> = {
   alipay: { src: '/payment/alipay.svg', alt: '支付宝' },
   wxpay: { src: '/payment/wechatpay.svg', alt: '微信支付' },
-  unionpay: { src: '/payment/unionpay.svg', alt: '银联支付' },
 }
 
 /** 支付渠道品牌图标 */

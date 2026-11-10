@@ -43,21 +43,21 @@ async def _publication_restriction(db: DB, publication: Publication) -> str:
         return "作者账号不可用"
     # 账号模型当前没有封禁字段；不引入或修改原用户表。
     if publication.content_type == "work":
-        item = await db.get(Work, publication.content_id)
+        item = await db.get(Work, publication.content_id, populate_existing=True)
         if not item or item.owner_id != publication.owner_id:
             return "作品不可用"
         if item.blocked:
             return "作品已被限制播放"
     elif publication.content_type == "series_episode":
-        item = await db.get(SeriesEpisode, publication.content_id)
-        series = await db.get(Series, item.series_id) if item else None
+        item = await db.get(SeriesEpisode, publication.content_id, populate_existing=True)
+        series = await db.get(Series, item.series_id, populate_existing=True) if item else None
         if not item or not series or item.owner_id != publication.owner_id or series.owner_id != publication.owner_id:
             return "分集不可用"
         if item.blocked or series.blocked:
             return "系列或分集已被限制播放"
     else:
         return "不支持的发布内容"
-    rights = (await db.execute(select(Rights).where(Rights.asset_id == publication.asset_id))).scalar_one_or_none()
+    rights = (await db.execute(select(Rights).where(Rights.asset_id == publication.asset_id).execution_options(populate_existing=True))).scalar_one_or_none()
     if not rights or rights.owner_id != publication.owner_id or rights.blocked or (rights.valid_until and rights.valid_until <= now()):
         return "该发布版本的权属已受限制"
     return ""
@@ -70,11 +70,11 @@ async def _current_sale(db: DB, publication: Publication) -> bool:
     if publication.share_bps is None or not 0 <= publication.share_bps <= 10000:
         return False
     if publication.content_type == "work":
-        item = await db.get(Work, publication.content_id)
+        item = await db.get(Work, publication.content_id, populate_existing=True)
         parent = item
     else:
-        item = await db.get(SeriesEpisode, publication.content_id)
-        parent = await db.get(Series, item.series_id)
+        item = await db.get(SeriesEpisode, publication.content_id, populate_existing=True)
+        parent = await db.get(Series, item.series_id, populate_existing=True)
         from .previews import episode_is_free
         if episode_is_free(parent, item):
             return False
@@ -83,8 +83,8 @@ async def _current_sale(db: DB, publication: Publication) -> bool:
             or parent.audit_status != "approved" or not parent.listed
             or parent.deleted_at or parent.sale_type != "platform_unlock"):
         return False
-    asset = await db.get(Asset, publication.asset_id)
-    rights = (await db.execute(select(Rights).where(Rights.asset_id == publication.asset_id))).scalar_one_or_none()
+    asset = await db.get(Asset, publication.asset_id, populate_existing=True)
+    rights = (await db.execute(select(Rights).where(Rights.asset_id == publication.asset_id).execution_options(populate_existing=True))).scalar_one_or_none()
     return bool(asset and asset.owner_id == publication.owner_id and asset.status == "ready" and rights_valid(rights, full=True))
 
 
@@ -324,6 +324,19 @@ def _notify_success(params: dict[str, str]) -> bool:
     return str(params.get("trade_status") or params.get("status") or "").upper() in {"TRADE_SUCCESS", "SUCCESS", "1"}
 
 
+async def ensure_paid_order_revenue(db, order, publication):
+    if await db.scalar(select(RevenueLedger.id).where(RevenueLedger.order_id == order.id)):
+        return False
+    share = publication.share_bps
+    if share is None or not 0 <= share <= 10000:
+        return False
+    platform = order.amount_fen * share // 10000
+    db.add(RevenueLedger(order_id=order.id, publication_id=publication.id, owner_id=publication.owner_id,
+        gross_fen=order.amount_fen, platform_fen=platform, creator_fen=order.amount_fen-platform, share_bps=share))
+    await db.flush()
+    return True
+
+
 @router.get(
     "/payments/epay/notify",
     response_class=PlainTextResponse,
@@ -351,9 +364,14 @@ async def epay_notify(request: Request, db: DB) -> PlainTextResponse:
     if not _notify_success(params):
         return PlainTextResponse("success")
     trade_no = str(params.get("out_trade_no") or "")
-    order = (await db.execute(select(ContentOrder).where(ContentOrder.out_trade_no == trade_no).with_for_update())).scalar_one_or_none()
+    owner_id = await db.scalar(select(ContentOrder.user_id).where(ContentOrder.out_trade_no == trade_no))
+    if owner_id is not None:
+        await db.execute(select(User).where(User.id == owner_id).with_for_update())
+    order = (await db.execute(select(ContentOrder).where(ContentOrder.out_trade_no == trade_no).with_for_update().execution_options(populate_existing=True))).scalar_one_or_none()
     if not order:
         return PlainTextResponse("fail", status_code=404)
+    if order.pay_type not in ("alipay", "wxpay"):
+        return PlainTextResponse("fail", status_code=400)
     try:
         amount = Decimal(str(params.get("money") or "")) * 100
         if not amount.is_finite() or amount != amount.to_integral_value():
@@ -385,8 +403,15 @@ async def epay_notify(request: Request, db: DB) -> PlainTextResponse:
     existing_entitlement = (await db.execute(select(Entitlement).where(
         Entitlement.user_id == order.user_id,
         Entitlement.publication_id == publication.id,
-    ).with_for_update())).scalar_one_or_none()
+    ).with_for_update().execution_options(populate_existing=True))).scalar_one_or_none()
     if existing_entitlement:
+        prior_order = await db.get(ContentOrder, existing_entitlement.order_id) if existing_entitlement.order_id else None
+        if not existing_entitlement.active:
+            existing_entitlement.active, existing_entitlement.order_id = True, order.id
+            await ensure_paid_order_revenue(db, order, publication)
+        elif prior_order and prior_order.pay_type == "platform_balance":
+            # Preserve this independent paid grant if the Apple-funded grant is revoked later.
+            existing_entitlement.order_id = order.id
         event(db, order.user_id, "content_order", order.id, "duplicate_purchase_paid",
               "同一发布版本已有权益，本次付款已确认，需人工核对重复收款；不重复计创作者收益", publication.version)
         await db.commit()

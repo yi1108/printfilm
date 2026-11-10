@@ -16,6 +16,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
+COPY scripts ./scripts
 COPY static ./static
 
 RUN mkdir -p /app/static/generated /app/static/voice_previews

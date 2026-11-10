@@ -169,7 +169,7 @@ async function waitForAssetVideo(projectId: number, assetId: number): Promise<Dr
       if (status === 'done' && latest.url) {
         return latest
       }
-      if (status !== 'generating' && isVideoMediaUrl(latest.url)) {
+      if (status !== 'generating' && status !== 'queued' && isVideoMediaUrl(latest.url)) {
         return latest
       }
     } catch (err) {
@@ -313,19 +313,23 @@ export function enqueueDramaVideoGen(input: EnqueueInput): Promise<DramaAsset> {
 export function resumeDramaVideoGensFromAssets(
   projectId: number,
   assets: DramaAsset[],
+  onAssetUpdate?: (asset: DramaAsset) => void,
 ): void {
   for (const asset of assets) {
     if (asset.project_id !== projectId) continue
     if ((asset.type || '').toLowerCase() !== 'video') continue
     const status = readGenerationStatus(asset)
-    if (status !== 'generating') continue
-    if (isDramaAssetVideoBusy(asset.id)) continue
+    if (status !== 'generating' && status !== 'queued') continue
+    // enqueue 会复用在途轮询；重新进入画布也需要接上完成结果。
     void enqueueDramaVideoGen({
       projectId,
       assetId: asset.id,
       assetName: asset.name || undefined,
       prompt: '',
       resumeOnly: true,
+    }).then((latest) => {
+      // 旧任务完成后的微任务不能覆盖刚开始的下一次生成。
+      if (!isDramaAssetVideoBusy(asset.id)) onAssetUpdate?.(latest)
     }).catch(() => {
       /* 面板会显示失败 */
     })

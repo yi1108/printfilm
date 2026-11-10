@@ -5,8 +5,8 @@ import { AdminModal } from "@/components/admin/AdminModal";
 import { AdminField } from "@/components/admin/AdminField";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { yuanInputToFen } from "@/lib/moneyInput";
-import { fenToYuan } from "@/lib/utils";
+import { parsePoints } from "@/lib/points";
+import { points } from "@/lib/points";
 
 /** 设置团队或成员月上限，零元停用新消费，空值代表不限额。 */
 export function TeamBudgetModal({ teamId, memberId, name, limit, onClose, onSaved }: {
@@ -14,7 +14,7 @@ export function TeamBudgetModal({ teamId, memberId, name, limit, onClose, onSave
   onClose: () => void; onSaved: () => void;
 }) {
   const [unlimited, setUnlimited] = useState(limit === null);
-  const [amount, setAmount] = useState(limit === null ? "" : fenToYuan(limit));
+  const [amount, setAmount] = useState(limit === null ? "" : String(limit));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [amountTouched, setAmountTouched] = useState(false);
@@ -22,11 +22,11 @@ export function TeamBudgetModal({ teamId, memberId, name, limit, onClose, onSave
   const pending = useRef(false);
   const formId = useId();
   const modeName = useId();
-  const amountFen = yuanInputToFen(amount);
+  const amountFen = parsePoints(amount);
   const amountError = unlimited ? "" : !amount.trim()
     ? "请输入每月消费上限"
-    : amountFen === null ? "请输入非负金额，最多保留两位小数"
-    : amountFen > 100000000 ? "每月消费上限不能超过 1,000,000 元"
+    : amountFen === null ? "请输入非负整数积分"
+    : amountFen > 100000000 ? "每月消费上限不能超过 100,000,000 积分"
     : "";
   const nextLimit = unlimited ? null : amountFen;
   const changed = unlimited ? limit !== null : amountError !== "" || nextLimit !== limit;
@@ -61,7 +61,7 @@ export function TeamBudgetModal({ teamId, memberId, name, limit, onClose, onSave
       <form id={formId} noValidate onSubmit={(event) => { event.preventDefault(); void save(); }} className="space-y-5">
         <div className="admin-form-summary rounded-xl border border-[var(--admin-border)] bg-[#f7f9f4] px-4 py-3">
           <div className="text-xs text-[var(--admin-muted)]">当前每月消费上限</div>
-          <div className="mt-1.5 text-xl font-semibold tabular-nums text-[var(--admin-text)]">{limit === null ? "不限额" : `¥${fenToYuan(limit)}`}</div>
+          <div className="mt-1.5 text-xl font-semibold tabular-nums text-[var(--admin-text)]">{limit === null ? "不限额" : `${points(limit)}`}</div>
         </div>
         <fieldset disabled={busy} className="min-w-0 space-y-3">
           <legend className="mb-3 text-sm font-semibold text-[var(--admin-text)]">消费限制方式</legend>
@@ -76,13 +76,13 @@ export function TeamBudgetModal({ teamId, memberId, name, limit, onClose, onSave
             </label>
           </div>
         </fieldset>
-        <AdminField label="每月消费上限（元）" required={!unlimited} hint={unlimited ? "已选择不限额，无需填写金额。" : "可设置 0–1,000,000 元，最多两位小数；0 元表示停止新消费。"} error={visibleAmountError}>
-          <Input value={amount} inputMode="decimal" placeholder={unlimited ? "不限额，无需填写" : "例如 1000.00"} disabled={unlimited || busy} onBlur={() => setAmountTouched(true)} onChange={(event) => { setAmount(event.target.value); setError(""); }} />
+        <AdminField label="每月消费上限（积分）" required={!unlimited} hint={unlimited ? "已选择不限额，无需填写金额。" : "可设置 0–100,000,000 积分，仅支持整数；0 积分表示停止新消费。"} error={visibleAmountError}>
+          <Input value={amount} inputMode="numeric" placeholder={unlimited ? "不限额，无需填写" : "例如 100000"} disabled={unlimited || busy} onBlur={() => setAmountTouched(true)} onChange={(event) => { setAmount(event.target.value); setError(""); }} />
         </AdminField>
         <div className="admin-form-notice flex items-start gap-2.5 rounded-xl border border-[var(--admin-border)] bg-[#f8f9f5] p-4 text-xs leading-7 text-[var(--admin-muted)]">
           <Info className="mt-1 h-4 w-4 shrink-0" aria-hidden="true" />
           <div>
-            <p>按上海时区自然月统计，已消费金额与在途预留金额均占用额度。</p>
+            <p>按上海时区自然月统计，已消费积分与在途预留积分均占用额度。</p>
             <p>{memberId === undefined ? "团队上限统计所有成员消费；成员自己的上限同时生效。" : "成员消费同时受个人上限与团队总上限限制。"}降低上限不会取消已受理任务。</p>
             <p>费用从受理时的团队所有者个人账户扣除，设置上限不会调整账户余额。</p>
           </div>

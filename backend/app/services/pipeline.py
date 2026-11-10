@@ -1150,6 +1150,7 @@ async def _parallel_videos(project_id: int) -> None:
             .options(selectinload(Project.shots), selectinload(Project.template))
         )
         project = result.scalar_one()
+        project_user_id = int(project.user_id)
         tpl = project.template
         # 科普 full：默认 Seedance 内置口播；回退模式才 ambient_only + 后期 TTS
         generate_audio = _kepu_seedance_generate_audio(project)
@@ -1330,7 +1331,7 @@ async def _parallel_videos(project_id: int) -> None:
                 from app.services.media_models.runtime import current_snapshot
                 if (current_snapshot.get() or {}).get("mode") == "fixed_media":
                     from app.services.drama.billing_util import record_seedance_video_usage
-                    await record_seedance_video_usage(db, user_id=project.user_id, billing_key=billing_key,
+                    await record_seedance_video_usage(db, user_id=project_user_id, billing_key=billing_key,
                         model=video_model or get_settings().model_video, domain="kepu", task_result=task_result,
                         fallback_duration_sec=dur, resolution=resolution, provider_task_id=task_result.provider_task_id,
                         project_id=project_id, shot_id=shot.id)

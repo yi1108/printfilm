@@ -1,8 +1,9 @@
+import { marketText as mt } from './translate.ts'
 import type { Handoff } from './api'
 
 export type PublishEpisode = {
   id: number; name: string; episode_number: number; fragment_count: number; completed_count: number
-  ready: boolean; reason?: string | null; source_version: string
+  ready: boolean; reason?: string | null; reason_code?: string; reason_label?: string; source_version: string
 }
 export type ImportedEpisode = {
   source_episode_id: number; episode_id: number; source_version: string; status: string; handoff_id?: number | null; requires_update?: boolean
@@ -23,19 +24,19 @@ export function sourceRelation(episode: PublishEpisode, target?: PublishSeries) 
 
 export function publishSelection(context: DramaPublishContext, selected: number[], updates: number[], target?: PublishSeries) {
   return context.episodes.filter(item => selected.includes(item.id)).sort((a, b) => a.episode_number - b.episode_number).map(episode => {
-    if (!episode.ready) throw new Error(`${episode.name}：${episode.reason || '分集尚未全部生成完成'}`)
+    if (!episode.ready) throw new Error(`${episode.name}: ${episode.reason_label || episode.reason || mt("分集尚未全部生成完成")}`)
     const { changed } = sourceRelation(episode, target)
-    if (changed && !updates.includes(episode.id)) throw new Error(`请确认更新「${episode.name}」的新版本`)
+    if (changed && !updates.includes(episode.id)) throw new Error(mt("请确认更新「{0}」的新版本", [episode.name]))
     return { episode_id: episode.id, source_version: episode.source_version, update: changed }
   })
 }
 
-const phaseLabels: Record<string, string> = {
+const phaseLabels: Record<string, string> = new Proxy<Record<string, string>>({
   queued: '排队中', pending: '排队中', syncing: '同步素材', downloading: '同步素材', copying: '同步素材',
   composing: '拼接整集', concatenating: '拼接整集', validating: '校验视频', ready: '已就绪', failed: '同步失败',
-}
+}, { get: (target, key: string) => target[key] ? mt(target[key]) : undefined })
 export function handoffLabel(handoff: Handoff) {
-  return phaseLabels[handoff.phase || ''] || handoff.label || phaseLabels[handoff.status] || '同步中'
+  return phaseLabels[handoff.phase || ''] || handoff.label || phaseLabels[handoff.status] || mt("同步中")
 }
 export function isHandoffActive(handoff: Pick<Handoff, 'status'>) {
   return handoff.status === 'pending' || handoff.status === 'running'
@@ -50,6 +51,10 @@ export function latestEpisodeHandoffs(items: Handoff[]) {
 }
 
 type SyncEpisode = { id?: number; version?: number; asset_id: number | null; cover_asset_id: number | null; source?: string }
+// 接纳后台同步的系列封面；用户选过或主动清空后，后续轮询不能覆盖本地意图。
+export function mergeSyncedCover(current: number | null, remote: number | null, previous: number | null, edited = false) {
+  return !edited && current === previous ? remote : current
+}
 // 只回填同步产物和版本；封面被用户编辑过时保留本地选择，标题和价格始终保留。
 export function mergeSyncedEpisodes<T extends SyncEpisode>(current: T[], remote: T[], previous: T[]) {
   return current.map(episode => {

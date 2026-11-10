@@ -1,3 +1,4 @@
+import { points, pointText } from '../../lib/points'
 import { useCallback, useEffect, useRef } from 'react'
 import { api } from '../../api'
 import { dialog } from '../../lib/dialog'
@@ -26,8 +27,8 @@ export default function BillingAlertHost() {
       if (!items.length) return
       for (const item of items) {
         await dialog.alert({
-          title: item.title || '消费提醒',
-          message: item.message,
+          title: item.kind === 'user_milestone' ? pointText('积分消费提醒', 'Points usage reminder') : item.title || '消费提醒',
+          message: item.kind === 'user_milestone' && Number.isSafeInteger(item.milestone_fen) ? pointText(`累计消费已达到 ${points(item.milestone_fen)}，请注意账户可用积分。`, `Your spending has reached ${points(item.milestone_fen)}. Please check your available Points.`) : item.message,
           confirmText: '知道了',
         })
         try {

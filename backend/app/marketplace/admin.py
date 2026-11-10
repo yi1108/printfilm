@@ -4,22 +4,44 @@ from sqlalchemy import and_, func, select
 
 from .dependencies import Admin, DB
 from .models import Asset, EpisodePreview, Entitlement, Event, MediaJob, Publication, Recruit, RegistrationCase, Report, RevenueConfig, RevenueLedger, Payout, Rights, Series, SeriesEpisode, Submission, Support, Work, WorkPreview
-from .schemas import BlockInput, CaseReview, CategoryInput, PayoutInput, ResolutionInput, ReviewInput, RevenueConfigInput, SupportInput, Version
+from .schemas import BlockInput, CaseReview, CategoryInput, ContentRevenueInput, PayoutInput, ResolutionInput, ReviewInput, RevenueConfigInput, SupportInput, Version
 from .service import (asset_owned, check_version, data, event, fail, now, notify, page, recruit_data,
                       rights_for, rights_valid, submission_data, validate_rights, work_data)
 
 router = APIRouter()
 
 
+@router.patch("/content-revenue/{kind}/{target_id}", response_model=dict,
+              summary="设置内容后续发布版本的平台分成（仅管理员）")
+async def set_content_revenue(kind: str, target_id: int, body: ContentRevenueInput, db: DB, user: Admin):
+    """仅修改运营覆盖值，不重写已冻结发布版本、订单、权益或收益。"""
+    model = {"work": Work, "series": Series, "series_episode": SeriesEpisode}.get(kind)
+    if model is None:
+        fail("内容类型无效", 404)
+    item = await db.get(model, target_id, with_for_update=True, populate_existing=True)
+    if item is None or getattr(item, "deleted_at", None):
+        fail("内容不存在", 404)
+    check_version(item, body.version)
+    if item.share_bps != body.previous_share_bps:
+        fail("分成配置已被修改，请刷新后重试", 409)
+    previous = item.share_bps
+    item.share_bps = body.share_bps
+    event(db, user.id, kind, item.id, "revenue_share_updated",
+          note=f"{previous} -> {body.share_bps}; {body.reason}", version=item.version)
+    await db.commit()
+    return {"id": item.id, "version": item.version, "share_bps": item.share_bps,
+            "applies_to": "future_publications"}
+
+
 def _notification_note(message: str, note: str) -> str:
     """省略空说明，避免向用户展示内部枚举或空分隔符。"""
-    return f"{message}说明：{note.strip()}" if note.strip() else message
+    from .notification_locale import note_notice
+    return note_notice(message, note)
 
 
 def _review_notification(kind: str, title: str, decision: str, reason: str, approved_next: str) -> str:
-    result = (f"{kind}《{title}》审核通过，{approved_next}。" if decision == "approved"
-              else f"{kind}《{title}》审核未通过，请根据审核说明修改后重新提交。")
-    return _notification_note(result, reason)
+    from .notification_locale import review_notice
+    return review_notice(kind, title, decision, reason, approved_next)
 
 
 @router.get(
@@ -30,7 +52,7 @@ def _review_notification(kind: str, title: str, decision: str, reason: str, appr
 )
 async def get_categories(db: DB, user: Admin):
     from .categories import category_config
-    return await category_config(db)
+    return await category_config(db, include_disabled=True)
 
 
 @router.put(
@@ -47,13 +69,18 @@ async def save_categories(body: CategoryInput, db: DB, user: Admin):
     item = await db.get(CategoryConfig, 1, with_for_update=True)
     if body.version != (item.version if item else 0):
         fail("分类配置已被修改，请重新加载后保存", 409)
+    from .categories import category_config, entries, merge_config
+    previous = entries(item)
     if item is None:
         item = CategoryConfig(id=1, version=0, names=[])
         db.add(item)
-    item.names, item.version = body.names, item.version + 1
+    item.items = merge_config(previous,
+                              [entry.model_dump() for entry in body.items] if body.items is not None else None, body.names)
+    item.names = [entry["name_zh"] for entry in item.items if entry["enabled"]]
+    item.version += 1
     event(db, user.id, "categories", 1, "updated", version=item.version)
     await db.commit()
-    return {"names": item.names, "version": item.version}
+    return await category_config(db, include_disabled=True)
 
 
 MODELS = {"works": Work, "rights": Rights, "cases": RegistrationCase, "recruits": Recruit,
@@ -88,12 +115,15 @@ async def overview(db: DB, user: Admin):
     description='仅管理员可访问。kind 支持 works、rights、cases、recruits、submissions、reports、jobs、events、previews、series、episodes、orders、ledger、payouts、entitlements。支持按适用的状态筛选；权益记录还可按 user_id、owner_id 筛选。',
     response_description='运营记录 items 与分页信息 meta。',
 )
-async def records(kind: str, db: DB, user: Admin, status: str = "", user_id: int | None = Query(None, ge=1), owner_id: int | None = Query(None, ge=1), page_number: int = Query(1, alias="page", ge=1), page_size: int = Query(20, ge=1, le=100)):
+async def records(kind: str, db: DB, user: Admin, status: str = "", curation: str = "", user_id: int | None = Query(None, ge=1), owner_id: int | None = Query(None, ge=1), page_number: int = Query(1, alias="page", ge=1), page_size: int = Query(20, ge=1, le=100)):
     """管理员分页工作台；敏感材料在单独鉴权接口读取。"""
     model = MODELS.get(kind)
     if not model:
         fail("记录类型无效", 404)
     query = select(model)
+    if curation and kind in ("works", "series"):
+        from .curation import filter_curation
+        query = filter_curation(query, model, "work" if kind == "works" else "series", curation)
     if kind in ("works", "series"):
         query = query.where(model.deleted_at.is_(None))
     field = getattr(model, "audit_status", None) if kind in ("works", "recruits", "series") else getattr(model, "status", None)
@@ -135,7 +165,7 @@ async def records(kind: str, db: DB, user: Admin, status: str = "", user_id: int
             result["episodes"] = []
             for episode in episodes:
                 rights = (await db.execute(select(Rights).where(Rights.asset_id == episode.asset_id))).scalar_one_or_none() if episode.asset_id else None
-                result["episodes"].append({**data(episode, "id", "episode_no", "title", "description", "asset_id", "cover_asset_id", "source", "source_type", "version", "audit_status", "listed", "preview_status", "playback_status"), **({"details": rights.details, "certificate_asset_id": rights.certificate_asset_id, "evidence_ids": rights.evidence_ids} if rights else {})})
+                result["episodes"].append({**data(episode, "id", "episode_no", "title", "description", "asset_id", "cover_asset_id", "share_bps", "source", "source_type", "version", "audit_status", "listed", "preview_status", "playback_status"), **({"details": rights.details, "certificate_asset_id": rights.certificate_asset_id, "evidence_ids": rights.evidence_ids} if rights else {})})
         elif kind == "submissions":
             result = await submission_data(db, item, user)
         elif kind == "entitlements":
@@ -148,6 +178,9 @@ async def records(kind: str, db: DB, user: Admin, status: str = "", user_id: int
         else:
             fields = [column.name for column in model.__table__.columns]
             result = data(item, *fields)
+        if kind in ("works", "series"):
+            from .curation import admin_fields
+            result.update(await admin_fields(db, "work" if kind == "works" else "series", item.id))
         items.append(result)
     if kind in ("rights", "cases", "reports", "entitlements"):
         event(db, user.id, kind, 0, "admin_list_read")
@@ -510,7 +543,7 @@ async def resolve_report(report_id: int, body: ResolutionInput, db: DB, user: Ad
 async def get_support(db: DB, user: Admin):
     """管理配置不返回 OSS 对象位置。"""
     item = await db.get(Support, 1)
-    return data(item, "name", "wechat", "hours", "qr_asset_id", "enabled") if item else {"enabled": False}
+    return data(item, "name", "name_en", "wechat", "hours", "hours_en", "qr_asset_id", "enabled") if item else {"enabled": False}
 
 
 @router.put(

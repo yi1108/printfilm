@@ -10,6 +10,7 @@ import { CanvasTopBar } from './CanvasTopBar'
 import { getViewportCenterNodePosition } from './canvasNormalize'
 import { CANVAS_NODE_SIZE, type CanvasNodeKind } from './canvasTypes'
 import { FreeCanvasFlow } from './FreeCanvasFlow'
+import { formatGenerationErrorMessage } from '../../../lib/generationError'
 import './canvas.css'
 
 type CanvasWorkspaceProps = {
@@ -77,7 +78,7 @@ function CanvasWorkspaceContent({
       {showNodeSelector ? <CanvasNodeSelector onSelect={handleSelectNode} /> : null}
       {errorMessage ? (
         <p className="fc-error-toast" role="alert" onAnimationEnd={() => setErrorMessage('')}>
-          {errorMessage}
+          {formatGenerationErrorMessage(errorMessage)}
         </p>
       ) : null}
       {loading ? (

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { latestEpisodeHandoffs, mergeSyncedEpisodes, publishSelection, sourceRelation } from '../src/features/marketplace/dramaPublishing.ts'
+import { latestEpisodeHandoffs, mergeSyncedCover, mergeSyncedEpisodes, publishSelection, sourceRelation } from '../src/features/marketplace/dramaPublishing.ts'
 
 const episode = (id, episode_number, source_version = 'v1') => ({ id, name: `第${episode_number}集`, episode_number, source_version, ready: true, fragment_count: 3, completed_count: 3 })
 
@@ -53,4 +53,19 @@ test('后台第二次回填仍保留用户选择的封面和手动视频，新�
   const current = [{ ...previous[0], asset_id: 41, cover_asset_id: 42 }, { asset_id: null, cover_asset_id: null, title: '新添分集' }]
   const remote = [{ ...previous[0], version: 4, asset_id: 50, cover_asset_id: 51 }]
   assert.deepEqual(mergeSyncedEpisodes(current, remote, previous), [{ ...current[0], version: 4 }, current[1]])
+})
+
+test('后台补齐系列封面后，当前表单接纳封面并持续跟随未编辑的远端值', () => {
+  const first = mergeSyncedCover(null, 31, null)
+  assert.equal(first, 31)
+  assert.equal(mergeSyncedCover(first, 32, 31), 32)
+  assert.equal(mergeSyncedCover(32, 32, 32), 32)
+})
+
+test('系列封面同步保留本地新选、主动清空和选择后清空的意图', () => {
+  assert.equal(mergeSyncedCover(42, 31, null, true), 42)
+  assert.equal(mergeSyncedCover(null, 32, 31, true), null)
+  // 初始封面为空，用户选择后再清空；即使值与旧基线相同也不能被轮询覆盖。
+  assert.equal(mergeSyncedCover(null, 31, null, true), null)
+  assert.equal(mergeSyncedCover(42, 31, null), 42)
 })

@@ -7,10 +7,12 @@ import json
 
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import func, or_, select, text, update
+from sqlalchemy.orm import selectinload
 
 from app.models_drama import DramaEpisode, DramaEpisodeFragment, DramaProject
 from app.models_tasks import TaskRun
 from app.services.drama.access import require_drama_project_access
+from app.services.drama.project_cover import resolve_drama_project_cover
 from .authorization import current as current_authorization
 from .dependencies import Actor, DB, storage_ready
 from .models import DramaPublishBatch, Handoff, Publication, Rights, Series, SeriesEpisode
@@ -46,9 +48,53 @@ async def owned_project(db, owner_id: int, project_id: int):
     return project
 
 
+async def project_cover_snapshot(db, project_id: int, *, known_stamps=None) -> dict:
+    """沿用漫剧项目卡片的封面来源，并冻结真实文件身份供市场独立转存。"""
+    from .drama_media import source_stamp
+
+    project = (await db.execute(select(DramaProject).where(DramaProject.id == project_id).options(
+        selectinload(DramaProject.assets),
+        selectinload(DramaProject.episodes).selectinload(DramaEpisode.fragments),
+    ).execution_options(populate_existing=True))).scalar_one()
+    locator, _ = resolve_drama_project_cover(project)
+    if locator:
+        try:
+            stamp = (known_stamps or {}).get(locator)
+            if stamp is None:
+                stamp = await asyncio.to_thread(source_stamp, locator)
+            return {"project_cover_locator": locator, "project_cover_stamp": stamp}
+        except (HTTPException, ValueError, OSError):
+            pass
+    return {"project_cover_locator": "", "project_cover_stamp": None}
+
+
+def snapshot_source_version(snapshot: dict, *, include_project_cover: bool = True) -> str:
+    """按快照原协议计算来源版本，兼容升级前未包含项目封面的完整分集任务。"""
+    from .drama_media import stamp_version
+
+    cover_stamp = snapshot.get("cover_stamp")
+    if not include_project_cover and not any(clip.get("cover") for clip in snapshot["clips"]):
+        # 旧协议在没有分镜图片时留空，不将新增的视频首帧回退当作源文件变化。
+        cover_stamp = None
+    payload = {"episode": snapshot["drama_episode_id"], "title": snapshot["title"],
+        "episode_number": snapshot["episode_number"], "updated_at": snapshot["episode_updated_at"],
+        "cover_stamp": stamp_version(cover_stamp) if cover_stamp else None,
+        "clips": [{"id": clip["id"], "sort_order": clip["sort_order"], "updated_at": clip["updated_at"],
+                   "stamp": stamp_version(clip["stamp"]), "cover": clip["cover"]} for clip in snapshot["clips"]]}
+    if include_project_cover:
+        project_stamp = snapshot.get("project_cover_stamp")
+        payload["project_cover_stamp"] = stamp_version(project_stamp) if project_stamp else None
+    return digest(payload)
+
+
+def source_matches(snapshot: dict, task: Handoff) -> bool:
+    """只放宽新增封面协议字段，真实分镜与原分镜封面发生变化仍拒绝复用。"""
+    return snapshot_source_version(snapshot, include_project_cover="project_cover_stamp" in (task.source_snapshot or {})) == task.source_version
+
+
 async def episode_snapshot(db, owner_id: int, project_id: int, episode_id: int) -> dict:
     """服务端保存有序分镜与实际文件身份，不接受客户端传入视频地址。"""
-    from .drama_media import source_stamp, stamp_version
+    from .drama_media import source_stamp
 
     project = await owned_project(db, owner_id, project_id)
     episode = await db.get(DramaEpisode, episode_id)
@@ -82,26 +128,30 @@ async def episode_snapshot(db, owner_id: int, project_id: int, episode_id: int) 
         clips.append({"id": fragment.id, "sort_order": fragment.sort_order, "locator": locator,
                       "stamp": stamp, "updated_at": fragment.updated_at.isoformat(),
                       "cover": fragment.cover or ""})
+    known_stamps = {clip["locator"]: clip["stamp"] for clip in clips}
+    project_cover = await project_cover_snapshot(db, project.id, known_stamps=known_stamps)
+    if project_cover["project_cover_stamp"]:
+        known_stamps[project_cover["project_cover_locator"]] = project_cover["project_cover_stamp"]
     snapshot = {"schema_version": 2, "drama_project_id": project.id, "drama_episode_id": episode.id,
                 "episode_number": episode_number(episode), "title": episode.name,
                 "episode_updated_at": episode.updated_at.isoformat(), "clips": clips,
-                "cover_locator": next((clip["cover"] for clip in clips if clip["cover"]), "")}
+                **project_cover,
+                "cover_locator": next((clip["cover"] for clip in clips if clip["cover"]), "")
+                    or project_cover["project_cover_locator"]}
     snapshot["cover_stamp"] = None
     if snapshot["cover_locator"]:
         try:
-            snapshot["cover_stamp"] = await asyncio.to_thread(source_stamp, snapshot["cover_locator"])
+            snapshot["cover_stamp"] = known_stamps.get(snapshot["cover_locator"])
+            if snapshot["cover_stamp"] is None:
+                snapshot["cover_stamp"] = await asyncio.to_thread(source_stamp, snapshot["cover_locator"])
         except (HTTPException, ValueError, OSError):
             # A missing cover never selects an unrelated material. The editor asks for one.
             snapshot["cover_locator"] = ""
-    snapshot["source_version"] = digest({"episode": episode.id, "title": episode.name,
-        "episode_number": snapshot["episode_number"], "updated_at": snapshot["episode_updated_at"],
-        "cover_stamp": stamp_version(snapshot["cover_stamp"]) if snapshot["cover_stamp"] else None,
-        "clips": [{"id": clip["id"], "sort_order": clip["sort_order"], "updated_at": clip["updated_at"],
-                   "stamp": stamp_version(clip["stamp"]), "cover": clip["cover"]} for clip in clips]})
+    snapshot["source_version"] = snapshot_source_version(snapshot)
     return snapshot
 
 
-async def episode_context(db, owner_id: int, project_id: int, episode) -> dict:
+async def episode_context(db, owner_id: int, project_id: int, episode, *, source_versions=None) -> dict:
     fragments = list((await db.execute(select(DramaEpisodeFragment).where(DramaEpisodeFragment.episode_id == episode.id))).scalars().all())
     result = {"id": episode.id, "name": episode.name, "episode_number": episode_number(episode),
               "fragment_count": len(fragments), "completed_count": sum(bool((f.video or "").strip()) for f in fragments),
@@ -109,8 +159,13 @@ async def episode_context(db, owner_id: int, project_id: int, episode) -> dict:
     try:
         snapshot = await episode_snapshot(db, owner_id, project_id, episode.id)
         result.update(ready=True, source_version=snapshot["source_version"])
+        if source_versions is not None:
+            source_versions[episode.id] = (snapshot["source_version"], snapshot_source_version(snapshot, include_project_cover=False))
     except HTTPException as exc:
-        result["reason"] = str(exc.detail)
+        from .locale_messages import error_message
+        error = error_message(str(exc.detail), exc.status_code)[1]
+        result.update(reason=f"{error['code']}:{error['message']}",
+                      reason_code=error["code"], reason_label=error["message"])
     return result
 
 
@@ -125,6 +180,8 @@ async def publish_context(project_id: int, db: DB, user: Actor):
     project = await owned_project(db, user.id, project_id)
     episodes = list((await db.execute(select(DramaEpisode).where(DramaEpisode.project_id == project.id))).scalars().all())
     episodes.sort(key=lambda row: (episode_number(row), row.id))
+    source_versions = {}
+    episode_items = [await episode_context(db, user.id, project.id, episode, source_versions=source_versions) for episode in episodes]
     targets = list((await db.execute(select(Series).where(Series.owner_id == user.id,
         Series.deleted_at.is_(None), Series.blocked.is_(False)).order_by(Series.id.desc()))).scalars().all())
     series_items = []
@@ -144,15 +201,21 @@ async def publish_context(project_id: int, db: DB, user: Actor):
                 (handoff.status == "ready" and handoff.asset_id == episode.asset_id and mapping.get("last_handoff_id") == handoff.id)
                 or (handoff.status in ("pending", "running", "failed") and mapping.get("pending_handoff_id") == handoff.id
                     and frozen.get("target_version") == episode.version and frozen.get("original_asset_id") == episode.asset_id)))
-            mappings.append({"source_episode_id": mapping.get("drama_episode_id") or mapping.get("source_id"),
-                "episode_id": episode.id, "source_version": handoff.source_version if handoff else mapping.get("imported_source_version", ""),
+            source_id = mapping.get("drama_episode_id") or mapping.get("source_id")
+            version = handoff.source_version if handoff else mapping.get("imported_source_version", "")
+            current_versions = source_versions.get(source_id)
+            if (reusable and current_versions and "project_cover_stamp" not in frozen and version == current_versions[1]):
+                # 向选择弹窗返回可比较的新协议版本，不改写原任务、源快照或已购买发布记录。
+                version = current_versions[0]
+            mappings.append({"source_episode_id": source_id,
+                "episode_id": episode.id, "source_version": version,
                 "status": handoff.status if handoff else "legacy", "handoff_id": handoff.id if handoff else None,
                 "requires_update": not reusable})
         series_items.append({"id": target.id, "title": target.title, "version": target.version,
                              "series_version": target.version, "listed": target.listed,
                              "audit_status": target.audit_status, "imports": mappings})
     return {"project": {"id": project.id, "title": project.title, "description": project.description or ""},
-            "episodes": [await episode_context(db, user.id, project.id, episode) for episode in episodes],
+            "episodes": episode_items,
             "series": series_items, "authorization_ready": bool(await current_authorization(db, user.id)),
             "storage_configured": configured()}
 
@@ -235,6 +298,8 @@ async def publish_selected(project_id: int, body: DramaPublishInput, db, user):
     else:
         series = Series(owner_id=user.id, title=(body.title or project.title or "未命名短剧")[:200],
             description=(project.description or "")[:5000], category=await _category(db, "短剧"), sale_type="copyright_contact")
+        from .categories import resolve_category
+        series.category, series.category_code = await resolve_category(db, series.category)
         db.add(series)
         await db.flush()
         stale_target = False
@@ -257,7 +322,7 @@ async def publish_selected(project_id: int, body: DramaPublishInput, db, user):
                 and mapping.get("last_handoff_id") == previous.id)
             or (previous.status in ("pending", "running", "failed") and previous_snapshot.get("target_version") == target.version
                 and previous_snapshot.get("original_asset_id") == target.asset_id and mapping.get("pending_handoff_id") == previous.id)))
-        if previous_matches and previous.source_version == snapshot["source_version"] and previous_snapshot.get("schema_version") == 2:
+        if previous_matches and source_matches(snapshot, previous) and previous_snapshot.get("schema_version") == 2:
             targets.append(target)
             tasks.append(previous)
             continue
@@ -286,7 +351,9 @@ async def publish_selected(project_id: int, body: DramaPublishInput, db, user):
             source_kind="drama_episode", source_id=source_id, source_version=snapshot["source_version"],
             target_kind="series_episode", target_id=target.id, series_id=series.id, status="pending",
             source_snapshot={**snapshot, "phase": "queued", "target_version": target.version,
-                             "original_asset_id": target.asset_id})
+                             "original_asset_id": target.asset_id,
+                             "inherit_series_cover": not bool(body.series_id),
+                             "series_cover_version": series.version + 1})
         db.add(task)
         await db.flush()
         target.source = "printfilm"

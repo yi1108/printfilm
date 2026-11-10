@@ -57,6 +57,18 @@ test('尚未产出媒体的任务详情显示可读状态或错误', () => {
   assert.equal(failed.params.textContent, '模型暂不可用')
 })
 
+test('版权审核失败详情显示中文建议并保留请求编号，不修改原始错误', () => {
+  const requestId = '02179317708119300000000000000000000ffffac182c4fcb7e6'
+  const error = `RuntimeError: The request failed because the outputvideo may be related to copyright restrictions. Request id: ${requestId}`
+  const failedRecord = { ...record, kind: 'video', status: 'failed', error }
+  const failed = toolRunDetailAsset(failedRecord)
+  assert.match(failed.params.textContent, /版权/)
+  assert.match(failed.params.textContent, /调整|更换|修改/)
+  assert.ok(failed.params.textContent.includes(requestId))
+  assert.doesNotMatch(failed.params.textContent, /RuntimeError|The request failed/)
+  assert.equal(failedRecord.error, error)
+})
+
 test('成功媒体仍按所选结果预览，视频首帧不能作为成片地址', () => {
   const asset = toolRunDetailAsset({ ...record, kind: 'video', urls: ['/static/a.mp4', '/static/b.mp4'], preview_url: '/static/frame.png' }, 1)
   assert.equal(asset.type, 'video')

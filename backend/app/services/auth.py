@@ -36,10 +36,12 @@ def decode_token(token: str) -> str | None:
 
 
 async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
-    result = await db.execute(select(User).where(User.email == email))
+    """只返回可登录账号，已注销邮箱不能被资料修改或密码重置复用。"""
+    result = await db.execute(select(User).where(User.email == email, User.closed_at.is_(None)))
     return result.scalar_one_or_none()
 
 
 async def get_user_by_id(db: AsyncSession, user_id: int) -> User | None:
-    result = await db.execute(select(User).where(User.id == user_id))
+    """认证查询排除注销墓碑，使注销前签发的 JWT 立即失效。"""
+    result = await db.execute(select(User).where(User.id == user_id, User.closed_at.is_(None)))
     return result.scalar_one_or_none()

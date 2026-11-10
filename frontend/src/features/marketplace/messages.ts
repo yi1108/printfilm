@@ -1,3 +1,5 @@
+import { points } from '../../lib/points.ts'
+import { marketText as mt, marketFeedback } from './translate.ts'
 /** 用户提示与接口错误码分开处理，不改变服务端状态和错误契约。 */
 const businessMessages: Record<string, string> = {
   MARKETPLACE_STORAGE_UNAVAILABLE: '文件服务暂未配置或暂时不可用，请稍后重试或联系客服。',
@@ -43,12 +45,14 @@ export function marketplaceErrorCode(detail: unknown): string | undefined {
 
 function readableText(text: string): string | undefined {
   const cleaned = text.trim().replace(/^Value error,\s*/i, '')
-  // 有中文的业务说明可以保留；纯错误码或底层英文交给统一回退提示。
-  return /[\u3400-\u9fff]/u.test(cleaned) ? cleaned : undefined
+  // 两种语言的业务说明均可展示；纯错误码和底层异常使用安全回退提示。
+  if (!cleaned || /^MARKETPLACE_[A-Z_]+$/.test(cleaned) || /Internal Server Error|Traceback|sqlalchemy|SELECT .* FROM|https?:\/\/|object at 0x|Error:|Exception:/i.test(cleaned)) return undefined
+  return marketFeedback(cleaned)
 }
 
 function limitText(value: unknown, field: string): string {
-  if (typeof value !== 'number' && typeof value !== 'string') return '允许的范围'
+  if (typeof value !== 'number' && typeof value !== 'string') return mt("允许的范围")
+  if (field === 'unlock_price_fen') return points(Number(value))
   if (field.endsWith('_fen') && Number.isFinite(Number(value))) return `¥${(Number(value) / 100).toFixed(2)}`
   return String(value)
 }
@@ -58,29 +62,29 @@ function validationMessage(row: Record<string, unknown>, field: string): string 
   const ctx = record(row.ctx) ?? {}
   const raw = typeof row.msg === 'string' ? row.msg : ''
   const ownMessage = readableText(raw)
-  if (ownMessage) return ownMessage
+  if (ownMessage && type === 'value_error') return ownMessage
   switch (type) {
-    case 'missing': return '这是必填项'
-    case 'string_too_short': return `至少填写 ${ctx.min_length} 个字`
-    case 'string_too_long': return `不能超过 ${ctx.max_length} 个字`
-    case 'too_short': return `至少需要 ${ctx.min_length} 项`
-    case 'too_long': return `最多允许 ${ctx.max_length} 项`
-    case 'greater_than': return `须大于 ${limitText(ctx.gt, field)}`
-    case 'greater_than_equal': return `不能小于 ${limitText(ctx.ge, field)}`
-    case 'less_than': return `须小于 ${limitText(ctx.lt, field)}`
-    case 'less_than_equal': return `不能超过 ${limitText(ctx.le, field)}`
-    case 'int_parsing': case 'int_type': case 'int_from_float': return '请填写整数'
-    case 'float_parsing': case 'float_type': case 'finite_number': return '请填写有效数字'
-    case 'literal_error': return ctx.expected === 'True' ? '请勾选确认' : '请选择有效选项'
-    case 'bool_parsing': case 'bool_type': return '请确认此选项'
-    case 'datetime_parsing': case 'datetime_from_date_parsing': case 'timezone_aware': return '请填写有效的日期和时间'
-    case 'extra_forbidden': return '此项不支持提交，请刷新页面后重试'
+    case 'missing': return mt("这是必填项")
+    case 'string_too_short': return mt("至少填写 {0} 个字", [ctx.min_length])
+    case 'string_too_long': return mt("不能超过 {0} 个字", [ctx.max_length])
+    case 'too_short': return mt("至少需要 {0} 项", [ctx.min_length])
+    case 'too_long': return mt("最多允许 {0} 项", [ctx.max_length])
+    case 'greater_than': return mt("须大于 {0}", [limitText(ctx.gt, field)])
+    case 'greater_than_equal': return mt("不能小于 {0}", [limitText(ctx.ge, field)])
+    case 'less_than': return mt("须小于 {0}", [limitText(ctx.lt, field)])
+    case 'less_than_equal': return mt("不能超过 {0}", [limitText(ctx.le, field)])
+    case 'int_parsing': case 'int_type': case 'int_from_float': return mt("请填写整数")
+    case 'float_parsing': case 'float_type': case 'finite_number': return mt("请填写有效数字")
+    case 'literal_error': return ctx.expected === 'True' ? mt("请勾选确认") : mt("请选择有效选项")
+    case 'bool_parsing': case 'bool_type': return mt("请确认此选项")
+    case 'datetime_parsing': case 'datetime_from_date_parsing': case 'timezone_aware': return mt("请填写有效的日期和时间")
+    case 'extra_forbidden': return mt("此项不支持提交，请刷新页面后重试")
   }
-  if (/field required/i.test(raw)) return '这是必填项'
-  if (/at least 1 character/i.test(raw)) return '不能为空'
-  if (/valid integer/i.test(raw)) return '请填写整数'
-  if (/valid number/i.test(raw)) return '请填写有效数字'
-  return '请检查填写内容'
+  if (/field required/i.test(raw)) return mt("这是必填项")
+  if (/at least 1 character/i.test(raw)) return mt("不能为空")
+  if (/valid integer/i.test(raw)) return mt("请填写整数")
+  if (/valid number/i.test(raw)) return mt("请填写有效数字")
+  return mt("请检查填写内容")
 }
 
 function explainValidation(detail: unknown[]): string {
@@ -89,11 +93,11 @@ function explainValidation(detail: unknown[]): string {
     if (!row) return []
     const parts = (Array.isArray(row.loc) ? row.loc : []).filter(part => !['body', 'query', 'path'].includes(String(part)))
     const field = String(parts.at(-1) ?? '')
-    const location = parts.map(part => typeof part === 'number' ? `第 ${part + 1} 项` : fieldNames[String(part)] || '填写内容').join('的')
+    const location = parts.map(part => typeof part === 'number' ? mt("第 {0} 项", [part + 1]) : mt(fieldNames[String(part)] || '') || mt("填写内容")).join(mt("的"))
     const message = validationMessage(row, field)
     return [location ? `${location}：${message}` : message]
   })
-  return [...new Set(lines)].join('；') || '请检查表单内容和必填字段'
+  return [...new Set(lines)].join('；') || mt("请检查表单内容和必填字段")
 }
 
 export function explainMarketplaceError(detail: unknown, status?: number): string {
@@ -101,16 +105,16 @@ export function explainMarketplaceError(detail: unknown, status?: number): strin
   const value = record(detail)
   const raw = typeof detail === 'string' ? detail : typeof value?.message === 'string' ? value.message : ''
   const code = marketplaceErrorCode(detail)
-  // 带具体原因的中文说明优先于通用错误码说明。
+  // 带具体原因的业务说明优先于通用错误码说明。
   const message = readableText(raw.replace(/^MARKETPLACE_[A-Z_]+\s*[:：]?\s*/, ''))
   if (message) return message
-  if (code && businessMessages[code]) return businessMessages[code]
-  if (status === 401) return '登录已过期，请重新登录后继续。'
-  if (status === 403) return '当前账号没有执行此操作的权限。'
-  if (status === 404) return '内容不存在或暂不可访问，请刷新后重试。'
-  if (status === 409) return '内容状态已变化，请刷新后重新操作。'
-  if (status === 413) return '文件超过允许大小，请选择较小的文件。'
-  if (status === 422) return '请检查表单内容和必填字段。'
-  if (status === 429) return '操作过于频繁，请稍后再试。'
-  return '暂时无法完成操作，请稍后重试。'
+  if (code && businessMessages[code]) return mt(businessMessages[code])
+  if (status === 401) return mt("登录已过期，请重新登录后继续。")
+  if (status === 403) return mt("当前账号没有执行此操作的权限。")
+  if (status === 404) return mt("内容不存在或暂不可访问，请刷新后重试。")
+  if (status === 409) return mt("内容状态已变化，请刷新后重新操作。")
+  if (status === 413) return mt("文件超过允许大小，请选择较小的文件。")
+  if (status === 422) return mt("请检查表单内容和必填字段。")
+  if (status === 429) return mt("操作过于频繁，请稍后再试。")
+  return mt("暂时无法完成操作，请稍后重试。")
 }

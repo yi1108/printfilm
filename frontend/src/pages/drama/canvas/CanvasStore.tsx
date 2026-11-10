@@ -222,7 +222,16 @@ export function CanvasStoreProvider({ projectId, children }: CanvasStoreProvider
             ),
           )
         })
-        resumeDramaVideoGensFromAssets(projectId, assets)
+        resumeDramaVideoGensFromAssets(projectId, assets, (next) => {
+          if (cancelled) return
+          const mediaUrl = resolveDramaMediaUrl(next.url || next.cover || '')
+          if (!mediaUrl) return
+          setNodes((current) => current.map((node) =>
+            node.data.assetId === next.id
+              ? { ...node, data: { ...node.data, mediaUrl, generating: false } }
+              : node,
+          ))
+        })
         readyRef.current = true
       })
       .catch((err) => {

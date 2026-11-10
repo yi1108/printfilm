@@ -187,8 +187,9 @@ def test_full_create_contract_preserves_user_media_choices():
     ("https://media.example/start-1.png", "https://media.example/start-1.png"),
     ("https://www.tokenfree.com/v1/tasks/t1/artifacts/image-0/content", "/static/shot.png"),
 ])
+@pytest.mark.parametrize("billing_mode", ["legacy", "fixed_media"])
 async def test_full_video_generation_uses_own_image_and_previous_tail_with_native_audio(
-    monkeypatch, upstream_image, expected_first_frame,
+    monkeypatch, upstream_image, expected_first_frame, billing_mode,
 ):
     """图生视频沿用本镜首帧、前镜尾帧、脚本时长和项目模型，完整模式保留内置口播。"""
     shot1 = _shot(image_ark_url=upstream_image, duration=3,
@@ -211,10 +212,11 @@ async def test_full_video_generation_uses_own_image_and_previous_tail_with_nativ
 
     db.get = AsyncMock(side_effect=get_row)
     generate_video = AsyncMock(side_effect=[
-        ("/static/video-1.mp4", SimpleNamespace(last_frame_url="/static/tail-1.png")),
-        ("/static/video-2.mp4", SimpleNamespace(last_frame_url="/static/tail-2.png")),
+        ("/static/video-1.mp4", SimpleNamespace(last_frame_url="/static/tail-1.png", provider_task_id="video-task-1")),
+        ("/static/video-2.mp4", SimpleNamespace(last_frame_url="/static/tail-2.png", provider_task_id="video-task-2")),
     ])
     record_usage = AsyncMock()
+    fixed_record_usage = AsyncMock()
     monkeypatch.setattr(get_settings(), "kepu_seedance_native_audio", True)
     monkeypatch.setattr(pipeline, "AsyncSessionLocal", session)
     monkeypatch.setattr(pipeline, "get_ark", lambda: SimpleNamespace(gen_and_wait_video=generate_video))
@@ -222,9 +224,15 @@ async def test_full_video_generation_uses_own_image_and_previous_tail_with_nativ
     monkeypatch.setattr(pipeline, "_set_status", AsyncMock())
     monkeypatch.setattr(pipeline, "publish_progress", AsyncMock())
     monkeypatch.setattr(pipeline, "_record_seedance_usage", record_usage)
+    monkeypatch.setattr("app.services.drama.billing_util.record_seedance_video_usage", fixed_record_usage)
     monkeypatch.setattr(pipeline, "persist_last_frame_from_video", lambda *args, **kwargs: kwargs.get("preferred_url"))
 
-    await pipeline._parallel_videos(project.id)
+    from app.services.media_models.runtime import current_snapshot
+    token = current_snapshot.set({"mode": "fixed_media"} if billing_mode == "fixed_media" else None)
+    try:
+        await pipeline._parallel_videos(project.id)
+    finally:
+        current_snapshot.reset(token)
 
     first, second = generate_video.await_args_list
     assert first.args[0] == expected_first_frame
@@ -240,8 +248,15 @@ async def test_full_video_generation_uses_own_image_and_previous_tail_with_nativ
         assert "三维卡通" in call.args[1]
     assert shot1.video_url == "/static/video-1.mp4" and shot2.video_url == "/static/video-2.mp4"
     assert project.status == ProjectStatus.VIDEO_READY and project.progress == 88
-    assert [call.kwargs["fallback_duration_sec"] for call in record_usage.await_args_list] == [8, 6]
-    assert all(call.kwargs["billing_key"] == "seedance2:video0" for call in record_usage.await_args_list)
+    selected_usage = fixed_record_usage if billing_mode == "fixed_media" else record_usage
+    unused_usage = record_usage if billing_mode == "fixed_media" else fixed_record_usage
+    assert [call.kwargs["fallback_duration_sec"] for call in selected_usage.await_args_list] == [8, 6]
+    assert all(call.kwargs["billing_key"] == "seedance2:video0" for call in selected_usage.await_args_list)
+    unused_usage.assert_not_awaited()
+    if billing_mode == "fixed_media":
+        assert all(call.kwargs["user_id"] == project.user_id for call in selected_usage.await_args_list)
+        assert [call.kwargs["shot_id"] for call in selected_usage.await_args_list] == [shot1.id, shot2.id]
+        assert [call.kwargs["provider_task_id"] for call in selected_usage.await_args_list] == ["video-task-1", "video-task-2"]
 
 
 async def test_full_project_video_admission_reserves_only_remaining_video_cost(db_session, monkeypatch):

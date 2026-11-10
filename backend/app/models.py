@@ -51,6 +51,8 @@ class User(Base):
     phone: Mapped[str] = mapped_column(String(32), default="")
     # 用户消费里程碑告警：上次已提醒的累计扣费档位（分）
     billing_alert_last_milestone_fen: Mapped[int] = mapped_column(Integer, default=0)
+    # 注销墓碑：已匿名化的账号不能再通过任何凭证登录。
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     projects: Mapped[list["Project"]] = relationship(back_populates="owner")
@@ -267,8 +269,13 @@ class Order(Base):
     sku_id: Mapped[str] = mapped_column(String(64))
     amount_fen: Mapped[int] = mapped_column(Integer)
     credit_fen: Mapped[int] = mapped_column(Integer)
-    pay_type: Mapped[str] = mapped_column(String(16))  # alipay | wxpay
+    pay_type: Mapped[str] = mapped_column(String(16))  # alipay | wxpay | stripe
+    # 下单时固定外币报价；历史 NULL 订单仍按人民币 amount_fen 校验。
+    payment_currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    payment_amount_minor: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    payment_exchange_rate: Mapped[str | None] = mapped_column(String(32), nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="pending")  # pending|paid|closed
+    # 易支付交易号，或 Stripe Checkout Session ID（创建时绑定，回调时严格匹配）。
     trade_no: Mapped[str | None] = mapped_column(String(128), nullable=True)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page";
 import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { fenToYuan } from "@/lib/utils";
+import { points } from "@/lib/points";
 
 type LedgerRes = PageResult<AdminLedger>;
 
@@ -145,9 +145,9 @@ export function AdjustRecordsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className={row.delta_fen >= 0 ? "text-emerald-700" : "text-red-600"}>
-                      {row.delta_fen >= 0 ? "+" : ""}¥{fenToYuan(row.delta_fen)}
+                      {row.delta_fen >= 0 ? "+" : ""}{points(row.delta_fen)}
                     </TableCell>
-                    <TableCell>¥{fenToYuan(row.balance_after)}</TableCell>
+                    <TableCell>{points(row.balance_after)}</TableCell>
                     <TableCell>
                       {row.ref_id && /^\d+$/.test(row.ref_id) ? (
                         <AdminEntityLink
