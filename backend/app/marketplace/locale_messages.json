@@ -1,4 +1,5 @@
 {
+  "交易环境与当前服务不一致，未计入余额。": "The transaction environment does not match this wallet. No credit was added. Please use the correct production or test service.",
   "请提供充值操作编号。": "Provide an idempotency key for this purchase.",
   "商品价格和到账额度必须与共同套餐一致。": "The product price and credit must match the shared package.",
   "汇率须大于0且最多六位小数。": "The exchange rate must be positive with at most six decimal places.",
@@ -964,5 +965,15 @@
   "运营筛选条件无效": "Invalid curation filter.",
   "请填写运营调整原因": "Provide a reason for the curation change.",
   "请填写初始化原因 / An initialization reason is required": "Provide an initialization reason.",
-  "请填写调整原因 / An adjustment reason is required": "Provide an adjustment reason."
+  "请填写调整原因 / An adjustment reason is required": "Provide an adjustment reason.",
+  "账号不存在。": "Account not found.",
+  "沙箱新购及测试解锁已暂停。": "New sandbox purchases and test unlocks are paused.",
+  "该账号未获准发起沙箱购买。": "This account is not authorized to make sandbox purchases.",
+  "该账号未获准使用沙箱交易，未计入正式余额。": "This account is not authorized for sandbox transactions. No production credit was added.",
+  "沙箱测试积分不足。": "Insufficient sandbox test points.",
+  "沙箱余额与来源不一致。": "Sandbox balance and funding records do not match.",
+  "历史沙箱资金不在隔离账本中，请人工核对，不自动搬入正式余额。": "Legacy sandbox funds require manual review and will not be moved into production balances.",
+  "沙箱测试交易不能进入正式财务对账。": "Sandbox transactions cannot enter production reconciliation.",
+  "沙箱测试收益不能登记真实打款。": "Sandbox earnings cannot be paid out.",
+  "沙箱测试交易不参与正式收入核算。": "Sandbox transactions are excluded from production revenue accounting."
 }

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import AssetPicker from './AssetPicker'
+import AppEditionPicker, { type AppEdition } from './AppEditionPicker'
 import { request, type Handoff } from './api'
 import { FormSection, PageHeading, PublishGuide } from './ui'
 import Button from '../../components/ui/Button'
@@ -17,11 +18,11 @@ import { isFreeEpisode, previewStatusLabel } from './playbackPolicy'
 import { explainMarketplaceError } from './messages'
 
 type EpisodeDraft = { id?: number; version?: number; episode_no: number; title: string; description?: string; asset_id: number | null; cover_asset_id: number | null; copyright_price_fen: number; unlock_price_fen: number; source?: 'printfilm' | 'external' | 'original' | 'ai' | 'authorized'; preview_status?: string; preview_error?: string }
-type SeriesDraft = { id: number; version: number; title: string; description: string; category: string; category_code?: string; category_labels?: { zh: string; en: string }; tags: string[]; cover_asset_id?: number | null; sale_type: 'free' | 'copyright_contact' | 'platform_unlock'; copyright_price_fen: number; free_episode_count?: number; audit_status?: string; listed?: boolean; episodes: EpisodeDraft[]; authorization_ready?: boolean; sync_in_progress?: boolean; pending_handoffs?: Handoff[] }
+type SeriesDraft = { app_editions?: AppEdition[]; id: number; version: number; title: string; description: string; category: string; category_code?: string; category_labels?: { zh: string; en: string }; tags: string[]; cover_asset_id?: number | null; sale_type: 'free' | 'copyright_contact' | 'platform_unlock'; copyright_price_fen: number; free_episode_count?: number; audit_status?: string; listed?: boolean; episodes: EpisodeDraft[]; authorization_ready?: boolean; sync_in_progress?: boolean; pending_handoffs?: Handoff[] }
 type ImportSource = { id: number; title: string; episodes: { id: number; name: string; ready: boolean }[] }
 
-function EpisodePanel({ episode, count, free, open, saleType, seriesId, busy, videoLabel, videoLocked, lockVideoUntilPreview, toggle, update, remove, goRights }: {
-  episode: EpisodeDraft; count: number; free: boolean; open: boolean; saleType: SeriesDraft['sale_type']; seriesId?: string; busy: boolean; videoLabel: string; videoLocked: boolean; lockVideoUntilPreview: boolean
+function EpisodePanel({ episode, count, free, open, saleType, seriesId, busy, videoLabel, videoLocked, toggle, update, remove, goRights }: {
+  episode: EpisodeDraft; count: number; free: boolean; open: boolean; saleType: SeriesDraft['sale_type']; seriesId?: string; busy: boolean; videoLabel: string; videoLocked: boolean
   toggle: () => void; update: (patch: Partial<EpisodeDraft>) => void; remove: () => void; goRights: () => void
 }) {
   useMarketplaceLocale()
@@ -36,7 +37,7 @@ function EpisodePanel({ episode, count, free, open, saleType, seriesId, busy, vi
       <label>{mt("集标题")}<span className="pf-req-mark">{mt("必填")}</span><input required value={episode.title} onChange={event => update({ title: event.target.value })} /></label>
       <label>{mt("分集简介")}<textarea value={episode.description || ''} maxLength={5000} onChange={event => update({ description: event.target.value })} placeholder={mt("介绍这一集的内容")} /></label>
       <label>{mt("内容来源")}<select disabled={videoLocked} value={episode.source || 'external'} onChange={event => update({ source: event.target.value as EpisodeDraft['source'] })}><option value="printfilm">{mt("PrintFilm 生成")}</option><option value="external">{mt("其他平台生成")}</option></select></label>
-      <AssetPicker kind="video" value={episode.asset_id} onChange={asset_id => update({ asset_id })} title={mt("分集视频")} required locked={videoLocked} lockUntilPreview={lockVideoUntilPreview} />
+      <AssetPicker kind="video" value={episode.asset_id} onChange={asset_id => update({ asset_id })} title={mt("分集视频")} required locked={videoLocked} />
       <AssetPicker kind="image" required value={episode.cover_asset_id} onChange={cover_asset_id => update({ cover_asset_id })} title={mt("分集封面（可使用系列封面）")} />
       {saleType !== 'free' && <label>{mt("本集参考价（元）")}<input type="number" min="0" step="0.01" value={(episode.copyright_price_fen / 100) || ''} onChange={event => update({ copyright_price_fen: Math.round(Number(event.target.value || 0) * 100) })} /></label>}
       {episode.source === 'printfilm' ? <p className="pf-market-notice">{mt("PrintFilm 生成：本系列统一引用账号授权函，无需逐集签署或上传证书。")}</p> : episode.asset_id && (seriesId ? <button type="button" disabled={busy} onClick={goRights}>{mt("填写第")} {episode.episode_no}  {mt("集权属材料")}</button> : <p>{mt("请先保存草稿，再填写这一集的权属材料。保存后会回到这个页面。")}</p>)}
@@ -52,6 +53,7 @@ export default function SeriesEditor() {
   const { names: categories, label: categoryLabel, error: categoryError } = useCategories()
   const [series, setSeries] = useState<SeriesDraft | null>(null)
   const [saleType, setSaleType] = useState<'free' | 'copyright_contact' | 'platform_unlock'>('copyright_contact')
+  const [appEditions, setAppEditions] = useState<AppEdition[]>(['domestic'])
   const [freeEpisodeCount, setFreeEpisodeCount] = useState(0)
   const [category, setCategory] = useState('')
   const [coverId, setCoverId] = useState<number | null>(null)
@@ -78,7 +80,7 @@ export default function SeriesEditor() {
   const previewActive = Boolean(series?.episodes.some(episode => !isFreeEpisode(series, episode.episode_no) && (episode.preview_status === 'pending' || episode.preview_status === 'running')))
   const previewFailed = Boolean(series?.episodes.some(episode => !isFreeEpisode(series, episode.episode_no) && episode.preview_status === 'failed'))
   function acceptSaved(value: SeriesDraft) {
-    setSeries(value); setSaleType(value.sale_type); setFreeEpisodeCount(value.free_episode_count || 0); setCategory(value.category_code || value.category || 'other'); setCoverId(value.cover_asset_id ?? null)
+    setSeries(value); setSaleType(value.sale_type); setAppEditions(value.app_editions || ['domestic']); setFreeEpisodeCount(value.free_episode_count || 0); setCategory(value.category_code || value.category || 'other'); setCoverId(value.cover_asset_id ?? null)
     savedCoverId.current = value.cover_asset_id ?? null; coverEdited.current = false
     const normalized = value.episodes.map(item => ({ ...item, asset_id: item.asset_id ?? null, cover_asset_id: item.cover_asset_id ?? null }))
     setEpisodes(normalized); savedEpisodes.current = normalized; setRemovedEpisodeIds([]); setDirty(false)
@@ -160,7 +162,8 @@ export default function SeriesEditor() {
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError(''); setMessage(''); if (syncBlocked || hasSyncFailure) { setBusy(false); setError(mt("请等待同步完成或重试失败任务后再保存，当前输入会保留")); return } const missing = episodes.findIndex(item => !item.title.trim()); if (missing >= 0) { setExpanded(new Set([missing])); setBusy(false); setError(mt("第 {0} 集标题未填写", [missing + 1])); return } const form = new FormData(event.currentTarget)
     try {
-      const payload = { title: form.get('title'), description: form.get('description'), ...(/^[a-z][a-z0-9_]*$/.test(category) ? { category_code: category } : { category }), tags: String(form.get('tags') || '').split(/[,，]/).map(value => value.trim()).filter(Boolean), sale_type: saleType, copyright_price_fen: Math.round(Number(form.get('copyright_price') || 0) * 100), free_episode_count: freeEpisodeCount, cover_asset_id: coverId, ...(id ? { version: series?.version } : {}) }
+      if (saleType === 'platform_unlock' && !appEditions.length) throw new Error(mt('请至少选择一个App投放版本'))
+      const payload = { title: form.get('title'), description: form.get('description'), ...(/^[a-z][a-z0-9_]*$/.test(category) ? { category_code: category } : { category }), tags: String(form.get('tags') || '').split(/[,，]/).map(value => value.trim()).filter(Boolean), sale_type: saleType, app_editions: appEditions.length ? appEditions : ["domestic"], copyright_price_fen: Math.round(Number(form.get('copyright_price') || 0) * 100), free_episode_count: freeEpisodeCount, cover_asset_id: coverId, ...(id ? { version: series?.version } : {}) }
       const saved = await request<SeriesDraft>(id ? `/series/${id}` : '/series', id ? 'PATCH' : 'POST', payload)
       if (!id) for (const episode of episodes) await request(`/series/${saved.id}/episodes`, 'POST', episodeBody(episode))
       else {
@@ -224,7 +227,7 @@ export default function SeriesEditor() {
   if (id && !series && !error) return <p role="status">{mt("正在加载系列…")}</p>
   return <><PageHeading title={id ? mt("编辑短剧") : mt("发布短剧")} description={mt("短剧和单条视频一样出现在作品广场。在这一页添加分集，版权规则与单视频相同。")} back="/marketplace" /><div className="pf-market-editor-layout"><form className="pf-market-editor-main pf-market-form" onSubmit={save} onChangeCapture={event => { if (!(event.target as HTMLElement).closest('.pf-market-authorization, [data-market-transient]')) setDirty(true) }}>
     <FormSection step="01" title={mt("系列信息")} description={mt("先建立系列，再逐集上传或导入成片。")}><label>{mt("系列标题")}<span className="pf-req-mark">{mt("必填")}</span><input name="title" required maxLength={200} placeholder={mt("例如：城市里的光")} defaultValue={current?.title} /></label><label>{mt("简介")}<textarea name="description" maxLength={5000} defaultValue={current?.description} placeholder={mt("介绍整部短剧的主题和内容")} /></label><div className="pf-market-field-row"><label>{mt("分类")}<span className="pf-req-mark">{mt("必填")}</span><select name="category" required value={category || current?.category_code || current?.category || ''} onChange={event => setCategory(event.target.value)} disabled={!categories.length && !category}><option value="" disabled>{mt("请选择系列分类")}</option>{category && !categories.includes(category) && <option value={category}>{categoryLabel(category, current)}{mt("（历史分类）")}</option>}{categories.map(name => <option key={name} value={name}>{categoryLabel(name)}</option>)}</select>{categoryError && <span role="alert">{marketFeedback(categoryError)}</span>}</label><label>{mt("标签")}<input name="tags" defaultValue={current?.tags?.join('，')} placeholder={mt("都市，短剧")} /></label></div><AssetPicker kind="image" value={coverId} onChange={value => { coverEdited.current = true; setCoverId(value); setDirty(true) }} title={mt("系列封面（与分集封面至少上传一处）")} /></FormSection>
-    <FormSection step="02" title={mt("收益方式")} description={mt("免费公开供完整观看；版权出售通过客服洽谈；平台投放按集解锁并分成。")}><select value={saleType} onChange={event => setSaleType(event.target.value as typeof saleType)}><option value="free">{mt("免费公开")}</option><option value="copyright_contact">{mt("版权出售收益")}</option><option value="platform_unlock">{mt("平台投放收益")}</option></select><label>{mt("参考价（元）")}<input name="copyright_price" type="number" min="0" step="0.01" defaultValue={current?.copyright_price_fen ? current.copyright_price_fen / 100 : ''} /></label><label>{mt("免费集数")}<span className="pf-req-mark">{mt("前几集免费")}</span><input type="number" min="0" max="10000" step="1" value={freeEpisodeCount} onChange={event => setFreeEpisodeCount(Math.max(0, Number(event.target.value) || 0))} /></label><p className="pf-market-notice">{mt("选择“免费公开”时全部分集播放原片，无需试看；其他收益方式可将前几集设为免费，其余分集提供最长15秒且不超过原片30%的无水印短试看。版权合作参考价不代表已包含版权转让手续等额外费用，具体事项请与客服确认。平台投放按集定价，观众解锁仅获得永久在线播放权益，不包含版权转让；需在平台启用分成后才能提交审核。修改收益方式或免费集数后，将重新检查播放准备状态。")}</p></FormSection>
+    <FormSection step="02" title={mt("收益方式")} description={mt("免费公开供完整观看；版权出售通过客服洽谈；平台投放按集解锁并分成。")}><select value={saleType} onChange={event => setSaleType(event.target.value as typeof saleType)}><option value="free">{mt("免费公开")}</option><option value="copyright_contact">{mt("版权出售收益")}</option><option value="platform_unlock">{mt("平台投放收益")}</option></select>{saleType === 'platform_unlock' && <AppEditionPicker value={appEditions} onChange={value => { setAppEditions(value); setDirty(true) }} />}<label>{mt("参考价（元）")}<input name="copyright_price" type="number" min="0" step="0.01" defaultValue={current?.copyright_price_fen ? current.copyright_price_fen / 100 : ''} /></label><label>{mt("免费集数")}<span className="pf-req-mark">{mt("前几集免费")}</span><input type="number" min="0" max="10000" step="1" value={freeEpisodeCount} onChange={event => setFreeEpisodeCount(Math.max(0, Number(event.target.value) || 0))} /></label><p className="pf-market-notice">{mt("选择“免费公开”时全部分集播放原片，无需试看；其他收益方式可将前几集设为免费，其余分集提供最长15秒且不超过原片30%的无水印短试看。版权合作参考价不代表已包含版权转让手续等额外费用，具体事项请与客服确认。平台投放按集定价，观众解锁仅获得永久在线播放权益，不包含版权转让；需在平台启用分成后才能提交审核。修改收益方式或免费集数后，将重新检查播放准备状态。")}</p></FormSection>
     <FormSection step="03" title={mt("分集内容")} description={mt("每集一个完整视频和封面。同步期间可以填写信息，完成后再保存。")}>
       <div className="pf-episode-tools"><button type="button" onClick={() => setExpanded(new Set(episodes.map((_, index) => index)))}>{mt("展开全部")}</button><button type="button" onClick={() => setExpanded(new Set())}>{mt("收起全部")}</button><span>{mt("共")} {episodes.length}  {mt("集")}</span></div>
       {syncBlocked && <p className="pf-market-notice" role="status">{syncing ? mt("成片正在后台同步，可先填写标题与价格。同步完成后即可保存和提交；关闭页面不影响任务。") : mt("正在确认同步状态…")}</p>}
@@ -233,10 +236,9 @@ export default function SeriesEditor() {
       <div className="pf-market-episodes">{episodes.map((episode, index) => {
         const handoff = episodeHandoffs.find(item => item.episode_id === episode.id)
         const syncingVideo = Boolean(handoff && isHandoffActive(handoff))
-        const fromPrintfilm = episode.source === 'printfilm'
         const videoLabel = handoff ? handoffLabel(handoff) : episode.asset_id ? mt("视频已就绪") : mt("缺视频")
         return <div key={episode.id ?? `new-${index}`}>
-          <EpisodePanel episode={episode} count={episodes.length} free={isFreeEpisode({ sale_type: saleType, free_episode_count: freeEpisodeCount }, episode.episode_no)} open={expanded.has(index)} saleType={saleType} seriesId={id} busy={busy || syncBlocked || hasSyncFailure} videoLabel={videoLabel} videoLocked={syncingVideo || (fromPrintfilm && !episode.asset_id)} lockVideoUntilPreview={fromPrintfilm}
+          <EpisodePanel episode={episode} count={episodes.length} free={isFreeEpisode({ sale_type: saleType, free_episode_count: freeEpisodeCount }, episode.episode_no)} open={expanded.has(index)} saleType={saleType} seriesId={id} busy={busy || syncBlocked || hasSyncFailure} videoLabel={videoLabel} videoLocked={syncingVideo}
             toggle={() => setExpanded(value => { const next = new Set(value); if (next.has(index)) next.delete(index); else next.add(index); return next })}
             update={patch => update(index, patch)}
             remove={() => { setDirty(true); if (episode.id) setRemovedEpisodeIds(value => [...value, episode.id as number]); setEpisodes(value => value.filter((_, itemIndex) => itemIndex !== index).map((item, itemIndex) => ({ ...item, episode_no: itemIndex + 1 }))); setExpanded(new Set([Math.max(0, index - 1)])) }}

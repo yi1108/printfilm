@@ -15,8 +15,13 @@ def fields(row, names):
 
 async def records(db, kind, environment, page, page_size, status="", user_id=None):
     """按服务端分页读取同一部署的统一账户，不读取历史独立币余额。"""
-    wallet.configured_environment(environment)
-    if not wallet.enabled():
+    from .app_funds import isolated
+    if isolated(environment) and kind != 'recharge-orders':
+        from .sandbox_wallet import records as sandbox_records
+        return await sandbox_records(db, kind, page, page_size, user_id)
+    if not isolated(environment):
+        wallet.configured_environment(environment)
+    if not wallet.enabled() and not isolated(environment):
         app_fail("UNIFIED_WALLET_UNAVAILABLE", "统一余额尚未开放，请先完成迁移核对。", 503)
     choices = {
         "funding-sources": (WalletFundingLot, "id user_id environment source_type source_ref total_units total_amount_fen active settlement_status created_at"),
@@ -48,6 +53,8 @@ async def records(db, kind, environment, page, page_size, status="", user_id=Non
             conditions.append(model.status == status)
         if model is Order:
             conditions.append(Order.team_id.is_(None))
+            conditions.append(Order.payment_environment == 'Sandbox' if environment == 'Sandbox'
+                else func.coalesce(Order.payment_environment, 'Production') == 'Production')
         total = await db.scalar(select(func.count()).select_from(model).where(*conditions))
         rows = list((await db.scalars(select(model).where(*conditions).order_by(model.id.desc())
                                     .offset((page-1)*page_size).limit(page_size))).all())

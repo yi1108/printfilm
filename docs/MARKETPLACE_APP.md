@@ -10,6 +10,8 @@
 
 # App视频接口与Apple内购接入
 
+国内版／国际版内容查询参数、作者投放设置和历史兼容见 [App投放版本联调](APP_EDITION_INTEGRATION.md)。
+
 举报与拉黑创作者的独立联调说明、权限边界及请求示例见 [App举报与拉黑联调文档](APP_REPORT_AND_BLOCK_GUIDE.md)。
 
 时间契约（2026-11-09）：`/api/marketplace/app/v1` JSON 响应的 `created_at`、`updated_at`、`expires_at` 等 `*_at` 时间字段统一为北京时间（UTC+8）`YYYY-MM-DD HH:mm:ss`，不带微秒、T、Z；空值仍为 null。App 不得再次加8小时；需要转本地时间时，以 UTC+8 解析。秒数、时间戳数字、分页游标、支付签名和数据库 UTC 存储不变。此约定不改变 `/api/billing` 及后台接口格式。
@@ -241,7 +243,7 @@ MARKETPLACE_APPLE_ONLINE_CHECKS=true
 - `MARKETPLACE_APPLE_ROOT_CERT_PATHS`：Apple官方Root CA的DER证书文件路径，多个文件以分号分隔；SDK要求DER，不使用PEM，不使用客户端提交的证书，也不自动联网下载证书。
 - `MARKETPLACE_APPLE_ENVIRONMENT`：生产使用`Production`，Sandbox服务使用`Sandbox`；由服务器选择，客户端不能任意切换钱包环境。
 
-生产与Sandbox必须使用独立服务端部署、数据库、Redis及通知地址，仅增加`environment`字段不足以隔离共用的`users`余额。`MARKETPLACE_APPLE_ENVIRONMENT`由服务器配置，生产拒绝Sandbox资金。共同套餐和Apple固定映射分别在对应部署维护，真实可售状态及售价仍由App Store Connect和StoreKit决定。
+生产与Sandbox不得共用`users`余额。除独立测试部署外，现已支持[同部署白名单沙箱测试](IOS_SHARED_SANDBOX.md)，使用独立测试账本；仅增加`environment`字段不足以隔离资金。`MARKETPLACE_APPLE_ENVIRONMENT`由服务器配置，生产拒绝Sandbox资金。共同套餐和Apple固定映射分别在对应部署维护，真实可售状态及售价仍由App Store Connect和StoreKit决定。
 
 API 启动时会在同一个 PostgreSQL advisory lock 内自动执行数字资产 App 的幂等增量结构迁移，覆盖内容、播放、互动、Apple、钱包、退款和收益表。只新增缺失表、列和索引，不删除或改写历史数据；结构迁移失败时 API 不会通过健康检查。以下脚本保留给离线核验或故障恢复使用：
 

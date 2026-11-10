@@ -168,7 +168,7 @@ async def work_data(db: AsyncSession, work: Work, private: bool = False) -> dict
     """公开资料不包含邮箱、原片位置和权属材料。"""
     owner = await db.get(User, work.owner_id)
     asset = await db.get(Asset, work.asset_id) if work.asset_id else None
-    result = data(work, "id", "title", "description", "category", "tags", "price_fen", "sale_type", "unlock_price_fen", "share_bps", "source", "license_scope", "created_at")
+    result = data(work, "id", "title", "description", "category", "tags", "app_editions", "price_fen", "sale_type", "unlock_price_fen", "share_bps", "source", "license_scope", "created_at")
     from .categories import category_fields
     from .locale import localized
     result.update(await category_fields(db, work))

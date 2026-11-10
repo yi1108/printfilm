@@ -7,7 +7,7 @@ import AssetPreview, { PreviewContent } from './AssetPreview'
 import { explainMarketplaceError } from './messages'
 
 // 上传状态与“处理就绪”分开显示，只允许绑定 ready 文件。locked 时不提供手动选择。
-export default function AssetPicker({ kind, value, onChange, title = mt("选择或上传文件"), required = false, locked = false, lockUntilPreview = false }: { kind: 'video' | 'document' | 'image'; value: number | null; onChange: (id: number) => void; title?: string; required?: boolean; locked?: boolean; lockUntilPreview?: boolean }) {
+export default function AssetPicker({ kind, value, onChange, title = mt("选择或上传文件"), required = false, locked = false }: { kind: 'video' | 'document' | 'image'; value: number | null; onChange: (id: number) => void; title?: string; required?: boolean; locked?: boolean }) {
   useMarketplaceLocale()
   /* 仅上传并绑定当前文件，不加载历史文件列表。 */
 
@@ -20,9 +20,8 @@ export default function AssetPicker({ kind, value, onChange, title = mt("选择�
   const [localFile, setLocalFile] = useState<File | null>(null)
   const [localAssetId, setLocalAssetId] = useState<number | null>(null)
   const [localUrl, setLocalUrl] = useState('')
-  const [previewReady, setPreviewReady] = useState(false)
-  useEffect(() => { setPreviewReady(false) }, [value])
-  const waitingPreview = locked || (lockUntilPreview && (!value || !previewReady))
+  // Preview is optional browser feedback, never a prerequisite for uploading.
+  const waitingPreview = locked
   useEffect(() => {
     if (!localFile) { setLocalUrl(''); return }
     const url = URL.createObjectURL(localFile); setLocalUrl(url)
@@ -58,10 +57,10 @@ export default function AssetPicker({ kind, value, onChange, title = mt("选择�
     finally { controller.current = null }
   }
   return <fieldset><legend>{title}{required && <span className="pf-req-mark">{mt("必填")}</span>}</legend>
-    {waitingPreview ? <p className="pf-market-notice" role="status">{mt("加载预览中")}</p> : <label className="pf-market-upload-zone"><UploadCloud size={28} strokeWidth={1.4} /><strong>{mt("点击选择")}{kind === 'video' ? mt("视频") : kind === 'image' ? mt("图片") : mt("文件")}</strong><span>{kind === 'video' ? mt("MP4 / MOV / WebM · 最大500MB · 最长30分钟") : kind === 'image' ? mt("PNG / JPG / WebP · 最大20MB") : mt("PDF / PNG / JPG / WebP · 最大20MB")}</span><input aria-label={mt("上传{0}", [title])} type="file" disabled={progress !== null} accept={kind === 'video' ? '.mp4,.mov,.webm' : kind === 'image' ? '.png,.jpg,.jpeg,.webp' : '.pdf,.png,.jpg,.jpeg,.webp'} onChange={e => { void choose(e.target.files?.[0]); e.target.value = '' }} /></label>}
+    {waitingPreview ? <p className="pf-market-notice" role="status">{mt("正在同步成片…")}</p> : <label className="pf-market-upload-zone"><UploadCloud size={28} strokeWidth={1.4} /><strong>{mt("点击选择")}{kind === 'video' ? mt("视频") : kind === 'image' ? mt("图片") : mt("文件")}</strong><span>{kind === 'video' ? mt("MP4 / MOV / WebM · 最大500MB · 最长30分钟") : kind === 'image' ? mt("PNG / JPG / WebP · 最大20MB") : mt("PDF / PNG / JPG / WebP · 最大20MB")}</span><input aria-label={mt("上传{0}", [title])} type="file" disabled={progress !== null} accept={kind === 'video' ? '.mp4,.mov,.webm' : kind === 'image' ? '.png,.jpg,.jpeg,.webp' : '.pdf,.png,.jpg,.jpeg,.webp'} onChange={e => { void choose(e.target.files?.[0]); e.target.value = '' }} /></label>}
     {!waitingPreview && progress !== null && <div className="pf-market-upload-progress" role="status"><p>{pending ? mt("上传完成，正在确认文件状态，预览会自动更新。") : mt("正在上传 {0}%", [progress])}</p><progress value={progress} max={100} aria-label={mt("上传进度")} /></div>}
     {!waitingPreview && progress !== null && !pending && <button type="button" onClick={() => controller.current?.abort()}>{mt("取消上传")}</button>}
     {localFile && localUrl && <div><p>{mt("本地预览：")}{localFile.name} · {(localFile.size / 1024 / 1024).toFixed(2)} MB</p><p>{mt("仅供检查所选文件，不代表已上传或审核通过。")}</p><PreviewContent key={localUrl} url={localUrl} filename={localFile.name} video={kind === 'video'} /><button type="button" onClick={() => setLocalFile(null)}>{mt("关闭本地预览")}</button></div>}
-    {value && <><p className="pf-market-upload-selection" hidden={waitingPreview}><CheckCircle2 size={14} />  {mt("当前")}{kind === 'video' ? mt("视频") : kind === 'image' ? mt("图片") : mt("文件")}{mt("已选择，文件名和状态见下方。")}</p><AssetPreview key={value} id={value} hideMedia={Boolean(localFile)} onReady={id => { if (id === localAssetId) { setLocalFile(null); setLocalAssetId(null) } }} onMediaReady={() => setPreviewReady(true)} /></>}{error && <p role="alert">{marketFeedback(error)}</p>}</fieldset>
+    {value && <><p className="pf-market-upload-selection" hidden={waitingPreview}><CheckCircle2 size={14} />  {mt("当前")}{kind === 'video' ? mt("视频") : kind === 'image' ? mt("图片") : mt("文件")}{mt("已选择，文件名和状态见下方。")}</p><AssetPreview key={value} id={value} hideMedia={Boolean(localFile)} onReady={id => { if (id === localAssetId) { setLocalFile(null); setLocalAssetId(null) } }} /></>}{error && <p role="alert">{marketFeedback(error)}</p>}</fieldset>
 }
 

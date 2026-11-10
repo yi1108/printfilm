@@ -6,7 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { LabeledControl, SettingsPanel } from './SettingsPanel';
 
 type Status = { configured: boolean; missing: string[]; environment: string; notification_url: string;
-  notification_https: boolean; unified_wallet_enabled: boolean; runtime_running: boolean };
+  notification_https: boolean; unified_wallet_enabled: boolean; wallet_environment: string; wallet_environment_matches: boolean; runtime_running: boolean };
 
 export function AppleConnectionSettings() {
   const { form, loading, saving, patchField, save } = useAdminModelSettings();
@@ -48,6 +48,7 @@ export function AppleConnectionSettings() {
   async function submit() {
     if (!form) return;
     const saved = await save({
+      apple_sandbox_enabled: form.apple_sandbox_enabled, apple_sandbox_user_ids: form.apple_sandbox_user_ids,
       apple_iap_enabled: form.apple_iap_enabled, apple_environment: form.apple_environment, apple_bundle_id: form.apple_bundle_id.trim(),
       apple_app_id: form.apple_app_id, apple_issuer_id: form.apple_issuer_id.trim(), apple_key_id: form.apple_key_id.trim(),
       apple_private_key: privateKey || undefined, clear_apple_private_key: clearKey,
@@ -59,8 +60,13 @@ export function AppleConnectionSettings() {
     {loading || !form ? <p role="status">正在读取 Apple 配置…</p> : <div className="space-y-5">
       <div className="settings-toggle-row"><div><strong>允许 Apple 新购</strong><span>需完成商品配置、统一余额核对及 Sandbox / TestFlight 联调后再开启生产新购。</span></div>
         <Switch aria-label="允许 Apple 新购" checked={form.apple_iap_enabled} onCheckedChange={value => patchField('apple_iap_enabled', value)} /></div>
+      <div className="settings-toggle-row"><div><strong>允许白名单账号沙箱新购</strong><span>正式环境保持 Production；测试积分独立，不能用于正式 AI 或创作者结算。关闭只暂停新购和测试解锁，已付款验单及退款继续处理。</span></div>
+        <Switch aria-label="允许沙箱新购" checked={form.apple_sandbox_enabled} onCheckedChange={value => patchField('apple_sandbox_enabled', value)} /></div>
+      <LabeledControl label="沙箱测试用户 ID" hint="填写后台用户编号，用英文逗号分隔（例如 123,456）。这些账号的 App 钱包和视频权益显示为 Sandbox；Web 余额与 AI 仍使用正式钱包。移出前请完成测试核对。">
+        <input className="settings-input" value={form.apple_sandbox_user_ids} onChange={e => patchField('apple_sandbox_user_ids', e.target.value.replace(/\s/g, ''))} />
+      </LabeledControl>
       <div className="settings-field-grid">
-        <LabeledControl label="交易环境" hint="保存后生效。Sandbox 用于测试购买；切换不会转换已有余额或订单的环境，原环境账户不能直接用于另一环境。"><select className="settings-input" value={form.apple_environment} onChange={e => patchField('apple_environment', e.target.value as 'Production' | 'Sandbox')}><option value="Production">Production（生产）</option><option value="Sandbox">Sandbox（沙箱测试）</option></select></LabeledControl>
+        <LabeledControl label="交易环境" hint="仅影响 Apple 渠道，不改变统一钱包及 AI 消费环境。正式站请保留 Production。同部署沙箱请使用上方白名单开关，不要切换正式钱包环境。"><select className="settings-input" value={form.apple_environment} onChange={e => patchField('apple_environment', e.target.value as 'Production' | 'Sandbox')}><option value="Production">Production（生产）</option><option value="Sandbox">Sandbox（沙箱测试）</option></select></LabeledControl>
         <LabeledControl label="Bundle ID"><input className="settings-input" value={form.apple_bundle_id} onChange={e => patchField('apple_bundle_id', e.target.value)} placeholder="com.deep.printfilm" /></LabeledControl>
         <LabeledControl label="Apple App ID" hint="App Store Connect 应用的数字 Apple ID；生产必填，不是 Bundle ID。"><input className="settings-input" type="number" min="0" step="1" value={form.apple_app_id || ''} onChange={e => patchField('apple_app_id', Number(e.target.value))} /></LabeledControl>
         <LabeledControl label="Issuer ID"><input className="settings-input" value={form.apple_issuer_id} onChange={e => patchField('apple_issuer_id', e.target.value)} /></LabeledControl>
@@ -78,6 +84,7 @@ export function AppleConnectionSettings() {
       {status && <div className="rounded-lg border p-4 space-y-2 text-sm">
         <p>已保存配置：{status.configured ? '配置完整，仍需真实联调' : '待补充：' + status.missing.join('、')}</p>
         <p>统一钱包：{status.unified_wallet_enabled ? '已启用' : '未启用'} · 通知处理：{status.runtime_running ? '运行中' : '尚未运行'}</p>
+        <p>钱包环境：{status.wallet_environment}{!status.wallet_environment_matches && ' · 与 Apple 环境不匹配：已阻止新购及跨环境入账，AI 消费仍按钱包环境执行。'}</p>
         <p className="break-all">通知地址（App Store Server Notifications V2）：{status.notification_url}</p>
         {!status.notification_https && <p className="text-destructive">请先在“站点工具”配置可公网访问的 HTTPS 后端基址。</p>}
         <Button type="button" variant="outline" onClick={() => { void navigator.clipboard.writeText(status.notification_url).catch(() => setError('复制失败，请手动复制通知地址。')); }}>复制通知地址</Button>

@@ -160,7 +160,7 @@ async def build_admin_dashboard_stats(
     paid_total = int(
         (
             await db.execute(
-                select(func.coalesce(func.sum(Order.amount_fen), 0)).where(Order.status == "paid")
+                select(func.coalesce(func.sum(Order.amount_fen), 0)).where(Order.status == "paid", func.coalesce(Order.payment_environment, "Production") == "Production")
             )
         ).scalar_one()
         or 0
@@ -170,6 +170,7 @@ async def build_admin_dashboard_stats(
             await db.execute(
                 select(func.coalesce(func.sum(Order.amount_fen), 0)).where(
                     Order.status == "paid",
+                    func.coalesce(Order.payment_environment, "Production") == "Production",
                     Order.paid_at.is_not(None),
                     Order.paid_at >= today,
                 )

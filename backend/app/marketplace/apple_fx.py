@@ -53,6 +53,9 @@ async def finalize_valuation(db, transaction_id: int, rate_id: int, operator_id:
     item = await db.get(AppleTransaction, transaction_id)
     if not item:
         app_fail("MARKETPLACE_RECORD_NOT_FOUND", "业务记录不存在。", 404)
+    from .app_funds import isolated
+    if isolated(item.environment):
+        app_fail("SANDBOX_FINANCE_FORBIDDEN", "沙箱测试交易不参与正式收入核算。", 409)
     await funds_call(wallet.lock_account(db, item.user_id, item.environment))
     item = await db.scalar(select(AppleTransaction).where(AppleTransaction.id == item.id).with_for_update().execution_options(populate_existing=True))
     if item.valuation_status == "valued":

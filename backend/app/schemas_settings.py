@@ -21,6 +21,8 @@ class ModelCapabilityReadiness(BaseModel):
 
 class AdminModelSettingsOut(BaseModel):
     apple_environment: Literal["Production", "Sandbox"] = "Production"
+    apple_sandbox_enabled: bool = False
+    apple_sandbox_user_ids: str = ""
     apple_iap_enabled: bool = False
     apple_bundle_id: str = ""
     apple_app_id: int = 0
@@ -111,6 +113,7 @@ class AdminModelSettingsOut(BaseModel):
     # Token 计费
     billing_enabled: bool = Field(default=False, description="是否启用余额计费")
     unified_wallet_enabled: bool = Field(default=False, description="资金来源核对完成后启用统一钱包")
+    wallet_environment: Literal["Production", "Sandbox"] = Field(default="Production", description="独立钱包环境；已有账户或余额时禁止直接切换")
     billing_markup: float = Field(default=1.0, description="兼容保留的计费倍率配置；当前用户扣费按上游成本计算，不再乘此倍率")
     billing_estimate_buffer: float = Field(default=1.2, description="Token 或视频时长类预扣估算的缓冲系数；按张计价的生图预扣不乘此系数")
     billing_seedance_video0: float = Field(default=46.0, description="带音频生成的 Seedance Token 成本兜底单价，单位：人民币元/百万 Token")
@@ -161,6 +164,8 @@ class AdminModelSettingsOut(BaseModel):
 
 class AdminModelSettingsPatch(BaseModel):
     apple_environment: Literal["Production", "Sandbox"] | None = None
+    apple_sandbox_enabled: bool | None = None
+    apple_sandbox_user_ids: str | None = Field(None, max_length=4000, pattern=r"^(?:[1-9][0-9]*(?:,[1-9][0-9]*)*)?$")
     apple_iap_enabled: bool | None = None
     apple_bundle_id: str | None = Field(None, max_length=255)
     apple_app_id: int | None = Field(None, ge=0)
@@ -249,6 +254,7 @@ class AdminModelSettingsPatch(BaseModel):
 
     billing_enabled: bool | None = Field(default=None, description="是否启用余额计费；省略或 null 时不修改")
     unified_wallet_enabled: bool | None = Field(default=None, description="资金来源核对完成后启用统一钱包")
+    wallet_environment: Literal["Production", "Sandbox"] | None = None
     billing_markup: float | None = Field(default=None, description="兼容保留的计费倍率配置；当前用户扣费按上游成本计算，不再乘此倍率；省略或 null 时不修改")
     billing_estimate_buffer: float | None = Field(default=None, description="Token 或视频时长类预扣估算的缓冲系数；按张计价的生图预扣不乘此系数；省略或 null 时不修改")
     billing_seedance_video0: float | None = Field(default=None, description="带音频生成的 Seedance Token 成本兜底单价，单位：人民币元/百万 Token；省略或 null 时不修改")
@@ -358,6 +364,8 @@ def model_config_field_names() -> tuple[str, ...]:
         "epay_notify_url",
         "epay_return_url",
         "stripe_enabled",
+        "apple_sandbox_enabled",
+        "apple_sandbox_user_ids",
         "apple_iap_enabled",
         "apple_environment",
         "apple_bundle_id",
@@ -374,6 +382,7 @@ def model_config_field_names() -> tuple[str, ...]:
         "stripe_hkd_cny_rate",
         "billing_enabled",
         "unified_wallet_enabled",
+        "wallet_environment",
         "billing_markup",
         "billing_estimate_buffer",
         "billing_seedance_video0",

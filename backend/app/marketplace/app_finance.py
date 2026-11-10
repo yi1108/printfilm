@@ -21,6 +21,9 @@ def eligible_condition():
 
 async def reconcile(db, body, operator_id: int) -> AppleSettlement:
     """对账只登记核实后的苹果报表，不把客户端付款提示当实际到账。"""
+    from .app_funds import isolated
+    if isolated(body.environment):
+        app_fail("SANDBOX_FINANCE_FORBIDDEN", "沙箱测试交易不能进入正式财务对账。", 409)
     # 幂等编号跨环境唯一，固定同一个独立锁避免跨环境并发撞唯一约束。
     await lock_creator(db, 0, "Production")
     prior = (await db.execute(select(AppleSettlement).where(AppleSettlement.idempotency_key == body.idempotency_key))).scalar_one_or_none()
@@ -79,6 +82,9 @@ async def reconcile(db, body, operator_id: int) -> AppleSettlement:
 
 async def create_payout(db, body, operator_id: int) -> AppPayout:
     """只登记人工已打款或全额抵扣，不调用任何转账服务。"""
+    from .app_funds import isolated
+    if isolated(body.environment):
+        app_fail("SANDBOX_FINANCE_FORBIDDEN", "沙箱测试收益不能登记真实打款。", 409)
     # 幂等键是全局唯一，必须先跨作者/环境串行化同键，再取创作者结算锁。
     await db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
                      {"key": "marketplace-app-payout:" + body.idempotency_key})

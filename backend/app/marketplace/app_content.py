@@ -7,6 +7,7 @@ import hmac
 import json
 
 from fastapi import APIRouter, HTTPException, Path, Query
+from .distribution import AppEdition
 from sqlalchemy import literal, select, tuple_, union_all
 
 from app.config import get_settings
@@ -118,17 +119,20 @@ async def series_data(db, item, user=None):
 
 
 @router.get("/capabilities", response_model=dict)
-async def capabilities():
+async def capabilities(user: Visitor):
     """配置可用不等于真实苹果购买或 OSS 联调已验收。"""
     from .app_settings import get_app_settings
     from .apple_client import apple_configured
     config = get_app_settings()
+    from .apple_api import purchasing_enabled
+    from .sandbox_wallet import tester, new_purchase_allowed
+    testing = tester(user.id if user else None)
     from app.services.billing import wallet
     return {"sharing_enabled": bool(getattr(config, "sharing_enabled", False) and app_open()), "enabled": app_open(), "social_enabled": bool(config.social_enabled and app_open()), "comments_enabled": bool(config.comments_enabled and app_open()), "storage_configured": storage.configured(),
-        "apple_iap_enabled": bool(config.apple_iap_enabled), "environment": environment(),
+        "apple_iap_enabled": new_purchase_allowed(user.id) if testing else bool(config.apple_iap_enabled), "environment": environment(user.id if user else None),
         "payments_configured": apple_configured(),
-        "purchasing_enabled": bool(wallet.enabled() and app_open() and config.apple_iap_enabled and apple_configured()),
-        "unified_wallet_enabled": wallet.enabled(), "wallet_type": "platform_balance",
+        "purchasing_enabled": purchasing_enabled(user.id if user else None),
+        "unified_wallet_enabled": wallet.enabled(), "wallet_type": "sandbox_test" if testing else "platform_balance", "test_only": testing,
         "coin_value_fen": 1, "offline_download": False, "supported_locales": ["zh", "en"], "default_locale": "zh"}
 
 
@@ -162,14 +166,15 @@ async def app_categories(db: DB):
 )
 async def feed(db: DB, user: Visitor, q: str = Query("", max_length=100), category: str = Query("", max_length=60), category_code: str = Query("", max_length=80),
                content_type: str = Query("all", pattern="^(all|work|series)$"), cursor: str = Query("", max_length=1024, description="上一页返回的next_cursor；切换筛选或排序时清空。"),
-               limit: int = Query(20, ge=1, le=50), sort: str = Query("recommended", pattern="^(recommended|latest)$", description="recommended：置顶及精选优先（默认）；latest：严格按发布时间。")):
+               limit: int = Query(20, ge=1, le=50), sort: str = Query("recommended", pattern="^(recommended|latest)$", description="recommended：置顶及精选优先（默认）；latest：严格按发布时间。"),
+               app_edition: AppEdition = Query("domestic", description="国内版domestic、国际版international；省略默认国内版。先筛投放范围再排序分页，与语言无关。")):
     """SQL 层先筛审核、版权、封禁和作者屏蔽，再执行稳定游标分页。"""
     require_app_open()
-    fingerprint = feed_fingerprint(q=q, category=category, category_code=category_code, content_type=content_type, sort=sort, user_id=user.id if user else None)
+    fingerprint = feed_fingerprint(q=q, category=category, category_code=category_code, content_type=content_type, sort=sort, user_id=user.id if user else None, app_edition=app_edition)
     revision = await curation_revision(db) if sort == "recommended" else 0
     queries = []
-    for kind, model, query in (("work", Work, work_query(user.id if user else None)),
-                               ("series", Series, series_query(user.id if user else None))):
+    for kind, model, query in (("work", Work, work_query(user.id if user else None, app_edition)),
+                               ("series", Series, series_query(user.id if user else None, app_edition))):
         if content_type not in ("all", kind):
             continue
         if q:
@@ -184,19 +189,19 @@ async def feed(db: DB, user: Visitor, q: str = Query("", max_length=100), catego
     if sort == "recommended":
         keys = [combined.c.pin, combined.c.priority, combined.c.feature, *keys]
     if cursor:
-        position = decode_feed_cursor(cursor, sort=sort, fingerprint=fingerprint, revision=revision)
+        position = decode_feed_cursor(cursor, sort=sort, fingerprint=fingerprint, revision=revision, allow_legacy=app_edition == "domestic")
         query = query.where(tuple_(*keys) < position)
     rows = list((await db.execute(query.order_by(*(key.desc() for key in keys)).limit(limit + 1))).all())
     more, rows = len(rows) > limit, rows[:limit]
     items = []
     for row in rows:
         if row.kind == "series":
-            item = await db.scalar(series_query(user.id if user else None).where(Series.id == row.record_id))
+            item = await db.scalar(series_query(user.id if user else None, app_edition).where(Series.id == row.record_id))
             if item:
                 items.append(await series_data(db, item, user))
         else:
             try:
-                resolved = await current_content(db, "work", row.record_id, user.id if user else None)
+                resolved = await current_content(db, "work", row.record_id, user.id if user else None, app_edition)
             except HTTPException as exc:
                 # 本页查询后恰好下架的条目跳过，不让整页发现接口失败。
                 if exc.status_code != 404:

@@ -79,6 +79,7 @@ export function PaymentSettingsPanel() {
       epay_return_url: form.epay_return_url.trim(),
       billing_enabled: form.billing_enabled,
       unified_wallet_enabled: form.unified_wallet_enabled,
+      wallet_environment: form.wallet_environment,
       billing_markup: 1.0,
       billing_estimate_buffer: form.billing_estimate_buffer,
       billing_seedance_video0: form.billing_seedance_video0,
@@ -169,6 +170,7 @@ export function PaymentSettingsPanel() {
           <div><strong>启用 Stripe 支付</strong><span>开启并保存完整配置后，用户可在充值页选择银行卡支付。</span></div>
           <Switch aria-label="启用 Stripe 支付" checked={Boolean(form.stripe_enabled)} onCheckedChange={(value) => patchField("stripe_enabled", value)} />
         </div>
+
         <div className="settings-field-grid mt-5">
           <LabeledControl label="Stripe 收款币种" hint="根据用户当前网站语言自动选择；支付宝与微信支付仍使用人民币。">
             <input className="settings-input" readOnly value="中文 CNY / 英文 USD（按网站语言）" />
@@ -206,6 +208,9 @@ export function PaymentSettingsPanel() {
           <Switch aria-label="启用余额计费" checked={form.billing_enabled} onCheckedChange={(value) => patchField("billing_enabled", value)} />
           <label>启用统一钱包（须先核对历史资金来源）<Switch aria-label="启用统一钱包" checked={form.unified_wallet_enabled} onCheckedChange={(value) => patchField("unified_wallet_enabled", value)} /></label>
         </div>
+        <LabeledControl label="统一钱包环境" hint="独立于 Apple 交易环境。正式站使用 Production；Sandbox 仅用于独立测试库。已有钱包账户或余额后禁止直接切换，不会转换历史资金。">
+          <select className="settings-input" value={form.wallet_environment} onChange={event => patchField("wallet_environment", event.target.value as "Production" | "Sandbox")}><option value="Production">Production（正式资金）</option><option value="Sandbox">Sandbox（独立测试资金）</option></select>
+        </LabeledControl>
         <div className="settings-field-grid mt-5">
           <LabeledControl label="注册赠送积分" required hint={moneyHint("billing_signup_grant_fen")}>
             <input className="settings-input" type="number" min={0} step={1} placeholder="0" {...numericControl("billing_signup_grant_fen")} />

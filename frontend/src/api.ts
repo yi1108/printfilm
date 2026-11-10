@@ -553,7 +553,7 @@ export const api = {
     return request<Work[]>('/api/works')
   },
   wallet() {
-    return request<Wallet>('/api/billing/wallet')
+    return request<Wallet>('/api/billing/wallet?view=production')
   },
   billingSkus(language: 'zh' | 'en' = 'zh') {
     return request<{ skus: BillingSku[]; pay_types: string[]; markup: number; stripe_unavailable_reason?: string | null }>(`/api/billing/skus?language=${language}`)

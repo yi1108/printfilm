@@ -22,8 +22,7 @@ def enabled():
 
 def environment(value=None):
     """生产、Sandbox 必须使用不同部署和数据库，不能共用余额。"""
-    from app.marketplace.app_settings import get_app_settings
-    configured = get_app_settings().apple_environment
+    configured = get_settings().wallet_environment
     if value is not None and value != configured:
         raise WalletError("WALLET_ENVIRONMENT_MISMATCH", "交易环境与当前服务不一致，未计入余额。", 403)
     return configured
@@ -53,6 +52,8 @@ async def initialize_account(db, user, environment=None):
     """仅创建明确的新零余额账户；历史账户必须经过迁移核对。"""
     if not enabled():
         raise WalletError("UNIFIED_WALLET_UNAVAILABLE", "统一余额尚未开放。", 503)
+    from .wallet_environment import lock_environment
+    await lock_environment(db)
     env = globals()["environment"](environment)
     existing = await db.scalar(select(WalletAccount).where(WalletAccount.user_id == user.id))
     if existing:

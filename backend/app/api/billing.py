@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.database import get_db
 from app.deps import get_current_user
+from app.marketplace.dependencies import Visitor
 from app.models import Order, Project, UsageEvent, User
 from app.models_tasks import TaskRun
 from app.services import billing, epay, stripe_payments
@@ -71,22 +72,34 @@ class CreateOrderBody(BaseModel):
 @router.get(
     "/wallet",
     summary="获取个人钱包余额",
-    description="需要登录，返回个人可用余额、冻结金额、套餐和计费开关。金额同时提供分和元两种单位。",
+    description="需要登录，返回个人可用余额、冻结金额、套餐和计费开关。默认按账号选择钱包：沙箱白名单读取隔离测试余额，其他账号读取正式余额。Web使用view=production明确读取正式钱包；此参数仅影响查询，不改变AI扣费环境。金额同时提供分和元两种单位。",
     response_description="个人钱包与计费配置",
 )
-async def wallet(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict:
+async def wallet(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+                 view: Literal["app", "production"] = "app") -> dict:
     from app.services.billing import wallet as funds
     from app.marketplace.coin_service import funds_call
-    state = await funds_call(funds.snapshot(db, user.id)) if funds.enabled() else {}
+    from app.marketplace import app_funds
+    from app.marketplace.sandbox_wallet import environment
+    account_environment = environment(user.id) if view == "app" else funds.configured_environment()
+    if app_funds.isolated(account_environment):
+        state = await funds_call(app_funds.snapshot(db, user.id, account_environment))
+    else:
+        state = await funds_call(funds.snapshot(db, user.id)) if funds.enabled() else {}
+    balance = int(state.get("balance_fen", user.balance_fen or 0))
+    frozen = int(state.get("frozen_fen", user.frozen_fen or 0))
     return {
-        "balance_fen": int(user.balance_fen or 0),
-        "frozen_fen": int(user.frozen_fen or 0),
-        "balance_yuan": round(int(user.balance_fen or 0) / 100, 2),
-        "frozen_yuan": round(int(user.frozen_fen or 0) / 100, 2),
+        "balance_fen": balance,
+        "frozen_fen": frozen,
+        "balance_yuan": round(balance / 100, 2),
+        "frozen_yuan": round(frozen / 100, 2),
         "plan": user.plan or "free",
         "billing_enabled": settings.billing_enabled,
         "markup": settings.billing_markup,
         "unified_wallet_enabled": funds.enabled(),
+        "environment": account_environment,
+        "wallet_type": "platform_balance",
+        "test_only": False,
         **state,
     }
 
@@ -97,12 +110,12 @@ async def wallet(user: User = Depends(get_current_user), db: AsyncSession = Depe
     description="无需登录，返回可购买的充值套餐、支持的支付方式及计费倍率。",
     response_description="充值套餐与支付方式",
 )
-async def list_skus(request: Request, language: Literal["zh", "en"] = Query("zh"), channel: Literal["web", "apple_iap"] = "web", db: AsyncSession = Depends(get_db)) -> dict:
+async def list_skus(request: Request, user: Visitor = None, language: Literal["zh", "en"] = Query("zh"), channel: Literal["web", "apple_iap"] = "web", db: AsyncSession = Depends(get_db)) -> dict:
     if channel == "apple_iap":
         from app.marketplace.apple_api import coin_products
         from app.marketplace.app_bootstrap import require_schema
         await require_schema(request)
-        result = await coin_products(db)
+        result = await coin_products(db, user)
         return {**result, "skus": result["items"], "pay_types": ["apple_iap"] if result["purchasing_enabled"] else []}
     stripe_settings = get_settings()
     stripe_ready = stripe_payments.is_ready(stripe_settings, language=language)
@@ -227,15 +240,15 @@ async def create_order(
         from app.marketplace.app_bootstrap import require_schema
         from app.marketplace.apple_recharge import find_product_for_sku
         from app.marketplace.apple_service import purchase_intent
-        from app.marketplace.app_settings import get_app_settings
         from app.marketplace.coin_service import app_fail
         await require_schema(request)
-        if not purchasing_enabled():
+        if not purchasing_enabled(user.id):
             app_fail("MARKETPLACE_PAYMENT_UNAVAILABLE", "苹果充值暂不可用，请稍后重试。", 503)
         if not body.idempotency_key:
             app_fail("MARKETPLACE_IDEMPOTENCY_REQUIRED", "请提供充值操作编号。", 422)
         product = await find_product_for_sku(db, body.sku_id)
-        result = await purchase_intent(db, user.id, get_app_settings().apple_environment, product.product_id, body.idempotency_key)
+        from app.marketplace.sandbox_wallet import environment
+        result = await purchase_intent(db, user.id, environment(user.id), product.product_id, body.idempotency_key)
         await db.commit()
         return result
     if body.pay_type == "stripe" and not stripe_payments.is_ready(language=body.language):
@@ -488,7 +501,8 @@ async def list_orders(
     await billing.close_expired_pending_orders(db, user_id=user.id)
     result = await db.execute(
         select(Order)
-        .where(Order.user_id == user.id, Order.team_id.is_(None))
+        .where(Order.user_id == user.id, Order.team_id.is_(None),
+               func.coalesce(Order.payment_environment, "Production") == "Production")
         .order_by(Order.created_at.desc())
         .limit(limit)
     )
@@ -533,6 +547,8 @@ async def get_order(
     return {
         "out_trade_no": order.out_trade_no,
         "status": order.status,
+        "environment": order.payment_environment,
+        "test_only": order.payment_environment == "Sandbox" if order.payment_environment else None,
         "amount_fen": order.amount_fen,
         "credit_fen": order.credit_fen,
         "pay_type": order.pay_type,

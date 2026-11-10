@@ -135,7 +135,8 @@ async def build_report(db, environment):
             continue
         entries = list((await db.execute(select(WalletLedger).where(WalletLedger.user_id == user.id)
                       .order_by(WalletLedger.id))).scalars())
-        orders = list((await db.execute(select(Order).where(Order.user_id == user.id, Order.team_id.is_(None)))).scalars())
+        orders = list((await db.execute(select(Order).where(Order.user_id == user.id, Order.team_id.is_(None),
+            (Order.payment_environment.is_(None)) | (Order.payment_environment == "Production")))).scalars())
         try:
             sources, allocations, debt = replay_ledger(entries, orders, int(user.balance_fen or 0), int(user.frozen_fen or 0))
             coin = await coin_snapshot(db, user.id, environment, tables)

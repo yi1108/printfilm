@@ -161,6 +161,8 @@ async def update_work(work_id: int, body: WorkUpdate, db: DB, user: Actor):
             rights.full_status = "draft"
             rights.version += 1
     values = body.model_dump(exclude={"version"})
+    from .distribution import keep_editions
+    keep_editions(body, values)
     for key, value in values.items():
         setattr(item, key, value)
     item.version += 1

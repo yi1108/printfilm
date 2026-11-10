@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import insert
 
 from app.models import User
 from app.services.billing import wallet
+from . import app_funds
 from .app_models import AppleProduct, AppleTransaction, AppleTransactionRevision, CoinGrant, CoinUnlock, CreatorAccount
 from .models import ContentOrder, Entitlement, Publication, RevenueLedger
 from .service import now
@@ -37,7 +38,7 @@ async def funds_call(operation):
 async def lock_wallet(db, user_id: int, environment: str) -> User:
     """兼容原调用名称，唯一账户锁和余额来自 users，不创建旧币钱包。"""
     check_environment(environment)
-    return await funds_call(wallet.lock_account(db, user_id, environment))
+    return await funds_call(app_funds.lock_account(db, user_id, environment))
 
 
 async def lock_creator(db, owner_id: int, environment: str) -> CreatorAccount:
@@ -52,6 +53,9 @@ async def apply_apple_transaction(db, txn: dict) -> AppleTransaction:
     """已验签的每笔真实付款，对应一笔共同充值订单和一个资金来源。"""
     from .apple_recharge import product_snapshot, recharge_order_for_transaction, expected_prices
     environment, transaction_id = txn["environment"], str(txn["transaction_id"])
+    if app_funds.isolated(environment):
+        from .sandbox_wallet import authorize_transaction
+        await authorize_transaction(db, txn["user_id"], txn)
     await lock_wallet(db, txn["user_id"], environment)
     existing = await db.scalar(select(AppleTransaction).where(AppleTransaction.environment == environment,
         AppleTransaction.transaction_id == transaction_id)
@@ -60,6 +64,10 @@ async def apply_apple_transaction(db, txn: dict) -> AppleTransaction:
         if (existing.user_id != txn["user_id"] or existing.product_id != txn["product_id"]
                 or existing.app_account_token != txn["app_account_token"]):
             app_fail("MARKETPLACE_IAP_ACCOUNT_MISMATCH", "该交易不属于当前账号。", 403)
+        if app_funds.isolated(environment):
+            from .sandbox_models import SandboxLot
+            if not await db.scalar(select(SandboxLot.id).where(SandboxLot.transaction_id == existing.id)):
+                app_fail("SANDBOX_LEGACY_REVIEW_REQUIRED", "历史沙箱资金不在隔离账本中，请人工核对，不自动搬入正式余额。", 409)
         if txn.get("status") == "refunded" and existing.status != "refunded":
             await refund_apple_transaction(db, environment, transaction_id)
         return existing
@@ -87,8 +95,14 @@ async def apply_apple_transaction(db, txn: dict) -> AppleTransaction:
     db.add(item)
     await db.flush()
     db.add(AppleTransactionRevision(transaction_id=item.id, revision=0, status=item.status,
-        delta_gross_fen=0 if refunded else amount))
+        delta_gross_fen=0 if refunded or app_funds.isolated(environment) else amount))
     source_ref = f"{environment}:{transaction_id}"
+    if app_funds.isolated(environment):
+        from .sandbox_wallet import credit_transaction, refund
+        await credit_transaction(db, item)
+        if refunded:
+            await refund(db, item)
+        return item
     lot = await funds_call(wallet.credit(db, item.user_id, item.coins, source_type="apple_transaction",
         source_ref=source_ref, amount_fen=amount, environment=environment, note=f"Apple充值 {order.out_trade_no}"))
     lot.settlement_status = "pending_fx" if item.valuation_status == "pending" else "pending"
@@ -146,7 +160,7 @@ async def unlock_publication(db, user_id: int, environment: str, publication_id:
         app_fail("MARKETPLACE_SELF_PURCHASE", "不能购买自己的作品。", 409)
     if publication.unlock_price_fen != expected_coins or expected_coins <= 0:
         app_fail("MARKETPLACE_CONTENT_CHANGED", "解锁价格已变化，请刷新后重新确认。", 409)
-    state = await funds_call(wallet.snapshot(db, user_id, environment))
+    state = await funds_call(app_funds.snapshot(db, user_id, environment))
     if state["debt_fen"]:
         app_fail("WALLET_DEBT_OUTSTANDING", "账户存在欠费，请先充值补齐。", 409)
     if state["spendable_fen"] < expected_coins:
@@ -161,7 +175,7 @@ async def unlock_publication(db, user_id: int, environment: str, publication_id:
         publication_id=publication_id, coins=expected_coins, amount_fen=0, status="paid", idempotency_key=idempotency_key)
     db.add(item)
     await db.flush()
-    allocations = await funds_call(wallet.consume(db, user_id, expected_coins,
+    allocations = await funds_call(app_funds.consume(db, user_id, expected_coins,
         business_type="video_unlock", business_ref=str(item.id), environment=environment))
     gross = sum(row.amount_fen for row in allocations)
     item.amount_fen = order.amount_fen = gross
@@ -173,8 +187,9 @@ async def unlock_publication(db, user_id: int, environment: str, publication_id:
             index_elements=["user_id", "publication_id"], set_={"active": True, "order_id": order.id}))
     share = int(publication.share_bps)
     platform = gross * share // 10000
-    db.add(RevenueLedger(order_id=order.id, publication_id=publication_id, owner_id=publication.owner_id,
-        gross_fen=gross, platform_fen=platform, creator_fen=gross-platform, share_bps=share))
+    if not app_funds.isolated(environment):
+        db.add(RevenueLedger(order_id=order.id, publication_id=publication_id, owner_id=publication.owner_id,
+            gross_fen=gross, platform_fen=platform, creator_fen=gross-platform, share_bps=share))
     await db.flush()
     return {**unlock_data(item), "entitled": True, "charged_coins": expected_coins,
         "balance_coins": account.balance_fen, "balance_fen": account.balance_fen}

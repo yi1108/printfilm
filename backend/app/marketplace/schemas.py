@@ -19,7 +19,18 @@ class ContentRevenueInput(Version):
     reason: str = Field(min_length=1, max_length=2000)
 
 
-class WorkInput(Input):
+class AppDistribution(Input):
+    app_editions: list[Literal["domestic", "international"]] = Field(
+        default_factory=lambda: ["domestic"], min_length=1, max_length=2,
+        description="App投放版本：国内版domestic、国际版international，两项表示两版；旧客户端省略时新建默认国内版，更新保留原值。")
+
+    @field_validator("app_editions")
+    @classmethod
+    def normalize_editions(cls, value):
+        return [edition for edition in ("domestic", "international") if edition in value]
+
+
+class WorkInput(AppDistribution):
     title: str = Field(min_length=1, max_length=200)
     description: str = Field(default="", max_length=5000)
     category: str = Field(default="其他", min_length=1, max_length=60)
@@ -198,7 +209,7 @@ class ResolutionInput(Input):
     resolution: str = Field(min_length=1, max_length=3000)
 
 
-class SeriesInput(Input):
+class SeriesInput(AppDistribution):
     title: str = Field(min_length=1, max_length=200)
     description: str = Field(default="", max_length=5000)
     category: str = Field(default="其他", min_length=1, max_length=60)

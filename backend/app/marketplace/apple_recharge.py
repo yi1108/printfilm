@@ -6,7 +6,6 @@ import uuid
 from sqlalchemy import select
 
 from app.models import Order
-from app.services.billing import wallet
 from .apple_models import ApplePurchaseIntent
 from .app_models import AppleProduct
 from .coin_service import app_fail, check_environment
@@ -66,7 +65,12 @@ async def create_recharge_intent(db, user_id: int, environment: str, product_id:
     """先锁同一用户，幂等创建充值订单和 StoreKit 意向，不代表已付款。"""
     from .apple_service import account_token
     check_environment(environment)
-    await wallet.lock_account(db, user_id, environment)
+    from .app_funds import isolated, lock_account
+    if isolated(environment):
+        from .sandbox_wallet import new_purchase_allowed
+        if not new_purchase_allowed(user_id):
+            app_fail("SANDBOX_PURCHASE_DISABLED", "该账号未获准发起沙箱购买。", 403)
+    await lock_account(db, user_id, environment)
     product = await db.scalar(select(AppleProduct).where(
         AppleProduct.product_id == product_id, AppleProduct.enabled.is_(True)))
     if not product:
@@ -81,7 +85,7 @@ async def create_recharge_intent(db, user_id: int, environment: str, product_id:
     if not intent:
         order = Order(out_trade_no=f"IAP-I-{uuid.uuid4().hex}", user_id=user_id,
                       sku_id=product.sku_id, amount_fen=product.price_fen,
-                      credit_fen=snapshot["credit_fen"], pay_type="apple_iap", status="pending")
+                      credit_fen=snapshot["credit_fen"], payment_environment=environment, pay_type="apple_iap", status="pending")
         db.add(order)
         await db.flush()
         intent = ApplePurchaseIntent(user_id=user_id, environment=environment, product_id=product_id,
@@ -122,11 +126,12 @@ async def recharge_order_for_transaction(db, txn: dict, product: AppleProduct) -
         identifier = hashlib.sha256(f'{txn["environment"]}:{txn["transaction_id"]}'.encode()).hexdigest()[:48]
         order = Order(out_trade_no=f"IAP-T-{identifier}", user_id=txn["user_id"], sku_id=product.sku_id,
                       amount_fen=txn["amount_fen"], credit_fen=snapshot["credit_fen"],
-                      pay_type="apple_iap", status="pending")
+                      pay_type="apple_iap", payment_environment=txn["environment"], status="pending")
         db.add(order)
         await db.flush()
     if intent and not intent.fulfilled_transaction_id:
         intent.fulfilled_transaction_id = str(txn["transaction_id"])
+    order.payment_environment = txn["environment"]
     order.amount_fen = txn["amount_fen"]
     order.payment_currency = txn["currency"].lower()
     order.payment_amount_minor = txn.get("payment_amount_minor", txn["amount_fen"])

@@ -31,18 +31,17 @@ def require_social_open():
         error("MARKETPLACE_SOCIAL_UNAVAILABLE", "互动服务尚未开放", 404)
 
 
-def environment() -> str:
+def environment(user_id=None) -> str:
     """支付环境只由服务器配置决定，不读取客户端字段。"""
-    from .app_settings import get_app_settings
-    value = get_app_settings().apple_environment
-    return value.value if hasattr(value, "value") else str(value)
+    from .sandbox_wallet import environment as account_environment
+    return account_environment(user_id)
 
 
 def entitlement_filters(user_id: int):
     """币权益只认当前环境；旧易支付及无订单历史权益保留。"""
     from .app_models import CoinGrant
     coin = select(CoinGrant.publication_id).where(CoinGrant.user_id == user_id,
-        CoinGrant.environment == environment(), CoinGrant.active.is_(True))
+        CoinGrant.environment == environment(user_id), CoinGrant.active.is_(True))
     legacy = select(Entitlement.publication_id).outerjoin(ContentOrder, ContentOrder.id == Entitlement.order_id).where(
         Entitlement.user_id == user_id, Entitlement.active.is_(True),
         or_(ContentOrder.pay_type.in_(("alipay", "wxpay")), and_(Entitlement.order_id.is_(None),
@@ -53,7 +52,7 @@ def entitlement_filters(user_id: int):
 async def has_entitlement(db, user_id: int, publication_id: int) -> bool:
     """客户端声明、Sandbox 币授权均不能代替当前环境真实权益。"""
     from .coin_service import has_access
-    return await has_access(db, user_id, publication_id, environment())
+    return await has_access(db, user_id, publication_id, environment(user_id))
 
 
 def author_filter(model, user_id: int | None):
@@ -62,30 +61,32 @@ def author_filter(model, user_id: int | None):
     return ~exists().where(AuthorBlock.user_id == user_id, AuthorBlock.author_id == model.owner_id) if user_id else True
 
 
-def work_query(user_id=None):
+def work_query(user_id=None, app_edition=None):
     """免费和平台投放与 Web 共用审核、短试看、版权和实时限制条件。"""
     from .service import public_work_filters
+    from .distribution import edition_filter
     return select(Work).join(Asset, Work.asset_id == Asset.id).join(Rights, Rights.asset_id == Asset.id).where(
         *public_work_filters(), Work.sale_type.in_(("free", "platform_unlock")),
-        Asset.owner_id == Work.owner_id, Rights.owner_id == Work.owner_id, author_filter(Work, user_id))
+        Asset.owner_id == Work.owner_id, Rights.owner_id == Work.owner_id, author_filter(Work, user_id), edition_filter(Work, app_edition))
 
 
-def series_query(user_id=None):
+def series_query(user_id=None, app_edition=None):
     """系列整体审核，不能绕过任意一集的封禁或失效版权材料。"""
     from .series import public_series_filters
+    from .distribution import edition_filter
     return select(Series).where(*public_series_filters(), Series.sale_type.in_(("free", "platform_unlock")),
-                                author_filter(Series, user_id))
+                                author_filter(Series, user_id), edition_filter(Series, app_edition))
 
 
-async def current_content(db, kind: str, content_id: int, user_id=None):
+async def current_content(db, kind: str, content_id: int, user_id=None, app_edition=None):
     """公开详情、试看和新解锁从同一当前版本入口解析。"""
     if kind == "work":
-        item = await db.scalar(work_query(user_id).where(Work.id == content_id))
+        item = await db.scalar(work_query(user_id, app_edition).where(Work.id == content_id))
         parent = item
         free = bool(item and item.sale_type == "free")
     elif kind == "series_episode":
         item = await db.get(SeriesEpisode, content_id)
-        parent = await db.scalar(series_query(user_id).where(Series.id == item.series_id)) if item else None
+        parent = await db.scalar(series_query(user_id, app_edition).where(Series.id == item.series_id)) if item else None
         from .previews import episode_is_free
         free = bool(item and parent and episode_is_free(parent, item))
     else:

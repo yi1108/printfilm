@@ -1,5 +1,10 @@
 /** 市场人工维护的中英对照；用户填写内容不进入此词典。 */
 export default {
+  "App 投放版本": "App distribution",
+  "国内版": "Domestic app",
+  "国际版": "International app",
+  "至少选择一个版本，同时勾选表示两版都投放。短剧所有分集继承系列设置。": "Select at least one app, or both. All series episodes inherit this setting.",
+  "请至少选择一个App投放版本": "Select at least one app for distribution.",
   "网络连接失败，请检查网络后重试。": "Network connection failed. Check your connection and try again.",
   "授权函暂时无法打开": "The authorization letter is temporarily unavailable.",
   "取消未确认，请到我的文件检查状态；重新选择相同文件可恢复上传。": "Cancellation could not be confirmed. Check your files; select the same file to resume the upload.",
