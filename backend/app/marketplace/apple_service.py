@@ -40,7 +40,7 @@ async def apply_verified_transaction(db, txn: dict, *, expected_user_id: int | N
         app_fail(exc.code, exc.message, exc.status)
     owner = (await db.execute(select(AppleAccountToken).where(AppleAccountToken.token == txn["app_account_token"]))).scalar_one_or_none()
     if not owner or (expected_user_id is not None and owner.user_id != expected_user_id):
-        app_fail("MARKETPLACE_IAP_ACCOUNT_MISMATCH", "该苹果交易不属于当前 PrintFilm 账号，请使用购买时的账号登录。", 403)
+        app_fail("MARKETPLACE_IAP_ACCOUNT_MISMATCH", "该苹果交易不属于当前 PRINTFILM 账号，请使用购买时的账号登录。", 403)
     if isolated(txn["environment"]):
         from .sandbox_wallet import authorize_transaction
         await authorize_transaction(db, owner.user_id, txn)

@@ -3,9 +3,9 @@ import { useEffect, useRef, useState } from 'react'
 import { Check, Copy, X } from 'lucide-react'
 import { useI18n } from '../../i18n'
 import { useFabDragPosition } from '../../hooks/useFabDragPosition'
+import { WECHAT_ID } from '../../lib/siteContact'
 
 /** 社区加群微信号（不加图片二维码） */
-const WECHAT_ID = 'gitpp88'
 const POS_STORAGE_KEY = 'pf-wx-group-fab-pos'
 
 /** 简易微信气泡图标 */

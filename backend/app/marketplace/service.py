@@ -250,7 +250,7 @@ def validate_rights(details: dict, *, full: bool, certificate: bool) -> None:
     if source == "printfilm":
         from .authorization import VERSION
         if not details.get("authorization_id") or details.get("authorization_version") != VERSION:
-            fail("请先签署现行 PrintFilm 授权函，再保存权属档案以关联签署记录")
+            fail("请先签署现行 PRINTFILM 授权函，再保存权属档案以关联签署记录")
         return
     if source == "external" and full:
         if not certificate or not str(details.get("certificate_number", "")).strip():

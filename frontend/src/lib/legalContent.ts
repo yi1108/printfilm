@@ -1,4 +1,5 @@
 /** 联系页渠道与反馈主题。法务正文见 legalDocuments.ts。 */
+import { SUPPORT_EMAIL } from './siteContact'
 
 export type ContactChannel = {
   title: string
@@ -11,8 +12,8 @@ export const CONTACT_CHANNELS: ContactChannel[] = [
   {
     title: '邮箱支持',
     desc: '工作日一般 1–2 个工作日内回复；请附上账号邮箱与订单号（如有）。',
-    href: 'mailto:support@printfilm.com',
-    actionLabel: 'support@printfilm.com',
+    href: `mailto:${SUPPORT_EMAIL}`,
+    actionLabel: SUPPORT_EMAIL,
   },
   {
     title: '帮助中心',
@@ -23,7 +24,7 @@ export const CONTACT_CHANNELS: ContactChannel[] = [
   {
     title: '企业合作 / 对公转账',
     desc: '企业批量充值、API 合作或发票需求，请邮件说明公司名称与需求，我们会安排对接。',
-    href: 'mailto:support@printfilm.com?subject=PRINTFILM%20企业合作',
+    href: `mailto:${SUPPORT_EMAIL}?subject=PRINTFILM%20企业合作`,
     actionLabel: '发送合作邮件',
   },
 ]

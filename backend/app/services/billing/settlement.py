@@ -61,7 +61,7 @@ async def _ledger(
 
 
 async def _lock_user(db: AsyncSession, user_id: int) -> User | None:
-    """行锁用户钱包，避免并发预扣/结算透支；populate_existing 防止会话内过期余额。"""
+    """串行化钱包写入，同时允许用量行对 users.id 的外键 KEY SHARE 校验。"""
     from . import wallet
     if wallet.enabled():
         return await wallet.lock_account(db, user_id)
@@ -69,7 +69,9 @@ async def _lock_user(db: AsyncSession, user_id: int) -> User | None:
         await db.execute(
             select(User)
             .where(User.id == int(user_id))
-            .with_for_update()
+            # 余额更新不修改用户主键；FOR UPDATE 会阻塞 usage_events 外键校验，
+            # 与资产/任务锁形成死锁。NO KEY UPDATE 仍互斥其他钱包写入。
+            .with_for_update(key_share=True)
             .execution_options(populate_existing=True)
         )
     ).scalar_one_or_none()

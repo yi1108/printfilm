@@ -38,7 +38,7 @@ function SeriesStepPanel({ series, busy, mode, onCreate, onExisting, onJoin }: {
   </div>
 }
 
-// 从 PrintFilm 已生成成片发起转存。页面只提交编号，不提交视频地址。
+// 从 PRINTFILM 已生成成片发起转存。页面只提交编号，不提交视频地址。
 export default function FromPrintfilm() {
   useMarketplaceLocale()
   const navigate = useNavigate()
@@ -102,7 +102,7 @@ export default function FromPrintfilm() {
   }
 
   if (loading) return <p role="status">{mt("正在读取已生成的成片…")}</p>
-  const heading = <PageHeading title={mt("发布到数字资产市场")} description={focusProject ? mt("这部成片可以发布为单视频，或作为一集加入短剧。同步后补充资料并提交审核。") : mt("选择 PrintFilm 已生成的成片，同步到市场后补充资料并提交审核。已签署有效授权函的账号会自动关联，未签署的请在提交前完成一次签署。")} back="/marketplace/works/new" backLabel={mt("返回发布作品")} />
+  const heading = <PageHeading title={mt("发布到数字资产市场")} description={focusProject ? mt("这部成片可以发布为单视频，或作为一集加入短剧。同步后补充资料并提交审核。") : mt("选择 PRINTFILM 已生成的成片，同步到市场后补充资料并提交审核。已签署有效授权函的账号会自动关联，未签署的请在提交前完成一次签署。")} back="/marketplace/works/new" backLabel={mt("返回发布作品")} />
   if (focusProject) return <>
     {heading}
     {error && <p role="alert">{marketFeedback(error)}</p>}

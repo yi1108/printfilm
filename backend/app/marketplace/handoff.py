@@ -203,7 +203,7 @@ def _handoff(owner_id: int, key: str, source_kind: str, source_id: int, version:
 
 @router.get(
     "/printfilm/sources", response_model=dict,
-    summary='获取我的 PrintFilm 可转存来源',
+    summary='获取我的 PRINTFILM 可转存来源',
     description='登录后列出本人已有成片的科普项目及可选择的漫剧分集上下文；科普项目最多返回最近更新的 50 项，不返回源视频地址。',
     response_description='科普项目 projects 与漫剧项目 dramas 列表。',
 )
@@ -312,7 +312,7 @@ async def enqueue_series_import(series_id: int, body: PrintfilmEpisodeInput, db,
 
 @router.post(
     "/series/{series_id}/episodes/import-printfilm", response_model=dict,
-    summary='将 PrintFilm 内容导入系列分集',
+    summary='将 PRINTFILM 内容导入系列分集',
     description='仅目标系列作者可操作。将选定漫剧分集或一部科普成片登记为分集草稿，实际复制异步执行；重复的同版本导入请求复用已有记录。',
     response_description='目标分集草稿 items 与转存记录 handoffs。',
 )

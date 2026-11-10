@@ -5,7 +5,7 @@ export const TERMS_ZH: LegalDocument = {
   title: '用户协议',
   updatedAt: '2026年11月9日',
   intro: [
-    '本用户协议（以下简称“本协议”）是您与深圳市德配开源数据科技有限公司（以下简称“PRINTFILM”或“我们”）之间订立的合同，规范您对 PRINTFILM 移动应用、[https://www.printfilm.com](https://www.printfilm.com) 网站以及相关生成、播放和账户服务（以下合称“本服务”）的访问和使用。',
+    '本用户协议（以下简称“本协议”）是您与深圳德沛开源数据科技有限公司（以下简称“PRINTFILM”或“我们”）之间订立的合同，规范您对 PRINTFILM 移动应用、[https://www.printfilm.com](https://www.printfilm.com) 网站以及相关生成、播放和账户服务（以下合称“本服务”）的访问和使用。',
     '通过创建账户、点击“同意”、购买积分或 Studio 使用权限，或以其他方式使用本服务，即表示您同意本协议及我们的[隐私政策](/privacy)。如您不同意，请勿使用本服务。',
   ],
   sections: [
@@ -46,7 +46,7 @@ export const TERMS_ZH: LegalDocument = {
       blocks: [
         {
           type: 'paragraph',
-          text: '您需使用电子邮箱地址和密码注册，并选择显示名称。您还可以选择添加电话号码和头像。您有责任对登录凭据保密，并对您账户下发生的活动负责。如果您认为账户存在安全风险，请立即通过 [support@printfilm.com](mailto:support@printfilm.com) 告知我们。',
+          text: '您需使用电子邮箱地址和密码注册，并选择显示名称。您还可以选择添加电话号码和头像。您有责任对登录凭据保密，并对您账户下发生的活动负责。如果您认为账户存在安全风险，请立即通过 [kefu@gitcc.com](mailto:kefu@gitcc.com) 告知我们。',
         },
         {
           type: 'paragraph',
@@ -70,7 +70,7 @@ export const TERMS_ZH: LegalDocument = {
           items: [
             '本协议仅由您与 PRINTFILM 订立，而非您与 Apple Inc.（以下简称“Apple”）订立。Apple 不对本服务或其内容负责。',
             '您使用本应用时，还须遵守 App Store 条款以及 Apple 媒体服务条款中的使用规则。',
-            'Apple 没有义务为本应用提供维护或支持。支持请求请发送至 [support@printfilm.com](mailto:support@printfilm.com)。',
+            'Apple 没有义务为本应用提供维护或支持。支持请求请发送至 [kefu@gitcc.com](mailto:kefu@gitcc.com)。',
             '如果本应用不符合任何适用的保证，您可以通知 Apple，Apple 可退还本应用本身的购买价款（如有）。在法律允许的最大范围内，Apple 对本应用不承担任何其他保证义务。与本应用有关的任何其他索赔、损失或责任，在符合本协议约定的前提下，由 PRINTFILM 承担。',
             'Apple 不对与本应用或您持有、使用本应用有关的索赔负责，包括产品责任索赔、有关本应用不符合法律要求的索赔，以及消费者保护或隐私索赔。',
             '如果第三方声称本应用或您对本应用的使用侵犯其知识产权，则在 Apple 条款要求的范围内，由 PRINTFILM 而非 Apple 负责该索赔的调查、抗辩、和解及解决。',
@@ -186,7 +186,7 @@ export const TERMS_ZH: LegalDocument = {
         },
         {
           type: 'paragraph',
-          text: '当我们收到违反本协议的内容举报后，如果举报提供了足以识别该内容的信息，我们将在 24 小时内采取措施，包括移除内容并限制发布该内容的用户账户。您也可以发送电子邮件至 [support@printfilm.com](mailto:support@printfilm.com)。',
+          text: '当我们收到违反本协议的内容举报后，如果举报提供了足以识别该内容的信息，我们将在 24 小时内采取措施，包括移除内容并限制发布该内容的用户账户。您也可以发送电子邮件至 [kefu@gitcc.com](mailto:kefu@gitcc.com)。',
         },
       ],
     },
@@ -199,7 +199,7 @@ export const TERMS_ZH: LegalDocument = {
         },
         {
           type: 'paragraph',
-          text: '如果您认为本服务中的内容侵犯您的著作权，请发送电子邮件至 [support@printfilm.com](mailto:support@printfilm.com)，并提供：您的姓名和联系方式；对作品的描述；相关材料的 URL 或应用内位置；关于您善意认为该使用未经授权的声明；以及在适用情况下，愿意承担伪证责任的声明，声明所提供信息准确，且您是权利所有人或其代理人。我们可能会移除相关材料，并在适当情况下通知账户持有人。',
+          text: '如果您认为本服务中的内容侵犯您的著作权，请发送电子邮件至 [kefu@gitcc.com](mailto:kefu@gitcc.com)，并提供：您的姓名和联系方式；对作品的描述；相关材料的 URL 或应用内位置；关于您善意认为该使用未经授权的声明；以及在适用情况下，愿意承担伪证责任的声明，声明所提供信息准确，且您是权利所有人或其代理人。我们可能会移除相关材料，并在适当情况下通知账户持有人。',
         },
       ],
     },
@@ -296,7 +296,7 @@ export const TERMS_ZH: LegalDocument = {
       blocks: [
         {
           type: 'paragraph',
-          text: '深圳市德配开源数据科技有限公司\n电子邮箱：[support@printfilm.com](mailto:support@printfilm.com)\n网站：[https://www.printfilm.com](https://www.printfilm.com)\n支持：[https://www.printfilm.com/support](https://www.printfilm.com/support)',
+          text: '深圳德沛开源数据科技有限公司\n电子邮箱：[kefu@gitcc.com](mailto:kefu@gitcc.com)\n客服电话：[0755-27337894](tel:+8675527337894)\n微信：gitcc188\n网站：[https://www.printfilm.com](https://www.printfilm.com)\n客服入口：[联系我们](/contact)',
         },
       ],
     },
