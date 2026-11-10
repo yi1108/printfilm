@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
-import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { createServer } from 'vite'
+
+import { LEGAL_DOCS } from '../src/lib/legalDocuments.ts'
 
 const root = new URL('../', import.meta.url)
 
@@ -11,39 +12,90 @@ async function text(path) {
   return readFile(new URL(path, root), 'utf8')
 }
 
-for (const [name, sha256] of [
-  ['terms', '5d9054a6159496cb5eaddcf2b1ff19e72c8d9f9615b0e863b45f996f56e2ab98'],
-  ['privacy', 'b340e998c4e355ec55406ad5853754b0b24cf764a34702a7d4233833fedccad8'],
-]) {
-  test(`/${name} 发布原始完整 HTML，文件名与字节均不改变`, async () => {
-    const bytes = await readFile(new URL(`public/${name}.html`, root))
-    assert.equal(createHash('sha256').update(bytes).digest('hex'), sha256)
-    const html = bytes.toString('utf8')
-    assert.match(html, /^<!DOCTYPE html>/i)
-    assert.match(html, /<meta[^>]+charset=["']?utf-8/i)
-    assert.doesNotMatch(html, /id=["']root["']/i)
-  })
+test('Terms 与 Privacy 作为公开 React 路由接入应用', async () => {
+  const app = await text('src/App.tsx')
+  assert.match(app, /import \{ PrivacyPage, TermsPage \} from '\.\/pages\/LegalDocPage'/)
+  assert.match(app, /path=["']\/terms["'] element=\{<TermsPage \/>/)
+  assert.match(app, /path=["']\/privacy["'] element=\{<PrivacyPage \/>/)
+})
 
-  test(`nginx 的 /${name} 精确映射到独立 HTML，而非 SPA 回退`, async () => {
-    const nginx = await text('nginx.conf')
-    const route = nginx.match(new RegExp(`location = /${name} \\{(?<body>[\\s\\S]*?)\\}`))
-    assert.ok(route, `缺少 location = /${name}`)
-    assert.match(route.groups.body, new RegExp(`alias\\s+/usr/share/nginx/html/${name}\\.html;`))
-    assert.match(route.groups.body, /default_type\s+text\/html;/)
-    assert.match(route.groups.body, /charset\s+utf-8;/)
-    assert.doesNotMatch(route.groups.body, /proxy_pass|index\.html|try_files/)
-  })
+test('React 法务页使用 AppShell 和结构化正文，不嵌套独立 HTML', async () => {
+  const page = await text('src/pages/LegalDocPage.tsx')
+  assert.match(page, /AppShell/)
+  assert.match(page, /pf-legal-page/)
+  assert.match(page, /LEGAL_DOCS|getLegalDoc/)
+  assert.doesNotMatch(page, /dangerouslySetInnerHTML|<iframe|srcDoc/)
+})
 
-  test(`Vite 开发服务直接返回 /${name} 静态文件`, async () => {
-    const vite = await text('vite.config.ts')
-    assert.match(vite, /configureServer/)
-    assert.match(vite, new RegExp(`['"\`]/${name}['"\`]`))
-    assert.match(vite, new RegExp(`${name}\\.html`))
-    assert.match(vite, /text\/html;\s*charset=utf-8/)
-  })
-}
+test('参考文件的全部条款转换为结构化内容且保留关键规则', () => {
+  assert.equal(LEGAL_DOCS.terms.title, 'Terms of Use')
+  assert.equal(LEGAL_DOCS.privacy.title, 'Privacy Policy')
+  assert.equal(LEGAL_DOCS.terms.updatedAt, 'November 9, 2026')
+  assert.equal(LEGAL_DOCS.privacy.updatedAt, 'November 9, 2026')
+  assert.equal(LEGAL_DOCS.terms.sections.length, 20)
+  assert.equal(LEGAL_DOCS.privacy.sections.length, 13)
 
-test('Vite 实际响应无需登录、无重定向且逐字节匹配原 Legal 文件', async (t) => {
+  const terms = JSON.stringify(LEGAL_DOCS.terms)
+  const privacy = JSON.stringify(LEGAL_DOCS.privacy)
+  assert.match(terms, /within 24 hours/)
+  assert.match(terms, /Apple and Apple’s subsidiaries are third-party beneficiaries/)
+  assert.match(privacy, /normally within 30 days/)
+  assert.match(privacy, /typically for up to 7 years/)
+  assert.match(privacy, /password and the confirmation word/)
+  const firstSection = JSON.stringify(LEGAL_DOCS.terms.sections[0])
+  const listIndex = firstSection.indexOf('A Watch feed')
+  const followingIndex = firstSection.indexOf('Some features are available')
+  assert.ok(listIndex > firstSection.indexOf('Depending on the feature'))
+  assert.ok(followingIndex > listIndex, '列表后的段落必须保留在列表之后')
+})
+
+test('法务内容支持站内链接、邮箱和重点文本的安全渲染', async () => {
+  const page = await text('src/pages/LegalDocPage.tsx')
+  const content = await text('src/lib/legalDocuments.ts')
+  assert.match(content, /\[Privacy Policy\]\(\/privacy\)/)
+  assert.match(content, /\[support@printfilm\.com\]\(mailto:support@printfilm\.com\)/)
+  assert.match(content, /\*\*Account information\.\*\*/)
+  assert.match(page, /function LegalInlineText/)
+})
+
+test('页面样式参考原文件并适配现有设计体系', async () => {
+  const styles = await text('src/styles/printfilm.css')
+  const legal = styles.match(/\/\* Legal documents \*\/(?<body>[\s\S]*?)(?=\/\* Contact channels \*\/)/)
+  assert.ok(legal, '缺少独立法务样式分区')
+  assert.match(legal.groups.body, /#fbf7f8/)
+  assert.match(legal.groups.body, /#eadfe3/)
+  assert.match(legal.groups.body, /#c2410c/)
+  assert.match(legal.groups.body, /max-width: 820px/)
+  assert.match(legal.groups.body, /border-radius: 16px/)
+})
+
+test('站内 Legal 入口使用 React 文档导航', async () => {
+  const sources = await Promise.all([
+    text('src/components/layout/AppShell.tsx'),
+    text('src/pages/ContactPage.tsx'),
+    text('src/pages/HomePage.tsx'),
+    text('src/pages/HelpPage.tsx'),
+    text('src/pages/PricingPage.tsx'),
+  ])
+  for (const source of sources) {
+    assert.doesNotMatch(source, /<a[^>]+href=["']\/(?:terms|privacy)["']/)
+  }
+})
+
+test('构建配置不再提供独立 Legal HTML', async () => {
+  const [nginx, vite, dockerfile] = await Promise.all([
+    text('nginx.conf'),
+    text('vite.config.ts'),
+    text('Dockerfile'),
+  ])
+  assert.doesNotMatch(nginx, /alias \/usr\/share\/nginx\/html\/(?:terms|privacy)\.html/)
+  assert.doesNotMatch(vite, /serveLegalDocuments|legalDocuments/)
+  assert.doesNotMatch(dockerfile, /chmod 0644 .*terms\.html/)
+  await assert.rejects(readFile(new URL('public/terms.html', root)))
+  await assert.rejects(readFile(new URL('public/privacy.html', root)))
+})
+
+test('Vite 对 Legal 路径返回 React 应用入口而不是独立文档', async (t) => {
   const server = await createServer({
     root: fileURLToPath(root),
     configFile: fileURLToPath(new URL('vite.config.ts', root)),
@@ -55,38 +107,11 @@ test('Vite 实际响应无需登录、无重定向且逐字节匹配原 Legal �
   const address = server.httpServer?.address()
   assert.ok(address && typeof address === 'object')
 
-  for (const [name, sha256] of [
-    ['terms', '5d9054a6159496cb5eaddcf2b1ff19e72c8d9f9615b0e863b45f996f56e2ab98'],
-    ['privacy', 'b340e998c4e355ec55406ad5853754b0b24cf764a34702a7d4233833fedccad8'],
-  ]) {
+  for (const name of ['terms', 'privacy']) {
     const response = await fetch(`http://127.0.0.1:${address.port}/${name}`, { redirect: 'manual' })
     assert.equal(response.status, 200)
-    assert.equal(response.headers.get('content-type'), 'text/html; charset=utf-8')
-    const bytes = Buffer.from(await response.arrayBuffer())
-    assert.equal(createHash('sha256').update(bytes).digest('hex'), sha256)
-  }
-})
-
-test('Git 在任何平台检出 Legal 文件时都禁用换行符转换', async () => {
-  const attributes = await text('.gitattributes')
-  for (const name of ['terms', 'privacy']) {
-    assert.match(attributes, new RegExp(`public/${name}\\.html\\s+-text(?:\\s|$)`))
-  }
-})
-
-test('React 不再接管两个独立 Legal 路由，站内链接执行文档导航', async () => {
-  const app = await text('src/App.tsx')
-  assert.doesNotMatch(app, /path=["']\/terms["']/)
-  assert.doesNotMatch(app, /path=["']\/privacy["']/)
-  assert.doesNotMatch(app, /LegalDocPage/)
-  const sources = await Promise.all([
-    text('src/components/layout/AppShell.tsx'),
-    text('src/pages/ContactPage.tsx'),
-    text('src/pages/HomePage.tsx'),
-    text('src/pages/HelpPage.tsx'),
-    text('src/pages/PricingPage.tsx'),
-  ])
-  for (const source of sources) {
-    assert.doesNotMatch(source, /<Link[^>]+to=["']\/(?:terms|privacy)["']/)
+    const html = await response.text()
+    assert.match(html, /id=["']root["']/)
+    assert.match(html, /\/src\/main\.tsx/)
   }
 })

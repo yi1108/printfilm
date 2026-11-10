@@ -219,8 +219,8 @@ export default function HomePage() {
           <a href={FILM_SKILLS_URL} target="_blank" rel="noopener noreferrer">{t('nav.skills')}</a>
           <Link to="/pricing">{t('nav.pricing')}</Link>
           <Link to="/help">{t('nav.help')}</Link>
-          <a href="/terms">{t('footer.terms')}</a>
-          <a href="/privacy">{t('footer.privacy')}</a>
+          <Link to="/terms">{t('footer.terms')}</Link>
+          <Link to="/privacy">{t('footer.privacy')}</Link>
           <Link to="/contact">{t('footer.contact')}</Link>
           <a href={GITHUB_REPO_URL} target="_blank" rel="noopener noreferrer">
             {t('footer.github')}

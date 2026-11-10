@@ -133,8 +133,8 @@ export default function ContactPage() {
         </section>
 
         <nav className="pf-legal-foot-nav" aria-label={t('contact.related')}>
-          <a href="/terms">{t('footer.terms')}</a>
-          <a href="/privacy">{t('footer.privacy')}</a>
+          <Link to="/terms">{t('footer.terms')}</Link>
+          <Link to="/privacy">{t('footer.privacy')}</Link>
           <Link to="/help">{t('footer.help')}</Link>
           <Link to="/pricing">{t('contact.pricing')}</Link>
           <a href={GITHUB_REPO_URL} target="_blank" rel="noopener noreferrer">

@@ -27,8 +27,8 @@ export default function AppShell({ children, active, wide, flush, hideFooter }: 
       {!hideFooter && !flush ? (
         <footer className="pf-shell-footer">
           <nav className="pf-shell-footer-links" aria-label={t('footer.links')}>
-            <a href="/terms">{t('footer.terms')}</a>
-            <a href="/privacy">{t('footer.privacy')}</a>
+            <Link to="/terms">{t('footer.terms')}</Link>
+            <Link to="/privacy">{t('footer.privacy')}</Link>
             <Link to="/contact">{t('footer.contact')}</Link>
             <Link to="/help">{t('footer.help')}</Link>
             <a href={GITHUB_REPO_URL} target="_blank" rel="noopener noreferrer">
