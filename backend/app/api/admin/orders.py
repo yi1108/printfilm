@@ -29,8 +29,9 @@ async def list_orders(
 ) -> AdminOrderListOut:
     # Paginated recharge orders with owner email
     owner = aliased(User)
-    stmt = select(Order, owner.email).outerjoin(owner, owner.id == Order.user_id)
-    count_stmt = select(func.count()).select_from(Order)
+    production = func.coalesce(Order.payment_environment, "Production") == "Production"
+    stmt = select(Order, owner.email).outerjoin(owner, owner.id == Order.user_id).where(production)
+    count_stmt = select(func.count()).select_from(Order).where(production)
 
     if status and status.strip():
         stmt = stmt.where(Order.status == status.strip())

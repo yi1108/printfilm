@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 
 PAYMENT_COLUMNS = {
+    "payment_environment": "VARCHAR(16)",
     "payment_currency": "VARCHAR(3)",
     "payment_amount_minor": "INTEGER",
     "payment_exchange_rate": "VARCHAR(32)",
@@ -20,6 +21,8 @@ class PaymentSchemaNotReady(RuntimeError):
 
 async def apply_payment_schema_patches(conn: AsyncConnection) -> None:
     """幂等添加外币报价字段，旧订单 NULL 保持人民币含义。"""
+    from app.marketplace.app_schema import acquire_schema_lock
+    await conn.run_sync(acquire_schema_lock)
     if conn.dialect.name == "postgresql":
         await conn.execute(text("SELECT pg_advisory_xact_lock(82632024, 1101)"))
     tables = await conn.run_sync(lambda sync: set(inspect(sync).get_table_names()))

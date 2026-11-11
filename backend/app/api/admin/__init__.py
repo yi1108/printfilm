@@ -27,6 +27,8 @@ router.include_router(finance.router)
 router.include_router(queues.router)
 router.include_router(tasks.router)
 router.include_router(settings.router)
+from app.api.admin import wallet_migration
+router.include_router(wallet_migration.router)
 router.include_router(users.router)
 router.include_router(teams.router)
 router.include_router(orders.router)

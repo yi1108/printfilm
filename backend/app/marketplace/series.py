@@ -111,7 +111,7 @@ async def _episode_data(db, item: SeriesEpisode, *, private: bool = False) -> di
 
 async def _series_data(db, item: Series, *, private: bool = False) -> dict:
     episodes = (await db.execute(select(SeriesEpisode).where(SeriesEpisode.series_id == item.id).order_by(SeriesEpisode.episode_no))).scalars().all()
-    result = data(item, "id", "title", "description", "category", "tags", "cover_asset_id", "sale_type", "copyright_price_fen", "free_episode_count", "created_at")
+    result = data(item, "id", "title", "description", "category", "tags", "app_editions", "cover_asset_id", "sale_type", "copyright_price_fen", "free_episode_count", "created_at")
     result.update(await category_fields(db, item))
     from .curation import flags as curation_flags
     result.update(await curation_flags(db, "series", item.id))
@@ -248,6 +248,8 @@ async def update_series(series_id: int, body: SeriesUpdate, db: DB, user: Actor)
     if body.cover_asset_id:
         await asset_owned(db, body.cover_asset_id, user, ("image",))
     values = body.model_dump(exclude={"version"})
+    from .distribution import keep_editions
+    keep_editions(body, values)
     values["sale_type"] = _sale_type(values["sale_type"], values["copyright_price_fen"])
     for key, value in values.items():
         setattr(item, key, value)

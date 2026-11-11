@@ -675,6 +675,16 @@ async def patch_admin_model_settings(
     stored_flat = _decrypt_flat_config(config)
     current = _effective_flat(stored_flat if stored_flat else None)
     previous_apple_environment = current["apple_environment"]
+    if patch.get("unified_wallet_enabled") is True and not current["unified_wallet_enabled"]:
+        from app.services.billing.wallet_cutover import validate_settings_activation
+        await validate_settings_activation(db, patch.get("wallet_environment") or current["wallet_environment"])
+    if patch.get("unified_wallet_enabled") is False and current["unified_wallet_enabled"]:
+        from app.models_wallet import WalletAccount
+        if await db.scalar(select(WalletAccount.id).limit(1)) is not None:
+            raise ValueError("已有统一钱包账户，不能切回旧记账；请使用资金迁移维护入口。")
+    if patch.get("wallet_environment") is not None and patch["wallet_environment"] != current["wallet_environment"]:
+        from app.services.billing.wallet_environment import validate_environment_change
+        await validate_environment_change(db)
     applied: list[str] = []
 
     for field in SECRET_FIELDS:
@@ -707,11 +717,23 @@ async def patch_admin_model_settings(
         from app.marketplace.app_settings import get_app_settings
         validate_material(current["apple_private_key"], current["apple_root_certificates"])
         candidate = get_app_settings().model_copy(update={key: value for key, value in current.items() if key.startswith("apple_")})
-        if current["apple_iap_enabled"]:
+        if current["apple_sandbox_enabled"]:
+            if current["wallet_environment"] != "Production" or current["apple_environment"] != "Production":
+                raise ValueError("同部署沙箱测试要求 Apple 和正式钱包均保持 Production。")
+            ids = [int(value) for value in current["apple_sandbox_user_ids"].split(",") if value]
+            if any(value > 2147483647 for value in ids):
+                raise ValueError("沙箱测试用户 ID 超出有效范围。")
+            if not ids:
+                raise ValueError("请先配置沙箱测试用户 ID 白名单。")
+            from app.models import User
+            existing = set((await db.scalars(select(User.id).where(User.id.in_(ids)))).all())
+            if set(ids) != existing:
+                raise ValueError("沙箱白名单包含不存在的用户 ID。")
+        if current["apple_iap_enabled"] or current["apple_sandbox_enabled"]:
             status = configuration_status(candidate)
             if not status["configured"]:
                 raise ValueError("Apple 新购配置不完整：" + "、".join(status["missing"]))
-    turning_app_on = (current.get("marketplace_app_enabled") is True and "marketplace_app_enabled" in applied) or (apple_changed and current["apple_iap_enabled"])
+    turning_app_on = (current.get("marketplace_app_enabled") is True and "marketplace_app_enabled" in applied) or (apple_changed and (current["apple_iap_enabled"] or current["apple_sandbox_enabled"]))
     if turning_app_on:
         from app.marketplace.app_bootstrap import ensure_schema
         try:
@@ -752,6 +774,16 @@ async def import_admin_model_settings_from_env(
     config = dict(app_row.config_json or {})
     current = _effective_flat(_decrypt_flat_config(config))
     env_flat = _flat_from_env_settings()
+    if env_flat["unified_wallet_enabled"] and not current["unified_wallet_enabled"]:
+        from app.services.billing.wallet_cutover import validate_settings_activation
+        await validate_settings_activation(db, env_flat["wallet_environment"])
+    if current["unified_wallet_enabled"] and not env_flat["unified_wallet_enabled"]:
+        from app.models_wallet import WalletAccount
+        if await db.scalar(select(WalletAccount.id).limit(1)) is not None:
+            raise ValueError("已有统一钱包账户，不能通过环境导入切回旧记账。")
+    if env_flat["wallet_environment"] != current["wallet_environment"]:
+        from app.services.billing.wallet_environment import validate_environment_change
+        await validate_environment_change(db)
     imported: list[str] = []
     skipped_secrets: list[str] = []
 

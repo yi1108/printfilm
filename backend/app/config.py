@@ -11,6 +11,8 @@ _ENV_FILE = _BACKEND_DIR / ".env"
 
 class Settings(BaseSettings):
     apple_environment: Literal["Production", "Sandbox"] = Field("Production", validation_alias="MARKETPLACE_APPLE_ENVIRONMENT")
+    apple_sandbox_enabled: bool = False
+    apple_sandbox_user_ids: str = Field("", max_length=4000, pattern=r"^(?:[1-9][0-9]*(?:,[1-9][0-9]*)*)?$")
     apple_iap_enabled: bool = Field(False, validation_alias="MARKETPLACE_APPLE_IAP_ENABLED")
     apple_bundle_id: str = Field("", validation_alias="MARKETPLACE_APPLE_BUNDLE_ID")
     apple_app_id: int = 0
@@ -120,6 +122,7 @@ class Settings(BaseSettings):
     # Token 计费：用户扣费 = TokenFree 官方成本（billing_markup 保留兼容，不再乘）
     billing_enabled: bool = False
     unified_wallet_enabled: bool = False
+    wallet_environment: Literal["Production", "Sandbox"] = "Production"
     billing_markup: float = 1.0
     # token / 视频时长估价缓冲；按张生图官价不再乘此系数（否则 5 元赠金冻不住一张图）
     billing_estimate_buffer: float = 1.2

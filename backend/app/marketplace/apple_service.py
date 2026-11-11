@@ -30,9 +30,20 @@ async def purchase_intent(db, user_id: int, environment: str, product_id: str, k
 async def apply_verified_transaction(db, txn: dict, *, expected_user_id: int | None = None,
                                      intent_id: int | None = None, event_type: str = "") -> AppleTransaction:
     """归属由预先分配的账号 UUID 决定；钱包锁内比较权威查询顺序再履约。"""
+    from app.services.billing import wallet
+    # 校验必须早于账号归属查询与任何订单、余额及退款写入。
+    from .app_funds import isolated
+    try:
+        if not isolated(txn["environment"]):
+            wallet.configured_environment(txn["environment"])
+    except wallet.WalletError as exc:
+        app_fail(exc.code, exc.message, exc.status)
     owner = (await db.execute(select(AppleAccountToken).where(AppleAccountToken.token == txn["app_account_token"]))).scalar_one_or_none()
     if not owner or (expected_user_id is not None and owner.user_id != expected_user_id):
-        app_fail("MARKETPLACE_IAP_ACCOUNT_MISMATCH", "该苹果交易不属于当前 PrintFilm 账号，请使用购买时的账号登录。", 403)
+        app_fail("MARKETPLACE_IAP_ACCOUNT_MISMATCH", "该苹果交易不属于当前 PRINTFILM 账号，请使用购买时的账号登录。", 403)
+    if isolated(txn["environment"]):
+        from .sandbox_wallet import authorize_transaction
+        await authorize_transaction(db, owner.user_id, txn)
     if intent_id is not None:
         intent = await db.get(ApplePurchaseIntent, intent_id)
         if not intent or intent.user_id != owner.user_id or intent.environment != txn["environment"] or intent.product_id != txn["product_id"]:
@@ -45,6 +56,10 @@ async def apply_verified_transaction(db, txn: dict, *, expected_user_id: int | N
     if previous:
         if previous.user_id != owner.user_id or previous.product_id != txn["product_id"] or previous.app_account_token != txn["app_account_token"]:
             app_fail("MARKETPLACE_IAP_ACCOUNT_MISMATCH", "苹果交易归属发生冲突，请联系客服。", 403)
+        if isolated(txn["environment"]):
+            from .sandbox_models import SandboxLot
+            if not await db.scalar(select(SandboxLot.id).where(SandboxLot.transaction_id == previous.id)):
+                app_fail("SANDBOX_LEGACY_REVIEW_REQUIRED", "历史沙箱资金不在隔离账本中，请人工核对，不自动搬入正式余额。", 409)
         # 所有财务入口均先做 Apple 当前状态查询；旧查询返回较晚也不能复活新退款。
         incoming_at = txn.get("raw_payload", {}).get("_server_observed_at", "")
         previous_at = (previous.raw_payload or {}).get("_server_observed_at", "")
@@ -74,7 +89,7 @@ def transaction_response(item: AppleTransaction) -> dict:
             "status": item.status, "coins": item.coins, "amount_fen": item.amount_fen,
             "currency": item.currency, "credited": item.status == "paid", "finish_transaction": True,
             "payment_amount_minor": item.payment_amount_minor, "credit_currency": "CNY",
-            "valuation_status": item.valuation_status,
+            "valuation_status": item.valuation_status, "test_only": item.settlement_status == "test_only",
             "message": localized("平台余额充值已确认。", "Platform credit confirmed.") if item.status == "paid" else localized("该笔充值已退款，未发放可用平台余额。", "This purchase was refunded; no available platform credit was granted.")}
 
 
@@ -102,6 +117,13 @@ async def consumption_request_snapshot(db, transaction: dict) -> dict:
                             AppleTransaction.transaction_id == transaction["transaction_id"]))).scalar_one_or_none()
     if item and (item.user_id != owner.user_id or item.app_account_token != transaction["app_account_token"]):
         return {"note": "交易账号绑定存在冲突，未披露消费数据，请人工核对。"}
+    from .app_funds import isolated
+    if isolated(transaction["environment"]):
+        from .sandbox_models import SandboxLot
+        lot = await db.scalar(select(SandboxLot).where(SandboxLot.transaction_id == item.id)) if item else None
+        return {"transaction_id": transaction["transaction_id"], "environment": "Sandbox",
+                "delivered": bool(lot), "consumed_milli_percent":
+                (lot.total_units - lot.available_units) * 100000 // lot.total_units if lot else 0}
     from app.services.billing import wallet
     from app.models_wallet import WalletAllocation
     from sqlalchemy import func
@@ -121,6 +143,7 @@ async def send_consumption_snapshot(snapshot: dict) -> str:
     """无数据库事务地回传已授权的最小数据，失败由通知租约队列重试。"""
     if snapshot.get("note"):
         return snapshot["note"]
-    await apple_client.send_consumption(snapshot["transaction_id"], delivered=snapshot["delivered"],
-                                        consumed_milli_percent=snapshot["consumed_milli_percent"])
+    await apple_client.in_environment(snapshot.get("environment", apple_client.get_app_settings().apple_environment),
+        apple_client.send_consumption, snapshot["transaction_id"], delivered=snapshot["delivered"],
+        consumed_milli_percent=snapshot["consumed_milli_percent"])
     return ""

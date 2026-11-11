@@ -84,6 +84,25 @@ async def test_status_requires_admin(settings_client):
     assert (await client.get("/api/admin/settings/apple/status")).status_code == 403
 
 
+@pytest.mark.asyncio
+async def test_shared_sandbox_configuration_requires_valid_whitelist(settings_client, credentials, monkeypatch):
+    from app.marketplace import app_bootstrap
+    client, user = settings_client
+    async def ready():
+        return []
+    monkeypatch.setattr(app_bootstrap, 'ensure_schema', ready)
+    assert (await client.patch(SETTINGS_URL, json={'apple_sandbox_enabled': True})).status_code == 400
+    invalid = await client.patch(SETTINGS_URL, json={'apple_sandbox_user_ids': '1,abc'})
+    assert invalid.status_code == 422
+    response = await client.patch(SETTINGS_URL, json={**credentials, 'apple_environment': 'Production',
+        'apple_sandbox_enabled': True, 'apple_sandbox_user_ids': str(user.id)})
+    assert response.status_code == 200, response.text
+    assert response.json()['settings']['wallet_environment'] == 'Production'
+    status = (await client.get('/api/admin/settings/apple/status')).json()
+    assert status['sandbox_enabled'] and status['sandbox_user_count'] == 1
+    assert (await client.patch(SETTINGS_URL, json={'apple_environment': 'Sandbox'})).status_code == 400
+
+
 def test_certificate_and_key_validation(credentials):
     validate_material(credentials["apple_private_key"], credentials["apple_root_certificates"])
     with pytest.raises(ValueError):
@@ -100,6 +119,22 @@ async def test_environment_can_be_saved_and_restored(settings_client):
         assert get_app_settings().apple_environment == environment
         assert (await client.get("/api/admin/settings/apple/status")).json()["environment"] == environment
     assert (await client.patch(SETTINGS_URL, json={"apple_environment": "invalid"})).status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_wallet_environment_is_separate_and_legacy_balance_blocks_switch(settings_client, db_session):
+    from app.config import get_settings
+    client, user = settings_client
+    assert (await client.patch(SETTINGS_URL, json={"apple_environment": "Sandbox"})).status_code == 200
+    assert get_settings().wallet_environment == "Production"
+    status = (await client.get("/api/admin/settings/apple/status")).json()
+    assert status["wallet_environment"] == "Production"
+    assert status["wallet_environment_matches"] is False
+    user.balance_fen = 100
+    await db_session.commit()
+    response = await client.patch(SETTINGS_URL, json={"wallet_environment": "Sandbox"})
+    assert response.status_code == 400
+    assert get_settings().wallet_environment == "Production"
 
 
 @pytest.mark.asyncio

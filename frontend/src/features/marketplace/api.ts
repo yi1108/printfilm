@@ -4,6 +4,7 @@ import { explainMarketplaceError, marketplaceErrorCode } from './messages'
 
 /** 下游独立客户端；不修改原 api.ts。金额统一以分传输。 */
 export type Row = {
+  app_editions?: ('domestic' | 'international')[];
   is_featured?: boolean; is_pinned?: boolean;
   id: number; title?: string; description?: string; category?: string; category_code?: string; category_label?: string; category_labels?: { zh: string; en: string }; author?: string;
   price_fen?: number; copyright_price_fen?: number; unlock_price_fen?: number; sale_type?: 'free' | 'copyright_contact' | 'platform_unlock'; share_bps?: number | null; budget_fen?: number; quote_fen?: number; wanted_count?: number;

@@ -58,6 +58,26 @@ async def add(ctx, ref, units=100, cash=None, kind="apple_transaction"):
                                amount_fen=units if cash is None else cash)
 
 
+@pytest.mark.asyncio
+async def test_existing_account_prevents_environment_switch(wallet_ctx):
+    from app.services.billing.wallet_environment import validate_environment_change
+    with pytest.raises(ValueError, match="已有统一钱包账户"):
+        await validate_environment_change(wallet_ctx.db)
+
+
+def test_wallet_environment_is_independent_of_apple(monkeypatch):
+    from app.marketplace.app_settings import get_app_settings
+    from app.services.billing.wallet_base import environment
+    monkeypatch.setattr(get_settings(), "wallet_environment", "Production")
+    monkeypatch.setattr(get_app_settings(), "apple_environment", "Sandbox")
+    assert environment() == "Production"
+    with pytest.raises(wallet.WalletError) as caught:
+        environment("Sandbox")
+    assert caught.value.code == "WALLET_ENVIRONMENT_MISMATCH"
+    monkeypatch.setattr(get_settings(), "wallet_environment", "Sandbox")
+    assert environment("Sandbox") == "Sandbox"
+
+
 async def refund(ctx, ref):
     """视频撤权在市场测试覆盖；纯 AI 来源退款后直接收回欠费。"""
     result = await wallet.revoke_source(ctx.db, ctx.user.id, "apple_transaction", ref)

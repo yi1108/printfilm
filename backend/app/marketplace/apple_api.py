@@ -7,7 +7,7 @@ from .apple_service import account_token, apply_verified_transaction, persist_no
 from .app_settings import get_app_settings
 from .coin_service import app_fail, funds_call
 from .config import is_marketplace_enabled
-from .dependencies import Actor, DB
+from .dependencies import Actor, DB, Visitor
 from .service import now
 
 from .app_response import AppJSONResponse
@@ -43,21 +43,26 @@ class ConsumptionConsentInput(BaseModel):
     consented: bool
 
 
-def purchasing_enabled() -> bool:
+def purchasing_enabled(user_id=None) -> bool:
     """只约束新购买，不约束已经产生真实付款的履约。"""
     cfg = get_app_settings()
     from app.services.billing import wallet
+    from .sandbox_wallet import tester, new_purchase_allowed
+    if tester(user_id) and wallet.configured_environment() == "Production":
+        return bool(new_purchase_allowed(user_id) and apple_client.apple_configured())
     return bool(wallet.enabled()
+                and cfg.apple_environment == wallet.configured_environment()
                 and cfg.apple_iap_enabled and apple_client.apple_configured())
 
 
 @router.get("/coin-products", response_model=dict)
-async def coin_products(db: DB):
+async def coin_products(db: DB, user: Visitor):
     """只列出真实后台登记商品，价格展示仍以 StoreKit 返回值为准。"""
-    enabled = purchasing_enabled()
+    enabled = purchasing_enabled(user.id if user else None)
+    from .sandbox_wallet import environment
     from .apple_recharge import list_recharge_products
     products = await list_recharge_products(db) if enabled else []
-    return {"purchasing_enabled": enabled, "environment": get_app_settings().apple_environment,
+    return {"purchasing_enabled": enabled, "environment": environment(user.id if user else None),
             "currency": "CNY", "credit_currency": "CNY", "supported_payment_currencies": ["CNY", "USD"], "coins_per_yuan": 100,
             "items": [{**row, "sku_id": row["id"], "price_fen": row["reference_price_fen"]} for row in products]}
 
@@ -65,9 +70,10 @@ async def coin_products(db: DB):
 @router.post("/iap/apple/purchase-intents", response_model=dict)
 async def create_purchase_intent(body: PurchaseIntentInput, db: DB, user: Actor):
     """只有新购开关、身份及真实苹果配置齐备时才允许发起 StoreKit 购买。"""
-    if not purchasing_enabled():
+    if not purchasing_enabled(user.id):
         app_fail("MARKETPLACE_PAYMENT_UNAVAILABLE", "苹果充值暂不可用，请稍后重试。", 503)
-    result = await purchase_intent(db, user.id, get_app_settings().apple_environment, body.product_id, body.idempotency_key)
+    from .sandbox_wallet import environment
+    result = await purchase_intent(db, user.id, environment(user.id), body.product_id, body.idempotency_key)
     await db.commit()
     return result
 
@@ -77,12 +83,12 @@ async def create_purchase_intent(body: PurchaseIntentInput, db: DB, user: Actor)
 async def verify_apple_transaction(body: VerifyInput, db: DB, user: Actor):
     """支付后断网、关入口或意向过期仍可验单；commit成功才允许App finish。"""
     supplied = await apple_client.verify_transaction(body.signed_transaction_info)
-    current = await apple_client.query_transaction(supplied["transaction_id"])
+    current = await apple_client.in_environment(supplied["environment"], apple_client.query_transaction, supplied["transaction_id"])
     if any(current[field] != supplied[field] for field in ("transaction_id", "product_id", "app_account_token", "environment")):
         app_fail("MARKETPLACE_IAP_TRANSACTION_INVALID", "苹果交易查询结果与回执不一致，请联系客服。")
     item = await apply_verified_transaction(db, current, expected_user_id=user.id, intent_id=body.intent_id)
-    from app.services.billing import wallet
-    state = await funds_call(wallet.snapshot(db, user.id, item.environment))
+    from . import app_funds
+    state = await funds_call(app_funds.snapshot(db, user.id, item.environment))
     result = {**transaction_response(item), **state, "balance_coins": state["balance_fen"]}
     await db.commit()
     return result

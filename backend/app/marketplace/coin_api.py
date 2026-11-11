@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
 from app.models import User, WalletLedger
-from app.services.billing import wallet
+from . import app_funds as wallet
 from .app_models import AuthorBlock, CoinUnlock
 from .coin_service import app_fail, funds_call, unlock_publication
 from .dependencies import Actor, DB
@@ -23,10 +23,10 @@ class UnlockInput(BaseModel):
     idempotency_key: str = Field(min_length=8, max_length=128)
 
 
-def current_environment() -> str:
+def current_environment(user_id=None) -> str:
     """客户端不得通过参数切换钱包环境。"""
-    from .app_settings import get_app_settings
-    return get_app_settings().apple_environment
+    from .sandbox_wallet import environment
+    return environment(user_id)
 
 
 def require_new_unlock() -> None:
@@ -40,22 +40,27 @@ def require_new_unlock() -> None:
 @router.get("/me/wallet", response_model=dict)
 async def wallet_info(db: DB, user: Actor):
     """读取与 Web 相同的平台余额，兼容币字段只是单位别名。"""
-    environment = current_environment()
+    environment = current_environment(user.id)
     state = await funds_call(wallet.snapshot(db, user.id, environment))
     from .locale import localized
     return {**state, "balance_coins": state["balance_fen"], "frozen_coins": state["frozen_fen"],
             "debt_coins": state["debt_fen"], "spendable_coins": state["spendable_fen"],
-            "coin_name": localized("平台余额", "Platform balance"), "coins_per_yuan": 100, "wallet_type": "platform_balance"}
+            "coin_name": localized("沙箱测试积分", "Sandbox test points") if state.get("test_only") else localized("平台余额", "Platform balance"), "coins_per_yuan": 100, "wallet_type": state.get("wallet_type", "platform_balance")}
 
 
 @router.get("/me/wallet/entries", response_model=dict)
 async def wallet_entries(db: DB, user: Actor, cursor: int | None = Query(None, gt=0), page_size: int = Query(20, ge=1, le=50)):
     """Web充值、Apple充值和AI消费读取同一历史，不再读取旧币流水。"""
-    await funds_call(wallet.snapshot(db, user.id, current_environment()))
-    query = select(WalletLedger).where(WalletLedger.user_id == user.id)
+    await funds_call(wallet.snapshot(db, user.id, current_environment(user.id)))
+    if wallet.isolated(current_environment(user.id)):
+        from .sandbox_models import SandboxEntry
+        model = SandboxEntry
+    else:
+        model = WalletLedger
+    query = select(model).where(model.user_id == user.id)
     if cursor:
-        query = query.where(WalletLedger.id < cursor)
-    rows = list((await db.execute(query.order_by(WalletLedger.id.desc()).limit(page_size+1))).scalars())
+        query = query.where(model.id < cursor)
+    rows = list((await db.execute(query.order_by(model.id.desc()).limit(page_size+1))).scalars())
     return {"items": [{"id": row.id, "kind": row.kind, "coins_delta": row.delta_fen,
             "delta_fen": row.delta_fen, "balance_after": row.balance_after, "created_at": row.created_at}
             for row in rows[:page_size]], "next_cursor": rows[page_size-1].id if len(rows) > page_size else None, "has_more": len(rows) > page_size}
@@ -68,7 +73,11 @@ async def unlock(body: UnlockInput, db: DB, user: Actor):
     from .app_media_models import AppMedia
     from .models import Publication
     from .coin_service import has_access
-    environment = current_environment()
+    environment = current_environment(user.id)
+    if wallet.isolated(environment):
+        from .sandbox_wallet import new_purchase_allowed
+        if not new_purchase_allowed(user.id):
+            app_fail("SANDBOX_PURCHASE_DISABLED", "沙箱新购及测试解锁已暂停。", 403)
     if not await has_access(db, user.id, body.publication_id, environment):
         publication = await db.get(Publication, body.publication_id)
         if not publication:
@@ -91,7 +100,7 @@ async def unlock(body: UnlockInput, db: DB, user: Actor):
 @router.get("/me/unlock-orders", response_model=dict)
 async def unlock_orders(db: DB, user: Actor, cursor: int | None = Query(None, gt=0), page_size: int = Query(20, ge=1, le=50)):
     """保留撤销的购买历史，界面按有效权益决定能否播放。"""
-    query = select(CoinUnlock).where(CoinUnlock.user_id == user.id, CoinUnlock.environment == current_environment())
+    query = select(CoinUnlock).where(CoinUnlock.user_id == user.id, CoinUnlock.environment == current_environment(user.id))
     if cursor:
         query = query.where(CoinUnlock.id < cursor)
     rows = list((await db.execute(query.order_by(CoinUnlock.id.desc()).limit(page_size+1))).scalars())

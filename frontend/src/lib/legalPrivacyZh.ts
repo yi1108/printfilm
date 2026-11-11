@@ -6,7 +6,7 @@ export const PRIVACY_ZH: LegalDocument = {
   title: '隐私政策',
   updatedAt: '2026年11月9日',
   intro: [
-    '深圳市德配开源数据科技有限公司（以下简称“PRINTFILM”或“我们”）尊重您的隐私。本政策说明您使用 PRINTFILM iOS 应用、[https://www.printfilm.com](https://www.printfilm.com) 以及相关生成、播放和账户服务（统称“服务”）时，我们如何收集、使用和共享信息。',
+    '深圳德沛开源数据科技有限公司（以下简称“PRINTFILM”或“我们”）尊重您的隐私。本政策说明您使用 PRINTFILM iOS 应用、[https://www.printfilm.com](https://www.printfilm.com) 以及相关生成、播放和账户服务（统称“服务”）时，我们如何收集、使用和共享信息。',
     '如果您不同意本政策，请勿使用本服务。我们的[使用条款](/terms)说明了使用 PRINTFILM 的规则。',
   ],
   sections: [
@@ -15,7 +15,7 @@ export const PRIVACY_ZH: LegalDocument = {
       blocks: [
         {
           type: 'paragraph',
-          text: '您的个人信息控制者为深圳市德配开源数据科技有限公司。您可以通过 [support@printfilm.com](mailto:support@printfilm.com) 与我们联系。',
+          text: '您的个人信息控制者为深圳德沛开源数据科技有限公司。您可以通过 [kefu@gitcc.com](mailto:kefu@gitcc.com) 与我们联系。',
         },
       ],
     },
@@ -56,7 +56,7 @@ export const PRIVACY_ZH: LegalDocument = {
         },
         {
           type: 'paragraph',
-          text: '**支持消息。** 如果您发送电子邮件至 [support@printfilm.com](mailto:support@printfilm.com)，我们会保留该消息和您发送的联系信息，包括您选择提供的与问题有关的信息。',
+          text: '**支持消息。** 如果您发送电子邮件至 [kefu@gitcc.com](mailto:kefu@gitcc.com)，我们会保留该消息和您发送的联系信息，包括您选择提供的与问题有关的信息。',
         },
         {
           type: 'paragraph',
@@ -157,7 +157,7 @@ export const PRIVACY_ZH: LegalDocument = {
         },
         {
           type: 'paragraph',
-          text: '在 GDPR 或英国 GDPR 要求使用传输机制的情况下，我们会采用经批准的机制，例如欧盟委员会的标准合同条款以及英国附录或英国《国际数据传输协议》，并配合适合该次传输的保障措施。您可以发送电子邮件至 [support@printfilm.com](mailto:support@printfilm.com)，索取相关保障措施的摘要。',
+          text: '在 GDPR 或英国 GDPR 要求使用传输机制的情况下，我们会采用经批准的机制，例如欧盟委员会的标准合同条款以及英国附录或英国《国际数据传输协议》，并配合适合该次传输的保障措施。您可以发送电子邮件至 [kefu@gitcc.com](mailto:kefu@gitcc.com)，索取相关保障措施的摘要。',
         },
       ],
     },
@@ -217,7 +217,7 @@ export const PRIVACY_ZH: LegalDocument = {
         },
         {
           type: 'paragraph',
-          text: '要行使上述任何权利，请使用与账户关联的电子邮箱地址发送邮件至 [support@printfilm.com](mailto:support@printfilm.com)；如需删除，也可在应用中使用“注销账户”功能。我们可能需要确认请求确实由您提出。我们会在适用法律要求的期限内作出答复，通常为 30 天内；如需更长时间，我们会告知您。',
+          text: '要行使上述任何权利，请使用与账户关联的电子邮箱地址发送邮件至 [kefu@gitcc.com](mailto:kefu@gitcc.com)；如需删除，也可在应用中使用“注销账户”功能。我们可能需要确认请求确实由您提出。我们会在适用法律要求的期限内作出答复，通常为 30 天内；如需更长时间，我们会告知您。',
         },
       ],
     },
@@ -226,7 +226,7 @@ export const PRIVACY_ZH: LegalDocument = {
       blocks: [
         {
           type: 'paragraph',
-          text: 'PRINTFILM 不面向 13 岁以下儿童，我们也不会在明知的情况下收集 13 岁以下儿童的个人信息。如果您认为 13 岁以下儿童向我们提供了个人信息，请发送电子邮件至 [support@printfilm.com](mailto:support@printfilm.com)，我们将删除相关信息。未满 18 周岁的人士仅应在父母或监护人同意的情况下使用本服务。',
+          text: 'PRINTFILM 不面向 13 岁以下儿童，我们也不会在明知的情况下收集 13 岁以下儿童的个人信息。如果您认为 13 岁以下儿童向我们提供了个人信息，请发送电子邮件至 [kefu@gitcc.com](mailto:kefu@gitcc.com)，我们将删除相关信息。未满 18 周岁的人士仅应在父母或监护人同意的情况下使用本服务。',
         },
       ],
     },
@@ -244,7 +244,7 @@ export const PRIVACY_ZH: LegalDocument = {
       blocks: [
         {
           type: 'paragraph',
-          text: '深圳市德配开源数据科技有限公司\n电子邮箱：[support@printfilm.com](mailto:support@printfilm.com)\n网站：[https://www.printfilm.com](https://www.printfilm.com)\n隐私政策：[隐私政策](/privacy)\n使用条款：[使用条款](/terms)',
+          text: '深圳德沛开源数据科技有限公司\n电子邮箱：[kefu@gitcc.com](mailto:kefu@gitcc.com)\n客服电话：[0755-27337894](tel:+8675527337894)\n微信：gitcc188\n网站：[https://www.printfilm.com](https://www.printfilm.com)\n隐私政策：[隐私政策](/privacy)\n使用条款：[使用条款](/terms)',
         },
       ],
     },

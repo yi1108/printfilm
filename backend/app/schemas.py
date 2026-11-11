@@ -258,6 +258,8 @@ class ProjectDownloadRequest(BaseModel):
 class ContentExpandRequest(BaseModel):
     topic: str = Field(default="", max_length=2000)
     mode: str = Field(default="theme", pattern="^(theme|script)$")
+    target_duration_sec: int | None = Field(default=None, ge=5, le=600)
+    style: str | None = Field(default=None, max_length=200)
 
 
 class ContentExpandOut(BaseModel):

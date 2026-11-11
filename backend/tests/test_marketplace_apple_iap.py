@@ -28,10 +28,12 @@ from conftest import _ensure_test_database, _resolve_test_database_url
 
 
 @pytest.fixture
-def apple_cfg(monkeypatch):
+def apple_cfg(monkeypatch, request):
     """测试不读取真实Apple密钥，也不访问App Store。"""
+    environment = getattr(request, "param", "Production")
+    monkeypatch.setattr(get_settings(), "wallet_environment", environment)
     cfg = MarketplaceAppSettings(_env_file=None, enabled=False, apple_iap_enabled=False,
-                                  apple_bundle_id="test.printfilm.app", apple_environment="Production", apple_app_id=123)
+                                  apple_bundle_id="test.printfilm.app", apple_environment=environment, apple_app_id=123)
     for module in (apple_api, apple_client, apple_runtime):
         monkeypatch.setattr(module, "get_app_settings", lambda: cfg)
     return cfg
@@ -200,6 +202,57 @@ async def test_verified_payment_is_fulfilled_with_new_purchase_disabled(apple_ct
     assert await ctx.db.scalar(select(func.count()).select_from(CoinWallet)) == 0
     disabled = await ctx.client.post("/api/marketplace/app/v1/iap/apple/purchase-intents", json={"product_id": "coins.600", "idempotency_key": "new-payment-disabled"})
     assert disabled.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_production_wallet_rejects_sandbox_even_if_apple_setting_changes(apple_ctx, apple_cfg, monkeypatch):
+    ctx = apple_ctx
+    apple_cfg.apple_environment = "Sandbox"
+    monkeypatch.setattr(get_settings(), "wallet_environment", "Production")
+    stub_apple(monkeypatch, ctx, environment="Sandbox")
+    for path in ("/api/marketplace/app/v1/iap/apple/transactions/verify", "/api/billing/apple/transactions/verify"):
+        response = await ctx.client.post(path, json={"signed_transaction_info": "signed-sandbox-transaction"})
+        assert response.status_code == 403
+        assert response.json()["detail"]["code"] == "WALLET_ENVIRONMENT_MISMATCH"
+    assert ctx.buyer.balance_fen == 0
+    assert await ctx.db.scalar(select(func.count()).select_from(AppleTransaction)) == 0
+    assert await ctx.db.scalar(select(func.count()).select_from(WalletEvent)) == 0
+    state = await wallet.snapshot(ctx.db, ctx.buyer.id)
+    assert state["balance_fen"] == 0
+    # Apple 开关切换不改变统一钱包环境及新购判断。
+    apple_cfg.apple_iap_enabled = True
+    monkeypatch.setattr(apple_client, "apple_configured", lambda: True)
+    assert apple_api.purchasing_enabled() is False
+
+
+@pytest.mark.asyncio
+async def test_notification_sandbox_does_not_credit_production_wallet(apple_ctx, apple_cfg, monkeypatch):
+    ctx = apple_ctx
+    apple_cfg.apple_environment = "Sandbox"
+    txn = stub_apple(monkeypatch, ctx, environment="Sandbox")
+    await apple_service.persist_notification(ctx.db, {
+        "environment": "Sandbox", "notification_uuid": str(uuid.uuid4()),
+        "notification_type": "ONE_TIME_CHARGE", "transaction": txn,
+        "observed_at": now(), "raw_payload": {}})
+    await ctx.db.commit()
+    assert await apple_runtime.process_notification_once()
+    assert await ctx.db.scalar(select(func.count()).select_from(AppleTransaction)) == 0
+    assert ctx.buyer.balance_fen == 0
+    notification = await ctx.db.scalar(select(AppleNotification))
+    await ctx.db.refresh(notification)
+    assert notification.status == "failed"
+
+
+@pytest.mark.parametrize("apple_cfg", ["Sandbox"], indirect=True)
+@pytest.mark.asyncio
+async def test_isolated_sandbox_wallet_can_fulfill_sandbox_purchase(apple_ctx, monkeypatch):
+    ctx = apple_ctx
+    stub_apple(monkeypatch, ctx, environment="Sandbox")
+    response = await ctx.client.post("/api/billing/apple/transactions/verify",
+                                     json={"signed_transaction_info": "signed-sandbox-transaction"})
+    assert response.status_code == 200, response.text
+    assert response.json()["environment"] == "Sandbox"
+    assert response.json()["balance_coins"] == 600
 
 
 @pytest.mark.asyncio

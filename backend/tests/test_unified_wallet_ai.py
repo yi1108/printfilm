@@ -71,6 +71,17 @@ async def test_personal_freeze_and_unused_return_keep_original_sources(funded):
 
 
 @pytest.mark.asyncio
+async def test_apple_sandbox_setting_does_not_switch_ai_wallet(funded, monkeypatch):
+    from app.marketplace.app_settings import get_app_settings
+    db, user = funded
+    monkeypatch.setattr(get_app_settings(), "apple_environment", "Sandbox")
+    task = await make_task(db, user)
+    assert await settlement.freeze_for_task(db, task) == 80
+    assert await charge(db, task, 60) == {"charged": 60, "refunded": 20}
+    assert (user.balance_fen, user.frozen_fen) == (40, 0)
+
+
+@pytest.mark.asyncio
 async def test_actual_ai_overrun_becomes_explicit_debt(funded):
     """实际费用超过原资金时不写负余额，差额成为可追溯欠费。"""
     db, user = funded
@@ -162,6 +173,7 @@ async def test_signup_and_admin_grants_keep_zero_cash_sources(funded, monkeypatc
 
     db, admin = funded
     admin.role = "admin"
+    monkeypatch.setattr("app.api.auth.settings", get_settings())
     monkeypatch.setattr(get_settings(), "billing_signup_grant_fen", 50)
     address = f"unified-{uuid.uuid4().hex}@example.com"
     await register(RegisterRequest(email=address, password="unified-test-pass"), db=db)

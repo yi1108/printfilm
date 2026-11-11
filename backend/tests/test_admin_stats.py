@@ -12,6 +12,22 @@ from app.services.admin.stats import aggregate_usage_summary, build_admin_dashbo
 from tests.conftest import make_user
 
 
+@pytest.mark.asyncio
+async def test_sandbox_recharges_are_excluded_from_real_income(db_session):
+    from app.models import Order
+    import uuid
+    user = await make_user(db_session)
+    baseline = await build_admin_dashboard_stats(db_session)
+    for environment, amount in [('Production', 100), ('Sandbox', 60000)]:
+        db_session.add(Order(out_trade_no=uuid.uuid4().hex, user_id=user.id, sku_id='test',
+            amount_fen=amount, credit_fen=amount, pay_type='apple_iap', status='paid',
+            paid_at=datetime.now(timezone.utc), payment_environment=environment))
+    await db_session.flush()
+    result = await build_admin_dashboard_stats(db_session)
+    assert result['order_paid_total_fen'] - baseline['order_paid_total_fen'] == 100
+    assert result['order_paid_today_fen'] - baseline['order_paid_today_fen'] == 100
+
+
 def _utc_days_ago(days: int, *, hour: int = 12) -> datetime:
     base = datetime.now(timezone.utc).replace(hour=hour, minute=0, second=0, microsecond=0)
     return base - timedelta(days=days)

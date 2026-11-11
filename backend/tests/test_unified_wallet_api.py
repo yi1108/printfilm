@@ -94,7 +94,7 @@ async def test_apple_common_order_freezes_sku_gift_and_accepts_channel_actual_pr
         sku_snapshot={"id": "test_gift", "name": "共同赠额套餐", "amount_fen": 90, "credit_fen": 150},
         coins=150, price_fen=100, enabled=True))
     await ctx.db.commit()
-    monkeypatch.setattr(apple_api, "purchasing_enabled", lambda: True)
+    monkeypatch.setattr(apple_api, "purchasing_enabled", lambda user_id=None: True)
     monkeypatch.setattr(get_app_settings(), "apple_iap_enabled", True)
     async with client_for(ctx, monkeypatch) as client:
         skus = (await client.get("/api/billing/skus?channel=apple_iap")).json()

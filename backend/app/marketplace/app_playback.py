@@ -92,7 +92,7 @@ async def get_session(token):
         value = json.loads(raw) if raw else None
     except Exception:
         error("MARKETPLACE_PLAYBACK_UNAVAILABLE", "播放服务暂不可用，请稍后重试", 503)
-    if not value or value.get("expires_at", 0) <= time.time() or value.get("environment") != environment():
+    if not value or value.get("expires_at", 0) <= time.time() or value.get("environment") != environment(value.get("user_id")):
         error("MARKETPLACE_PLAYBACK_SESSION_EXPIRED", "播放会话已到期，请重新加载", 401)
     await put_session(token, value)
     return value
@@ -180,7 +180,7 @@ async def create_session(body: PlaybackInput, request: Request, db: DB, user: Vi
     _, segments = parse_playlist(text, media.manifest_key.rsplit("/", 1)[0] + "/")
     token, started = secrets.token_urlsafe(36), time.time()
     idle_seconds, max_seconds = session_limits()
-    value = {"user_id": user.id if user else None, "environment": environment(), "content_type": kind,
+    value = {"user_id": user.id if user else None, "environment": environment(user.id if user else None), "content_type": kind,
         "content_id": content_id, "publication_id": publication.id if publication else None,
         "asset_id": asset.id, "version": item.version, "access_mode": mode, "media_id": media.id,
         "created_at": started, "expires_at": started + max_seconds, "segments": segments}

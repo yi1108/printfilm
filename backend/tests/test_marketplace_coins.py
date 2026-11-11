@@ -317,7 +317,7 @@ async def test_http_financial_routes_and_admin_survive_disabled_market(coin_ctx,
     app.dependency_overrides[get_current_admin] = admin
     app.dependency_overrides[app_bootstrap.require_schema] = schema_ready
     monkeypatch.setattr(app_access, "app_open", lambda: False)
-    monkeypatch.setattr(coin_api, "current_environment", lambda: "Production")
+    monkeypatch.setattr(coin_api, "current_environment", lambda user_id=None: "Production")
     monkeypatch.setattr("app.marketplace.apple_client.get_app_settings", lambda: MarketplaceAppSettings(_env_file=None))
     monkeypatch.setattr(apple_client, "apple_configured", lambda: False)
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:

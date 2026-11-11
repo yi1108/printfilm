@@ -27,7 +27,7 @@ export async function handleBillingError(
   const message = err instanceof Error ? err.message : String(err || '')
   if (!isBillingError(message)) return false
   if (workspaceScope.teamId !== null) {
-    await dialog.alert({ title: '团队消费受限', message: `${message}。请在团队钱包查看本人额度；团队余额与充值由所有者管理。`, confirmText: '知道了' })
+    await dialog.alert({ title: pointText('团队消费受限', 'Team spending restricted'), message: `${billingPointsMessage(message)}${pointText('。请在团队钱包查看本人额度；团队余额与充值由所有者管理。', ' Check your allowance in the team wallet. The owner manages the team balance and top-ups.')}`, confirmText: pointText('知道了', 'OK') })
     return true
   }
   const go = await dialog.confirm({

@@ -63,8 +63,8 @@ async def app_ctx(monkeypatch):
         monkeypatch.setattr(app_playback, "time", SimpleNamespace(time=lambda: ctx.clock.current))
         monkeypatch.setattr(app_playback, "session_store", lambda: redis)
         monkeypatch.setattr(app_access, "app_open", lambda: True)
-        monkeypatch.setattr(app_access, "environment", lambda: "Production")
-        monkeypatch.setattr(app_playback, "environment", lambda: "Production")
+        monkeypatch.setattr(app_access, "environment", lambda user_id=None: "Production")
+        monkeypatch.setattr(app_playback, "environment", lambda user_id=None: "Production")
         monkeypatch.setattr(storage, "configured", lambda: True)
         monkeypatch.setattr(storage, "signed", lambda key, content_type: f"https://oss.test/{key}?signed=300")
         monkeypatch.setattr(storage, "read", lambda key: b"#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:6\n#EXTINF:6.0,\nsegment-00000.ts\n#EXTINF:4.0,\nsegment-00001.ts\n#EXT-X-ENDLIST\n")
@@ -355,7 +355,7 @@ async def test_sandbox_grants_cannot_authorize_production_playback(app_ctx, monk
     assert not await app_access.has_entitlement(ctx.db, ctx.buyer.id, item.publication.id)
     assert (await session(ctx, publication_id=item.publication.id)).status_code == 403
     assert (await ctx.client.get("/api/marketplace/app/v1/me/entitlements")).json()["items"] == []
-    monkeypatch.setattr(app_access, "environment", lambda: "Sandbox")
+    monkeypatch.setattr(app_access, "environment", lambda user_id=None: "Sandbox")
     assert await app_access.has_entitlement(ctx.db, ctx.buyer.id, item.publication.id)
     assert len((await ctx.client.get("/api/marketplace/app/v1/me/entitlements")).json()["items"]) == 1
 
@@ -548,7 +548,7 @@ async def test_purchased_detail_requires_own_active_environment_entitlement(app_
     ctx.db.add(grant)
     await ctx.db.flush()
     assert (await ctx.client.get(path)).status_code == 403
-    monkeypatch.setattr(app_access, "environment", lambda: "Sandbox")
+    monkeypatch.setattr(app_access, "environment", lambda user_id=None: "Sandbox")
     assert (await ctx.client.get(path)).status_code == 200
     grant.active = False
     await ctx.db.flush()

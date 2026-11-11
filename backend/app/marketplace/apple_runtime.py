@@ -33,7 +33,7 @@ async def _claim_notification():
     async with AsyncSessionLocal() as db:
         instant = now()
         query = select(AppleNotification).where(
-            AppleNotification.environment == get_app_settings().apple_environment,
+            AppleNotification.environment.in_(apple_client.verification_environments()),
             or_(and_(AppleNotification.status.in_(("pending", "failed")), AppleNotification.attempts < 20,
                      or_(AppleNotification.next_attempt_at.is_(None), AppleNotification.next_attempt_at <= instant)),
                 and_(AppleNotification.status == "running", AppleNotification.lease_until <= instant)),
@@ -46,7 +46,7 @@ async def _claim_notification():
         item.attempts += 1
         item.lease_until = instant + timedelta(seconds=180)
         result = {"id": item.id, "token": token, "type": item.notification_type,
-                  "transaction_id": item.transaction_id, "payload": item.payload}
+                  "transaction_id": item.transaction_id, "environment": item.environment, "payload": item.payload}
         await db.commit()
         return result
 
@@ -68,7 +68,7 @@ async def process_notification_once() -> bool:
         return False
     try:
         # Apple调用在持有金融行锁前完成，历史通知不会按到达顺序复活退款。
-        transaction = await apple_client.query_transaction(work["transaction_id"]) if work["type"] in FINANCIAL_EVENTS else None
+        transaction = await apple_client.in_environment(work["environment"], apple_client.query_transaction, work["transaction_id"]) if work["type"] in FINANCIAL_EVENTS else None
         note = ""
         if work["type"] == "CONSUMPTION_REQUEST":
             original = (work["payload"] or {}).get("transaction")
@@ -110,9 +110,9 @@ async def process_notification_once() -> bool:
     return True
 
 
-async def reconcile_history_once() -> bool:
+async def reconcile_history_once(environment=None) -> bool:
     """每次补偿一页，持久化时间窗口和分页令牌，支持长时间停机后恢复。"""
-    environment = get_app_settings().apple_environment
+    environment = environment or get_app_settings().apple_environment
     async with AsyncSessionLocal() as db:
         instant = now()
         await db.execute(insert(AppleNotificationCursor).values(environment=environment, last_end_at=instant - timedelta(days=1), error="")
@@ -137,7 +137,7 @@ async def reconcile_history_once() -> bool:
                     "page": cursor.pagination_token, "token": token}
         await db.commit()
     try:
-        response = await apple_client.notification_history(snapshot["start"], snapshot["end"], snapshot["page"])
+        response = await apple_client.in_environment(environment, apple_client.notification_history, snapshot["start"], snapshot["end"], snapshot["page"])
         for record in response.notificationHistory or []:
             payload = await apple_client.verify_notification(record.signedPayload)
             async with AsyncSessionLocal() as db:
@@ -191,13 +191,17 @@ async def _loop():
     while True:
         _state["heartbeat_at"] = now().isoformat()
         try:
-            if not apple_client.apple_configured():
-                await asyncio.sleep(get_app_settings().apple_notification_poll_seconds)
-                continue
-            worked = await process_notification_once()
-            if time.monotonic() >= next_reconcile:
-                more = await reconcile_history_once()
-                next_reconcile = time.monotonic() + (0 if more else get_app_settings().apple_reconciliation_seconds)
+            from app.services.billing.wallet_cutover import background_guard
+            from app.wallet_cutover_middleware import BarrierSession
+            worked = False
+            async with background_guard(BarrierSession) as allowed:
+                if allowed and apple_client.apple_configured():
+                    worked = await process_notification_once()
+                    if time.monotonic() >= next_reconcile:
+                        more = False
+                        for env in apple_client.verification_environments():
+                            more = await reconcile_history_once(env) or more
+                        next_reconcile = time.monotonic() + (0 if more else get_app_settings().apple_reconciliation_seconds)
             if not worked:
                 await asyncio.sleep(get_app_settings().apple_notification_poll_seconds)
         except asyncio.CancelledError:

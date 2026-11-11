@@ -147,7 +147,11 @@ async def expand_content(
 
     async def _do_expand() -> dict[str, str]:
         try:
-            result = await get_ark().expand_content(topic, body.mode)
+            result = await get_ark().expand_content(
+                topic, body.mode,
+                target_duration_sec=body.target_duration_sec,
+                style=body.style,
+            )
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"AI 生成失败：{exc}") from exc
         await record_llm_chat_line(

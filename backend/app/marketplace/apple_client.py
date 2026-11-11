@@ -1,5 +1,6 @@
 """只使用 Apple 官方服务器库验签和查询，不接受客户端声称的付款结果。"""
 import asyncio
+from contextvars import ContextVar
 import logging
 from datetime import datetime, timezone
 from enum import Enum
@@ -13,6 +14,24 @@ from .app_settings import get_app_settings
 from .coin_service import app_fail
 
 logger = logging.getLogger(__name__)
+_selected_environment = ContextVar("apple_verified_environment", default=None)
+
+
+async def in_environment(environment, operation, *args, **kwargs):
+    if environment not in ("Production", "Sandbox"):
+        app_fail("MARKETPLACE_IAP_ENVIRONMENT_INVALID", "交易环境不正确。")
+    token = _selected_environment.set(environment)
+    try:
+        return await operation(*args, **kwargs)
+    finally:
+        _selected_environment.reset(token)
+
+
+def verification_environments():
+    # Even after new purchases stop, pending sandbox payments/refunds must verify.
+    configured = get_app_settings().apple_environment
+    return [configured] + (["Sandbox"] if configured == "Production" else [])
+
 
 
 class _InitializationError(Exception):
@@ -105,6 +124,8 @@ def _objects():
     """运行时只接受当前服务器环境，客户端不能指定 Sandbox 绕过付款。"""
     require_apple_configured()
     cfg = get_app_settings()
+    if _selected_environment.get():
+        cfg = cfg.model_copy(update={"apple_environment": _selected_environment.get()})
     try:
         from .apple_configuration import material
         private_key, roots = material(cfg)
@@ -138,7 +159,7 @@ def normalize_transaction(decoded) -> dict:
     payload = _json_value(decoded)
     price, quantity = _field(decoded, "price"), _field(decoded, "quantity")
     env = _scalar(_field(decoded, "environment"))
-    if (_field(decoded, "bundleId") != cfg.apple_bundle_id or env != cfg.apple_environment
+    if (_field(decoded, "bundleId") != cfg.apple_bundle_id or env != (_selected_environment.get() or cfg.apple_environment)
             or _scalar(_field(decoded, "type")) != "Consumable" or type(quantity) is not int or quantity != 1
             or _field(decoded, "currency") not in ("CNY", "USD")
             or not _field(decoded, "storefront")
@@ -203,7 +224,7 @@ async def verify_notification(signed_payload: str) -> dict:
         notification_uuid = str(uuid.UUID(str(_field(decoded, "notificationUUID"))))
     except (ValueError, TypeError):
         app_fail("MARKETPLACE_IAP_NOTIFICATION_INVALID", "苹果通知编号不正确。")
-    if env != get_app_settings().apple_environment or _field(decoded, "version") != "2.0":
+    if env != (_selected_environment.get() or get_app_settings().apple_environment) or _field(decoded, "version") != "2.0":
         app_fail("MARKETPLACE_IAP_NOTIFICATION_INVALID", "苹果通知环境或版本不正确。")
     signed = _field(data, "signedTransactionInfo")
     transaction = await verify_transaction(signed) if signed else None
@@ -238,3 +259,28 @@ async def send_consumption(transaction_id: str, *, delivered: bool, consumed_mil
         await asyncio.to_thread(client.send_consumption_information, transaction_id, request)
     except Exception:
         app_fail("MARKETPLACE_PAYMENT_UNAVAILABLE", "苹果消费信息回传暂时失败，将自动重试。", 503)
+
+
+_verify_transaction_one = verify_transaction
+_verify_notification_one = verify_notification
+
+
+async def _verified_in_any_environment(operation, signed):
+    if _selected_environment.get():
+        return await operation(signed)
+    first_error = None
+    for env in verification_environments():
+        try:
+            return await in_environment(env, operation, signed)
+        except HTTPException as exc:
+            first_error = first_error or exc
+    raise first_error
+
+
+async def verify_transaction(signed_transaction_info: str) -> dict:
+    """依次使用官方环境验证器验签；未验证的客户端字段不能决定账本。"""
+    return await _verified_in_any_environment(_verify_transaction_one, signed_transaction_info)
+
+
+async def verify_notification(signed_payload: str) -> dict:
+    return await _verified_in_any_environment(_verify_notification_one, signed_payload)

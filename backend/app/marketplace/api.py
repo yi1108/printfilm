@@ -161,6 +161,8 @@ async def update_work(work_id: int, body: WorkUpdate, db: DB, user: Actor):
             rights.full_status = "draft"
             rights.version += 1
     values = body.model_dump(exclude={"version"})
+    from .distribution import keep_editions
+    keep_editions(body, values)
     for key, value in values.items():
         setattr(item, key, value)
     item.version += 1
@@ -377,7 +379,7 @@ async def get_rights(asset_id: int, db: DB, user: Actor):
 @router.put(
     "/assets/{asset_id}/rights", response_model=dict,
     summary='保存视频资产权属档案',
-    description='仅资产所有者可操作。首次保存 version 为 0，修改须匹配当前版本；证明材料须属于本人且已就绪。PrintFilm 来源须先签署授权函。保存后重置权属核验，并将关联作品、分集与系列撤回草稿和下架。',
+    description='仅资产所有者可操作。首次保存 version 为 0，修改须匹配当前版本；证明材料须属于本人且已就绪。PRINTFILM 来源须先签署授权函。保存后重置权属核验，并将关联作品、分集与系列撤回草稿和下架。',
     response_description='权属档案 ID 与保存后的 version。',
 )
 async def save_rights(asset_id: int, body: RightsInput, db: DB, user: Actor):
@@ -400,7 +402,7 @@ async def save_rights(asset_id: int, body: RightsInput, db: DB, user: Actor):
         from .authorization import current
         authorization = await current(db, user.id)
         if not authorization:
-            fail("请先签署 PrintFilm 授权函")
+            fail("请先签署 PRINTFILM 授权函")
     item = await rights_for(db, asset_id, lock=True)
     if item:
         check_version(item, body.version)
@@ -419,7 +421,7 @@ async def save_rights(asset_id: int, body: RightsInput, db: DB, user: Actor):
                             "authorization_version": authorization.template_version,
                             "authorization_signer": authorization.signer_name}
         if not authorization:
-            fail("请先签署 PrintFilm 授权函")
+            fail("请先签署 PRINTFILM 授权函")
     item.certificate_asset_id, item.evidence_ids, item.valid_until = body.certificate_asset_id, body.evidence_ids, body.valid_until
     item.basic_status, item.full_status = "draft", "draft"
     for work in related:
@@ -499,7 +501,7 @@ async def save_case(rights_id: int, body: CaseInput, db: DB, user: Actor):
 @router.post(
     "/assets/{asset_id}/assistance", response_model=dict,
     summary='申请版权材料客服协办',
-    description='仅视频资产所有者可操作。可在尚无证明材料时建立外部来源权属档案及客服协办案件；已有协办案件直接复用。PrintFilm 来源须先走授权函流程。',
+    description='仅视频资产所有者可操作。可在尚无证明材料时建立外部来源权属档案及客服协办案件；已有协办案件直接复用。PRINTFILM 来源须先走授权函流程。',
     response_description='当前客服协办案件信息。',
 )
 async def start_assistance(asset_id: int, db: DB, user: Actor):
@@ -507,7 +509,7 @@ async def start_assistance(asset_id: int, db: DB, user: Actor):
     await asset_owned(db, asset_id, user)
     rights = await rights_for(db, asset_id, lock=True)
     if rights and rights.details.get("source") == "printfilm":
-        fail("PrintFilm 作品请先签署授权函；更正来源请保存权属档案")
+        fail("PRINTFILM 作品请先签署授权函；更正来源请保存权属档案")
     if not rights:
         rights = Rights(asset_id=asset_id, owner_id=user.id, details={"source": "external"})
         db.add(rights)

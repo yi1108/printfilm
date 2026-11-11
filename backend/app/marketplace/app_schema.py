@@ -21,8 +21,8 @@ def acquire_schema_lock(connection) -> None:
 
 def register_models():
     """显式注册全部 App 模型，避免运行时导入次序遗漏表。"""
-    from . import app_models, app_media_models, apple_models, app_social_models, app_engagement_models, curation_models
-    modules = {app_models.__name__, app_media_models.__name__, apple_models.__name__, app_social_models.__name__, app_engagement_models.__name__, curation_models.__name__}
+    from . import app_models, app_media_models, apple_models, app_social_models, app_engagement_models, curation_models, sandbox_models
+    modules = {app_models.__name__, app_media_models.__name__, apple_models.__name__, app_social_models.__name__, app_engagement_models.__name__, curation_models.__name__, sandbox_models.__name__}
     names = {mapper.local_table.name for mapper in MarketBase.registry.mappers if mapper.class_.__module__ in modules}
     return [table for table in MarketBase.metadata.sorted_tables if table.name in names]
 
@@ -65,6 +65,9 @@ def check_schema(connection) -> list[str]:
                 normalized = "".join(actual_where.replace("(", "").replace(")", "").split())
                 if str(expected_where) == "active = true" and normalized not in ("active=true", "activeistrue", "active"):
                     missing.append(f"{table.name}:index-predicate:{index.name}")
+    for name in ("marketplace_works", "marketplace_series"):
+        if name not in available or "app_editions" not in {column["name"] for column in inspector.get_columns(name)}:
+            missing.append(f"{name}.app_editions")
     return missing
 
 
@@ -79,6 +82,8 @@ def apply_schema(connection) -> None:
     for table in tables:
         table.create(connection, checkfirst=True)
     patches = {
+        "marketplace_works": {"app_editions": "JSON NOT NULL DEFAULT '[\"domestic\"]'"},
+        "marketplace_series": {"app_editions": "JSON NOT NULL DEFAULT '[\"domestic\"]'"},
         "marketplace_app_content_stats": {"share_count": "BIGINT NOT NULL DEFAULT 0"},
         "marketplace_apple_products": {
             "sku_id": "VARCHAR(64) NOT NULL DEFAULT ''",

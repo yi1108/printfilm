@@ -1,5 +1,7 @@
 # App 视频前端接入详解
 
+国内／国际版内容查询新增 `app_edition=domestic|international`，仅适用于feed及其搜索，省略默认国内版；切换后清空feed游标。单视频详情、系列详情和分集目录不按投放版本限制。详细约定见 [投放版本联调](APP_EDITION_INTEGRATION.md)。
+
 ## 视频举报（iOS / Android）
 
 `POST /api/marketplace/app/v1/reports`，必须携带 `Authorization: Bearer <token>`，可携带 `Accept-Language: zh-CN` 或 `en-US`。

@@ -61,9 +61,9 @@ async def revision(db) -> int:
     return int(await db.scalar(select(CurationRevision.revision).where(CurationRevision.id == 1)) or 0)
 
 
-def feed_fingerprint(*, q, category, category_code, content_type, sort, user_id) -> str:
+def feed_fingerprint(*, q, category, category_code, content_type, sort, user_id, app_edition="domestic") -> str:
     # Locale affects labels, never membership or ordering.
-    values = [q, "" if category_code else category, category_code, content_type, sort, user_id]
+    values = [q, "" if category_code else category, category_code, content_type, sort, user_id, app_edition]
     return hashlib.sha256(json.dumps(values, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()[:24]
 
 
@@ -76,7 +76,7 @@ def encode_feed_cursor(row, *, sort: str, fingerprint: str, revision: int) -> st
     return base64.urlsafe_b64encode(signature + body).decode().rstrip("=")
 
 
-def decode_feed_cursor(value: str, *, sort: str, fingerprint: str, revision: int):
+def decode_feed_cursor(value: str, *, sort: str, fingerprint: str, revision: int, allow_legacy: bool = True):
     try:
         decoded = base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
         signature, body = decoded[:16], decoded[16:]
@@ -84,6 +84,8 @@ def decode_feed_cursor(value: str, *, sort: str, fingerprint: str, revision: int
             raise ValueError()
         payload = json.loads(body)
         if isinstance(payload, list):
+            if not allow_legacy:
+                raise ValueError()
             # Pre-upgrade time cursors are meaningful only in chronological mode.
             if sort != "latest":
                 error("MARKETPLACE_FEED_UPDATED", "列表已更新，请刷新", 409)

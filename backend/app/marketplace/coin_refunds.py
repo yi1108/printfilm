@@ -65,6 +65,24 @@ async def refund_apple_transaction(db, environment: str, transaction_id: str, re
     await lock_wallet(db, transaction.user_id, environment)
     transaction = await db.scalar(select(AppleTransaction).where(AppleTransaction.id == transaction.id)
         .with_for_update().execution_options(populate_existing=True))
+    from .app_funds import isolated
+    if isolated(environment):
+        from .sandbox_wallet import refund
+        desired = "paid" if reversed else "refunded"
+        if transaction.status == desired:
+            return transaction
+        await refund(db, transaction, reversed=reversed)
+        transaction.status = desired
+        transaction.revision += 1
+        transaction.settlement_status = "test_only"
+        transaction.revoked_at = None if reversed else now()
+        db.add(AppleTransactionRevision(transaction_id=transaction.id, revision=transaction.revision,
+            status=desired, delta_gross_fen=0))
+        order = await db.get(Order, transaction.recharge_order_id) if transaction.recharge_order_id else None
+        if order:
+            order.status = desired
+        await db.flush()
+        return transaction
     source_ref = f"{environment}:{transaction_id}"
     if reversed:
         if transaction.status != "refunded":

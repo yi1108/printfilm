@@ -351,7 +351,7 @@ async def review_series(series_id: int, body: ReviewInput, db: DB, user: Admin):
                 from .authorization import current
                 authorization = await current(db, series.owner_id)
                 if not authorization or str(authorization.id) != rights.details.get("authorization_id"):
-                    fail(f"第{episode.episode_no}集 PrintFilm 授权函不存在或已更新")
+                    fail(f"第{episode.episode_no}集 PRINTFILM 授权函不存在或已更新")
             elif episode.source == "external":
                 if not rights.certificate_asset_id or not rights.details.get("certificate_number") or not rights.details.get("dispute_ack"):
                     fail(f"第{episode.episode_no}集缺少版权证书编号、证明材料或纠纷声明")
