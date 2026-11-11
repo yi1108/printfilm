@@ -43,6 +43,9 @@ def chinese_openapi() -> dict:
 
 app.openapi = chinese_openapi
 
+from app.wallet_cutover_middleware import middleware as wallet_cutover_middleware
+app.middleware("http")(wallet_cutover_middleware)
+
 
 @app.middleware("http")
 async def media_price_context(request: Request, call_next):
@@ -207,6 +210,8 @@ async def on_shutdown() -> None:
     await stop_app_services()
     await stop_marketplace_runtime()
     await stop_task_runtime()
+    from app.wallet_cutover_middleware import _engine as cutover_engine
+    await cutover_engine.dispose()
     await dispose_engine()
 
 

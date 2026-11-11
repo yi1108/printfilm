@@ -191,15 +191,17 @@ async def _loop():
     while True:
         _state["heartbeat_at"] = now().isoformat()
         try:
-            if not apple_client.apple_configured():
-                await asyncio.sleep(get_app_settings().apple_notification_poll_seconds)
-                continue
-            worked = await process_notification_once()
-            if time.monotonic() >= next_reconcile:
-                more = False
-                for env in apple_client.verification_environments():
-                    more = await reconcile_history_once(env) or more
-                next_reconcile = time.monotonic() + (0 if more else get_app_settings().apple_reconciliation_seconds)
+            from app.services.billing.wallet_cutover import background_guard
+            from app.wallet_cutover_middleware import BarrierSession
+            worked = False
+            async with background_guard(BarrierSession) as allowed:
+                if allowed and apple_client.apple_configured():
+                    worked = await process_notification_once()
+                    if time.monotonic() >= next_reconcile:
+                        more = False
+                        for env in apple_client.verification_environments():
+                            more = await reconcile_history_once(env) or more
+                        next_reconcile = time.monotonic() + (0 if more else get_app_settings().apple_reconciliation_seconds)
             if not worked:
                 await asyncio.sleep(get_app_settings().apple_notification_poll_seconds)
         except asyncio.CancelledError:

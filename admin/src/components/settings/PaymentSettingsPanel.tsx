@@ -10,6 +10,7 @@ import { stripeRateInputError, stripeSettingsPatch, stripeSettingsReady } from "
 import { MediaPriceSettings } from "./MediaPriceSettings";
 import { AppleProductSettings } from "./AppleProductSettings";
 import { AppleConnectionSettings } from "./AppleConnectionSettings";
+import { WalletMigrationSettings } from "./WalletMigrationSettings";
 
 const RATE_FIELDS = [
   { key: "billing_llm_per_m", label: "文字 LLM", unit: "元 / 百万 Token" },
@@ -208,6 +209,7 @@ export function PaymentSettingsPanel() {
           <Switch aria-label="启用余额计费" checked={form.billing_enabled} onCheckedChange={(value) => patchField("billing_enabled", value)} />
           <label>启用统一钱包（须先核对历史资金来源）<Switch aria-label="启用统一钱包" checked={form.unified_wallet_enabled} onCheckedChange={(value) => patchField("unified_wallet_enabled", value)} /></label>
         </div>
+        <p className="settings-panel-footnote">首次启用请使用下方“统一钱包迁移与核对”；此开关不执行迁移。已有统一钱包账户时不能切回旧记账。</p>
         <LabeledControl label="统一钱包环境" hint="独立于 Apple 交易环境。正式站使用 Production；Sandbox 仅用于独立测试库。已有钱包账户或余额后禁止直接切换，不会转换历史资金。">
           <select className="settings-input" value={form.wallet_environment} onChange={event => patchField("wallet_environment", event.target.value as "Production" | "Sandbox")}><option value="Production">Production（正式资金）</option><option value="Sandbox">Sandbox（独立测试资金）</option></select>
         </LabeledControl>
@@ -288,6 +290,7 @@ export function PaymentSettingsPanel() {
         </SettingsPanel>
       </details>
     </SettingsTabShell>
+    <WalletMigrationSettings />
     <AppleConnectionSettings />
     <AppleProductSettings />
     <MediaPriceSettings />

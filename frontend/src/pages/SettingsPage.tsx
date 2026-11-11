@@ -51,6 +51,7 @@ function AccountSettings() {
   const tab = parseTab(params.get('tab'))
   const [user, setUser] = useState<User | null>(null)
   const [wallet, setWallet] = useState<Wallet | null>(null)
+  const [walletError, setWalletError] = useState('')
 
   useEffect(() => {
     if (!localStorage.getItem('token')) {
@@ -66,7 +67,10 @@ function AccountSettings() {
   useEffect(() => {
     if (tab !== 'subscription' || !localStorage.getItem('token')) return
     let active = true
-    api.wallet().then((value) => { if (active) setWallet(value) }).catch(() => undefined)
+    setWalletError('')
+    api.wallet().then((value) => { if (active) setWallet(value) }).catch((error: unknown) => {
+      if (active) setWalletError(error instanceof Error ? error.message : pointText('积分账户暂不可用，请稍后重试。', 'Your Points account is temporarily unavailable. Please try again later.'))
+    })
     return () => { active = false }
   }, [tab])
 
@@ -116,6 +120,7 @@ function AccountSettings() {
             <section className="pf-settings-card">
               <h1>{t('nav.balanceBilling')}</h1>
               <p className="pf-muted">{t('settings.subLead')}</p>
+              {walletError && <p role="alert">{walletError}</p>}
               <div className="pf-settings-balance">
                 <div><span className="pf-muted">{t('settings.balance')}</span><strong>{points(wallet?.balance_fen)}</strong></div>
                 <div><span className="pf-muted">{t('settings.frozen')}</span><em>{points(wallet?.frozen_fen)}</em></div>

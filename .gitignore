@@ -64,6 +64,8 @@ id_ed25519
 .npmrc
 
 # Backend runtime data
+backend/var/wallet-backups/
+.pytest-wallet-cutover*/
 backend/ai_movie.db
 backend/*.db
 backend/.celery_autoscale/

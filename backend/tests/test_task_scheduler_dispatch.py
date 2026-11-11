@@ -15,6 +15,9 @@ from app.services.tasks import scheduler
 @pytest.fixture(autouse=True)
 async def isolated_scheduler(monkeypatch):
     """隔离进程内调度状态，并在退出时清理所有后台协程。"""
+    monkeypatch.setattr("app.services.billing.wallet_cutover.runtime_state", AsyncMock(return_value={}))
+    monkeypatch.setattr("app.services.billing.wallet_cutover.sync_runtime", AsyncMock())
+    monkeypatch.setattr("app.services.creation.reconcile_creation_sessions", AsyncMock())
     monkeypatch.setattr(scheduler, "_scheduler_task", None)
     monkeypatch.setattr(scheduler, "_maintenance_task", None)
     monkeypatch.setattr(scheduler, "_running_jobs", {})
@@ -126,7 +129,8 @@ async def test_failed_compare_and_swap_never_launches_executor(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_cancellation_runs_when_normal_capacity_is_full(monkeypatch):
+@pytest.mark.parametrize("paused", [False, True])
+async def test_cancellation_runs_when_normal_capacity_is_full(monkeypatch, paused):
     """取消独立于普通容量，并且只执行取消收敛，不进入业务 handler。"""
     active = asyncio.create_task(asyncio.Event().wait())
     scheduler._running_jobs.update({i: active for i in range(100, 112)})
@@ -134,6 +138,7 @@ async def test_cancellation_runs_when_normal_capacity_is_full(monkeypatch):
     db = _QueueSession([[9]])
     cancelled = AsyncMock()
     business = AsyncMock()
+    monkeypatch.setattr("app.services.billing.wallet_cutover.runtime_state", AsyncMock(return_value={"paused": paused}))
     monkeypatch.setattr(scheduler, "AsyncSessionLocal", lambda: db)
     monkeypatch.setattr(scheduler, "get_task_for_runtime", AsyncMock(return_value=SimpleNamespace(status="cancel_requested")))
     monkeypatch.setattr(scheduler, "_mark_cancelled", cancelled)
