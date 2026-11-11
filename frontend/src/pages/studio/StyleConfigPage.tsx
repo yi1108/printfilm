@@ -1,3 +1,5 @@
+import { studioSecondaryText as mt } from '../../i18n/studioSecondaryText'
+import { useMarketplaceLocale } from '../../features/marketplace/useMarketplaceLocale'
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api, defaultsFromTemplate, resolveVoiceId } from '../../api'
@@ -44,6 +46,7 @@ function isPortraitRatio(ratio: string | undefined | null): boolean {
 }
 
 export default function StyleConfigPage() {
+  useMarketplaceLocale()
   const { id } = useParams()
   const projectId = Number(id)
   const nav = useNavigate()
@@ -252,7 +255,7 @@ export default function StyleConfigPage() {
   if (!project) {
     return (
       <AppShell active="studio">
-        {error ? <BillingErrorNotice message={error} /> : <p className="pf-muted">加载中…</p>}
+        {error ? <BillingErrorNotice message={mt(error)} /> : <p className="pf-muted">{mt("加载中…")}</p>}
       </AppShell>
     )
   }
@@ -263,13 +266,11 @@ export default function StyleConfigPage() {
         <div className="pf-page-head-row">
           <div>
             <button type="button" className="pf-back" onClick={() => nav('/studio/new')}>
-              <IconChevronLeft size={18} />
-              返回创作台
-            </button>
-            <h1 className="pf-page-title">{project?.title || '风格配置'}</h1>
+              <IconChevronLeft size={18} />{mt("返回创作台")}</button>
+            <h1 className="pf-page-title">{project?.title || mt("风格配置")}</h1>
           </div>
           <Stepper
-            steps={kepuSteps(pipelineMode)}
+            steps={kepuSteps(pipelineMode).map(item => ({ ...item, label: mt(item.label) }))}
             current={kepuStepIndex('style', { status: 'DRAFT', pipeline_mode: pipelineMode })}
             doneThrough={0}
           />
@@ -278,7 +279,7 @@ export default function StyleConfigPage() {
 
       <div className="pf-style-layout">
         <aside className="pf-create-col">
-          <h3>项目信息</h3>
+          <h3>{mt("项目信息")}</h3>
           {currentTpl ? (
             <div>
               <div
@@ -301,32 +302,28 @@ export default function StyleConfigPage() {
           ) : null}
           <ul className="pf-meta-list" style={{ marginTop: '0.85rem' }}>
             <li>
-              <span>主题</span>
+              <span>{mt("主题")}</span>
               <span style={{ maxWidth: '55%', textAlign: 'right' }}>
                 {(project?.source_text || '').slice(0, 40)}
               </span>
             </li>
             <li>
-              <span>时长</span>
-              <span>~1–3 分钟</span>
+              <span>{mt("时长")}</span>
+              <span>{mt("~1–3 分钟")}</span>
             </li>
             <li>
-              <span>分镜数</span>
-              <span>AI 自动</span>
+              <span>{mt("分镜数")}</span>
+              <span>{mt("AI 自动")}</span>
             </li>
           </ul>
-          <button type="button" className="pf-btn pf-btn-ghost pf-btn-block pf-btn-sm" disabled>
-            预览模板 <ComingSoon />
+          <button type="button" className="pf-btn pf-btn-ghost pf-btn-block pf-btn-sm" disabled>{mt("预览模板")}<ComingSoon />
           </button>
         </aside>
 
         <section className="pf-create-col">
           <div className="pf-style-block">
-            <h3>画面风格</h3>
-            <p className="pf-muted" style={{ fontSize: '0.78rem', margin: '0 0 0.65rem' }}>
-              已由选题时选择的模板锁定，出图与出视频会自动带上画风。是否出角色由模板规则和主题让 AI
-              决定，不必再选一套人设。
-            </p>
+            <h3>{mt("画面风格")}</h3>
+            <p className="pf-muted" style={{ fontSize: '0.78rem', margin: '0 0 0.65rem' }}>{mt("已由选题时选择的模板锁定，出图与出视频会自动带上画风。是否出角色由模板规则和主题让 AI 决定，不必再选一套人设。")}</p>
             {currentTpl ? (
               <div
                 className={[
@@ -345,11 +342,11 @@ export default function StyleConfigPage() {
                   ) : null}
                 </span>
                 <div className="cap">{currentTpl.name}</div>
-                <div className="cap-sub">模板画风</div>
+                <div className="cap-sub">{mt("模板画风")}</div>
               </div>
             ) : null}
             <label className="pf-field" style={{ marginTop: '0.75rem' }}>
-              <span className="pf-field-label">风格提示词（可选覆盖）</span>
+              <span className="pf-field-label">{mt("风格提示词（可选覆盖）")}</span>
               <textarea
                 className="pf-field-input"
                 value={stylePrompt}
@@ -361,10 +358,7 @@ export default function StyleConfigPage() {
           </div>
 
           <div className="pf-style-block">
-            <h3>
-              配音音色
-              <button type="button" className="pf-btn pf-btn-ghost pf-btn-sm" disabled>
-                更多音色 <ComingSoon />
+            <h3>{mt("配音音色")}<button type="button" className="pf-btn pf-btn-ghost pf-btn-sm" disabled>{mt("更多音色")}<ComingSoon />
               </button>
             </h3>
             <div className="pf-voice-row">
@@ -389,7 +383,7 @@ export default function StyleConfigPage() {
                   >
                     <strong className="pf-voice-name">{v.label}</strong>
                     <span className="pf-voice-meta">
-                      {v.gender === 'female' ? '女声' : v.gender === 'male' ? '男声' : v.gender}
+                      {v.gender === 'female' ? mt("女声") : v.gender === 'male' ? mt("男声") : v.gender}
                     </span>
                     <button
                       type="button"
@@ -404,14 +398,12 @@ export default function StyleConfigPage() {
                       onClick={(e) => previewVoice(v, e)}
                     >
                       {loading ? (
-                        '生成中…'
+                        mt("生成中…")
                       ) : playing ? (
-                        '播放中'
+                        mt("播放中")
                       ) : (
                         <>
-                          <IconPlay size={12} />
-                          试听
-                        </>
+                          <IconPlay size={12} />{mt("试听")}</>
                       )}
                     </button>
                   </div>
@@ -420,16 +412,14 @@ export default function StyleConfigPage() {
             </div>
             {selectedVoice ? (
               <p className="pf-muted" style={{ fontSize: '0.78rem', margin: '0.55rem 0 0' }}>
-                当前：{selectedVoice.label} · 成片用该音色整片配音；点击「试听」可听约 5 秒样例
+                {mt("当前：{0} · 成片用该音色整片配音；点击「试听」可听约 5 秒样例", [selectedVoice.label])}
               </p>
             ) : null}
           </div>
 
           <div className="pf-style-block">
-            <h3>成片方式</h3>
-            <p className="pf-muted" style={{ fontSize: '0.78rem', margin: '0 0 0.65rem' }}>
-              任意模板都可选择是否生成 AI 视频，与画幅无关。
-            </p>
+            <h3>{mt("成片方式")}</h3>
+            <p className="pf-muted" style={{ fontSize: '0.78rem', margin: '0 0 0.65rem' }}>{mt("任意模板都可选择是否生成 AI 视频，与画幅无关。")}</p>
             <div className="pf-style-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
               {OUTPUT_MODES.map((m) => (
                 <button
@@ -439,8 +429,8 @@ export default function StyleConfigPage() {
                   onClick={() => setPipelineMode(m.id)}
                 >
                   <img src={m.image} alt="" />
-                  <div className="cap">{m.label}</div>
-                  <div className="cap-sub">{m.desc}</div>
+                  <div className="cap">{mt(m.label)}</div>
+                  <div className="cap-sub">{mt(m.desc)}</div>
                 </button>
               ))}
             </div>
@@ -448,14 +438,12 @@ export default function StyleConfigPage() {
 
           {mediaCatalog ? (
             <div className="pf-style-block">
-              <h3>图片模型</h3>
-              <label>分辨率 <select value={imageResolution} onChange={event => setImageResolution(event.target.value)}>
+              <h3>{mt("图片模型")}</h3>
+              <label>{mt("分辨率")}<select value={imageResolution} onChange={event => setImageResolution(event.target.value)}>
                 {(mediaCatalog.image_models.find(item => item.id === imageModel)?.available_resolutions ?? mediaCatalog.image_models.find(item => item.id === imageModel)?.allowed_resolutions ?? []).map(value => <option key={value} value={value}>{value}</option>)}
               </select></label>
               <MediaCostNotice modelId={imageModel} resolution={imageResolution} />
-              <p className="pf-muted" style={{ fontSize: '0.78rem', margin: '0 0 0.65rem' }}>
-                使用管理后台「模型」中已勾选的 TokenFree 模型。
-              </p>
+              <p className="pf-muted" style={{ fontSize: '0.78rem', margin: '0 0 0.65rem' }}>{mt("使用管理后台「模型」中已勾选的 TokenFree 模型。")}</p>
               <div className="pf-model-grid">
                 {mediaCatalog.image_models.map((m: MediaModelOption) => (
                   <button
@@ -466,11 +454,11 @@ export default function StyleConfigPage() {
                     onClick={() => setImageModel(m.id)}
                   >
                     <div className="pf-model-opt-title">
-                      <span>{m.label}</span>
-                      {m.recommended ? <span className="pf-model-badge">推荐</span> : null}
+                      <span>{mt(m.label)}</span>
+                      {m.recommended ? <span className="pf-model-badge">{mt("推荐")}</span> : null}
                     </div>
                     <div className="pf-model-opt-desc">{m.description}</div>
-                    <div className="pf-model-opt-provider">{Object.entries(m.prices ?? {}).map(([resolution, price]) => `${resolution} ¥${price}/张`).join(' · ') || m.pricing_hint}</div>
+                    <div className="pf-model-opt-provider">{Object.entries(m.prices ?? {}).map(([resolution, price]) => mt("{0} ¥{1}/张", [resolution, price])).join(' · ') || m.pricing_hint}</div>
                   </button>
                 ))}
               </div>
@@ -479,14 +467,12 @@ export default function StyleConfigPage() {
 
           {mediaCatalog && pipelineMode === 'full' ? (
             <div className="pf-style-block">
-              <h3>视频模型</h3>
-              <label>分辨率 <select value={videoResolution} onChange={event => setVideoResolution(event.target.value)}>
+              <h3>{mt("视频模型")}</h3>
+              <label>{mt("分辨率")}<select value={videoResolution} onChange={event => setVideoResolution(event.target.value)}>
                 {(mediaCatalog.video_models.find(item => item.id === videoModel)?.available_resolutions ?? mediaCatalog.video_models.find(item => item.id === videoModel)?.allowed_resolutions ?? []).map(value => <option key={value} value={value}>{value}</option>)}
               </select></label>
               <MediaCostNotice modelId={videoModel} resolution={videoResolution} seconds={1} />
-              <p className="pf-muted" style={{ fontSize: '0.78rem', margin: '0 0 0.65rem' }}>
-                图生视频所用模型；静图成片模式不调用。
-              </p>
+              <p className="pf-muted" style={{ fontSize: '0.78rem', margin: '0 0 0.65rem' }}>{mt("图生视频所用模型；静图成片模式不调用。")}</p>
               <div className="pf-model-grid">
                 {mediaCatalog.video_models.map((m: MediaModelOption) => (
                   <button
@@ -497,11 +483,11 @@ export default function StyleConfigPage() {
                     onClick={() => setVideoModel(m.id)}
                   >
                     <div className="pf-model-opt-title">
-                      <span>{m.label}</span>
-                      {m.recommended ? <span className="pf-model-badge">推荐</span> : null}
+                      <span>{mt(m.label)}</span>
+                      {m.recommended ? <span className="pf-model-badge">{mt("推荐")}</span> : null}
                     </div>
                     <div className="pf-model-opt-desc">{m.description}</div>
-                    <div className="pf-model-opt-provider">{Object.entries(m.prices ?? {}).map(([resolution, price]) => `${resolution} ¥${price}/秒`).join(' · ') || m.pricing_hint}</div>
+                    <div className="pf-model-opt-provider">{Object.entries(m.prices ?? {}).map(([resolution, price]) => mt("{0} ¥{1}/秒", [resolution, price])).join(' · ') || m.pricing_hint}</div>
                   </button>
                 ))}
               </div>
@@ -509,7 +495,7 @@ export default function StyleConfigPage() {
           ) : null}
 
           <div className="pf-style-block">
-            <h3>输出比例</h3>
+            <h3>{mt("输出比例")}</h3>
             <div className="pf-ratio-row">
               {RATIOS.map((r) => (
                 <button
@@ -527,7 +513,7 @@ export default function StyleConfigPage() {
         </section>
 
         <aside className="pf-create-col">
-          <h3>实时预览</h3>
+          <h3>{mt("实时预览")}</h3>
           <div
             className={[
               'pf-editor-preview',
@@ -540,33 +526,31 @@ export default function StyleConfigPage() {
             {currentTpl ? (
               <img src={api.assetUrl(currentTpl.preview_cover)} alt="" />
             ) : (
-              <span className="empty">预览占位</span>
+              <span className="empty">{mt("预览占位")}</span>
             )}
           </div>
-          <p className="pf-muted" style={{ fontSize: '0.8rem' }}>
-            生成后可在分镜台查看真实画面。当前为模板预览。
-          </p>
-          <h3 style={{ marginTop: '1rem' }}>当前配置概览</h3>
+          <p className="pf-muted" style={{ fontSize: '0.8rem' }}>{mt("生成后可在分镜台查看真实画面。当前为模板预览。")}</p>
+          <h3 style={{ marginTop: '1rem' }}>{mt("当前配置概览")}</h3>
           <ul className="pf-meta-list">
             <li>
-              <span>风格</span>
+              <span>{mt("风格")}</span>
               <span>{currentTpl?.name || '—'}</span>
             </li>
             <li>
-              <span>角色</span>
-              <span>AI 按模板与主题决定</span>
+              <span>{mt("角色")}</span>
+              <span>{mt("AI 按模板与主题决定")}</span>
             </li>
             <li>
-              <span>配音</span>
-              <span>{selectedVoice?.label || '默认'}</span>
+              <span>{mt("配音")}</span>
+              <span>{selectedVoice?.label || mt("默认")}</span>
             </li>
             <li>
-              <span>比例</span>
+              <span>{mt("比例")}</span>
               <span>{ratio}</span>
             </li>
             <li>
-              <span>成片</span>
-              <span>{pipelineMode === 'image_text' ? '静图成片' : 'AI 视频'}</span>
+              <span>{mt("成片")}</span>
+              <span>{pipelineMode === 'image_text' ? mt("静图成片") : mt("AI 视频")}</span>
             </li>
           </ul>
           {selectedVoice ? (
@@ -579,11 +563,11 @@ export default function StyleConfigPage() {
             >
               <IconPlay size={14} />
               {playingId === voiceKey(selectedVoice)
-                ? '停止试听'
-                : `试听「${selectedVoice.label}」`}
+                ? mt("停止试听")
+                : mt("试听「{0}」", [selectedVoice.label])}
             </button>
           ) : null}
-          {error ? <BillingErrorNotice message={error} style={{ marginTop: '0.75rem' }} /> : null}
+          {error ? <BillingErrorNotice message={mt(error)} style={{ marginTop: '0.75rem' }} /> : null}
           <button
             type="button"
             className="pf-btn pf-btn-lime pf-btn-block pf-btn-lg pf-btn-icon"
@@ -591,12 +575,10 @@ export default function StyleConfigPage() {
             disabled={busy || Boolean(previewBusy)}
             onClick={generate}
           >
-            {busy ? '启动中…' : project.shots?.length ? '保存并继续' : '生成故事板'}
+            {busy ? mt("启动中…") : project.shots?.length ? mt("保存并继续") : mt("生成故事板")}
             {!busy ? <span aria-hidden>→</span> : null}
           </button>
-          <p className="pf-muted" style={{ fontSize: '0.78rem', marginTop: '0.5rem' }}>
-            先生成分镜脚本，确认修改后再手动开始出图与配音。
-          </p>
+          <p className="pf-muted" style={{ fontSize: '0.78rem', marginTop: '0.5rem' }}>{mt("先生成分镜脚本，确认修改后再手动开始出图与配音。")}</p>
         </aside>
       </div>
     </AppShell>

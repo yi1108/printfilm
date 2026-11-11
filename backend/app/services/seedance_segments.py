@@ -24,11 +24,12 @@ LEGACY_NARRATION_PREFIX = "【旁白·慢速清晰·同步字幕】"
 DIALOGUE_PREFIX = "【对白·慢速清晰·同步字幕】"
 VISUAL_PREFIX = "【画面·无配音仅环境音】"
 EMPTY_SHOT_PREFIX = "【空镜·可仅环境音与 BGM】"
-SUBTITLE_CUE = "【字幕：后期叠旁白字幕，简体中文逐句同步】"
+SUBTITLE_CUE = "【字幕：后期叠旁白字幕，保持原文语言逐句同步】"
 DRAMA_SUBTITLE_CUE = "【字幕：底部居中·简体中文·逐句轮换·与口播同步】"
 # 历史 cue，提交前统一替换为现行文案
 LEGACY_KEPU_SUBTITLE_CUES = (
     "【字幕：全程简体中文字幕，旁白逐句同步烧录】",
+    "【字幕：后期叠旁白字幕，简体中文逐句同步】",
 )
 LEGACY_DRAMA_SUBTITLE_CUES = (
     "【字幕：底部居中·简体中文·仅标记段落同步】",
@@ -341,6 +342,10 @@ def estimate_narration_duration(text: str) -> int:
     clean = re.sub(r"^【[^】]*】", "", clean).strip()
     if not clean:
         return SEGMENT_DURATION_MIN
+    # 英文按完整单词估时，不把拉丁字母误当汉字造成拖腔。
+    if not re.search(r"[\u3400-\u9fff]", clean):
+        words = len(re.findall(r"[A-Za-z]+(?:['’-][A-Za-z]+)*", text or ""))
+        return clamp_segment_duration(max(SEGMENT_DURATION_MIN, round(words / 2.5) + 1))
     # (n + 4) // 5 ≈ 5 字/秒，略留半拍呼吸
     secs = max(SEGMENT_DURATION_MIN, int((len(clean) + 4) // 5) + 1)
     return clamp_segment_duration(secs)
@@ -399,7 +404,12 @@ def script_bgm_mood(segment_script: str) -> str:
     return infer_bgm_mood(segment_script)
 
 
-def build_production_cues(bgm_mood: str) -> list[str]:
+def build_production_cues(bgm_mood: str, *, language: str = "zh") -> list[str]:
+    """保留协议标记，但字幕必须保持原文而非强制翻译。"""
+    if language == "en":
+        mood = (bgm_mood or "Calm background music").strip()
+        return ["【字幕：Post-production captions in the original narration language】",
+                f"【BGM：Post-production mix · {mood}, below voice volume】"]
     mood = (bgm_mood or "").strip() or DEFAULT_BGM_MOOD
     if "音量低于人声" not in mood:
         mood = f"{mood}，音量低于人声"
@@ -471,6 +481,8 @@ def build_seedance_production_section(
         ]
         return f"{SEEDANCE_PRODUCTION_SECTION_HEADER}\n" + "\n".join(lines)
 
+    # 系统说明可为中文，但绝不把实际旁白/字幕翻译为中文。
+    language_guard = "0. 语言：旁白、对白及字幕严格保持脚本原文语言，禁止翻译；英文原文必须英文配音和英文字幕。"
     has_vo = script_has_narration_cue(segment_script)
     has_dialogue = script_has_dialogue_cue(segment_script)
     drama_mixed = script_is_drama_mixed(segment_script)
@@ -505,7 +517,7 @@ def build_seedance_production_section(
                 f"3. 字幕：{no_burn}"
                 if not burn_subtitles
                 else (
-                    "3. 字幕：仅【旁白·…】【对白·…】口播内容烧录简体中文字幕，底部居中；"
+                    "3. 字幕：仅【旁白·…】【对白·…】口播内容按原文语言烧录字幕，底部居中；"
                     "同一时刻只显示一行（一句），随口播进度逐句轮换，禁止把整段对白一次性叠满屏幕；"
                     "禁止重复字、叠字、口吃式重复；字幕必须与当前正在说的那一句逐字一致；"
                     "画面描述段不出现字幕。"
@@ -546,7 +558,7 @@ def build_seedance_production_section(
             lines.append(
                 "7. 人物介绍：本镜禁止任何人物介绍叠字/字卡；身份信息不写入画面。"
             )
-        return f"{SEEDANCE_PRODUCTION_SECTION_HEADER}\n" + "\n".join(lines)
+        return f"{SEEDANCE_PRODUCTION_SECTION_HEADER}\n{language_guard}\n" + "\n".join(lines)
 
     # 科普旁白模式：整镜以旁白段为主（语速自然偏快，避免拖沓）
     lines = [
@@ -556,7 +568,7 @@ def build_seedance_production_section(
             f"2. 字幕：{no_burn}"
             if not burn_subtitles
             else (
-                "2. 字幕：全程烧录简体中文字幕，位置底部居中，字号清晰可读；"
+                "2. 字幕：全程按原文语言烧录字幕，位置底部居中，字号清晰可读；"
                 "旁白须逐句同步显示，字幕与口播一致。"
             )
         ),
@@ -577,7 +589,7 @@ def build_seedance_production_section(
     lines.append(
         "5. 音效：环境音与动作音效与画面同步，层次低于人声。"
     )
-    return f"{SEEDANCE_PRODUCTION_SECTION_HEADER}\n" + "\n".join(lines)
+    return f"{SEEDANCE_PRODUCTION_SECTION_HEADER}\n{language_guard}\n" + "\n".join(lines)
 
 
 def format_segment_line(kind: str, text: str) -> str:
@@ -642,7 +654,7 @@ def narration_from_script(content: str) -> str:
             text = re.sub(r"^【[^】]*】", "", line).strip()
             if text:
                 lines.append(text)
-    return "".join(lines) if lines else ""
+    return (" " if not re.search(r"[\u3400-\u9fff]", "".join(lines)) else "").join(lines) if lines else ""
 
 
 def first_visual_prompt(content: str) -> str:
@@ -739,8 +751,9 @@ def build_segment_script(
     *,
     bgm_mood: str,
     max_total: int = SHOT_DURATION_MAX,
+    language: str = "zh",
 ) -> str:
-    lines = build_production_cues(bgm_mood)
+    lines = build_production_cues(bgm_mood, language=language)
     used = 0
     for beat in beats:
         text = format_segment_line(beat.kind, beat.text)
@@ -761,7 +774,7 @@ def build_segment_script(
             break
     if used == 0:
         lines.append(f"@duration:{SEGMENT_DURATION_MIN}")
-        lines.append("画面轻微动态，保持主体稳定")
+        lines.append("Subtle motion, keep the subject stable" if language == "en" else "画面轻微动态，保持主体稳定")
     return "\n".join(lines).strip()
 
 
@@ -801,7 +814,7 @@ def parse_beats_from_llm_shot(item: dict[str, Any], narration_fallback: str = ""
     if img:
         beats.append(SegmentBeat(duration=estimate_visual_duration(img), kind="visual", text=img))
     elif video:
-        visual = video if not camera else f"{video}，运镜：{camera}"
+        visual = video if not camera else f"{video}; {camera}"
         beats.append(SegmentBeat(duration=estimate_visual_duration(visual), kind="visual", text=visual))
     if text:
         beats.append(
@@ -906,7 +919,11 @@ def apply_segment_script_edit(script: str, *, bgm_mood: str | None = None) -> di
             bgm_mood=bgm_mood or DEFAULT_BGM_MOOD,
         )
     else:
-        cues = build_production_cues(bgm_mood or infer_bgm_mood(content))
+        # 语言取正文而非中文协议标记，编辑英文脚本时不补中文配乐描述。
+        body = re.sub(r"【[^】]*】|@duration:\d+", "", content)
+        language = "zh" if re.search(r"[\u3400-\u9fff]", body) else "en"
+        mood = bgm_mood or (script_bgm_mood(content) if "【BGM：" in content else ("Calm" if language == "en" else infer_bgm_mood(content)))
+        cues = build_production_cues(mood, language=language)
         body_lines = [
             ln
             for ln in content.splitlines()

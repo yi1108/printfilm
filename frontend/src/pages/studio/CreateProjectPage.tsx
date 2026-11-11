@@ -12,11 +12,14 @@ import { creationTemplateId } from '../../lib/creationTemplates'
 import { resolveShortVideoMediaSettings, shortVideoPipelineMode } from '../../lib/shortVideoSettings'
 import { isRunning, kepuSteps } from '../../lib/status'
 import { dialog } from '../../lib/dialog'
+import { useI18n } from '../../i18n'
 import './shortVideoCreate.css'
 
-const EXAMPLES = ['给小学生讲讲为什么天空是蓝色的', '一只胆小的小猫在雨天遇见新朋友', '用轻松的方式介绍二十四节气里的霜降']
-
+/** 创建短片与检查文案；界面语言不改变项目内容或生成参数。 */
 export default function CreateProjectPage() {
+  const { m, t } = useI18n()
+  const c = m.shortVideoCreate
+  const text = (key: string) => t(`shortVideoCreate.${key}`)
   const nav = useNavigate()
   const [params] = useSearchParams()
   const editId = Number(params.get('project')) || null
@@ -59,7 +62,7 @@ export default function CreateProjectPage() {
       nav(`/auth?next=${encodeURIComponent(returnPath)}`, { replace: true })
       return
     }
-    api.templates().then(rows => { if (!disposed) setTemplates(rows) }).catch(cause => { if (!disposed) setError(cause.message || '模板加载失败') })
+    api.templates().then(rows => { if (!disposed) setTemplates(rows) }).catch(cause => { if (!disposed) setError(cause.message || 'templatesFailed') })
     api.voices().then(rows => { if (!disposed) setVoices(rows) }).catch(() => { if (!disposed) setVoiceError(true) })
     return () => { disposed = true }
   }, [nav, editId, returnPath])
@@ -112,7 +115,7 @@ export default function CreateProjectPage() {
         setMode('copy')
         setStep(1)
       } else setStep(0)
-    }).catch(cause => { if (!disposed) setError(cause.message || '项目加载失败') })
+    }).catch(cause => { if (!disposed) setError(cause.message || 'projectFailed') })
       .finally(() => { if (!disposed) setLoading(false) })
     return () => { disposed = true }
   }, [editId, requestedTemplate, requestedPipelineMode, nav])
@@ -164,12 +167,12 @@ export default function CreateProjectPage() {
   async function saveCopyDraft() {
     if (!copy.trim() || disabled || working.current || !selectedTemplate || !canSaveDraft) return
     working.current = true
-    setBusy('正在保存草稿…')
+    setBusy('savingDraft')
     setError('')
     try {
       await saveDraft(copy, title)
     } catch (cause) {
-      if (mounted.current) setError(cause instanceof Error ? cause.message : '草稿保存失败，请重试')
+      if (mounted.current) setError(cause instanceof Error ? cause.message : 'saveFailed')
     } finally {
       working.current = false
       if (mounted.current) setBusy('')
@@ -180,18 +183,18 @@ export default function CreateProjectPage() {
     if (!idea.trim() || disabled || working.current || !selectedTemplate) return
     working.current = true
     setError('')
-    setBusy(mode === 'idea' ? '正在生成文案…' : '正在保存文案…')
+    setBusy(mode === 'idea' ? 'generatingCopy' : 'savingCopy')
     try {
       const result = mode === 'copy'
         ? { title: title || idea.trim().slice(0, 30), content: idea.trim() }
-        : await api.expandContent(`${idea.trim()}\n\n创作要求：约 ${duration} 秒，${selectedTemplate.name} 风格，普通话旁白。请写可直接配音的完整文案，保持内容与时长匹配。`, 'script')
+        : await api.expandContent(idea.trim(), 'script', { target_duration_sec: duration, style: selectedTemplate.name })
       if (!mounted.current) return
       setCopy(result.content)
       setTitle(result.title)
       setStep(1)
       await saveDraft(result.content, result.title)
     } catch (cause) {
-      if (mounted.current) setError(cause instanceof Error ? cause.message : '文案生成失败，请重试')
+      if (mounted.current) setError(cause instanceof Error ? cause.message : 'copyFailed')
     } finally {
       working.current = false
       if (mounted.current) setBusy('')
@@ -200,17 +203,17 @@ export default function CreateProjectPage() {
   async function generateStoryboard() {
     if (!copy.trim() || disabled || working.current || !selectedTemplate) return
     if (!mediaSettings.ready) {
-      setError('当前模型不可用或参考图数量不足，请重新选择图片和视频模型、清晰度与画面比例。')
+      setError('modelsFailed')
       return
     }
     working.current = true
     try {
       const old = savedProject.current
       if (old?.shots.length) {
-        const confirmed = await dialog.confirm({ title: '重新生成分镜', message: '新的文案与设置将重新生成分镜，并替换本项目已有的图片、镜头视频、配音和成片。', confirmText: '重新生成', tone: 'danger' })
+        const confirmed = await dialog.confirm({ title: c.restartTitle, message: c.restartMessage, confirmText: c.restartConfirm, tone: 'danger' })
         if (!confirmed || !mounted.current) return
       }
-      setBusy('正在保存并生成分镜…')
+      setBusy('generatingStoryboard')
       setError('')
       let value = await createDraft(copy, title)
       value = await api.updateProject(value.id, payload(copy, title))
@@ -219,7 +222,7 @@ export default function CreateProjectPage() {
       await api.generate(value.id, { restart: Boolean(value.shots.length) })
       if (mounted.current) nav(`/studio/${value.id}`)
     } catch (cause) {
-      if (mounted.current) setError(cause instanceof Error ? cause.message : '分镜生成失败，请重试')
+      if (mounted.current) setError(cause instanceof Error ? cause.message : 'storyboardFailed')
     } finally {
       working.current = false
       if (mounted.current) setBusy('')
@@ -229,57 +232,57 @@ export default function CreateProjectPage() {
   return <AppShell active="studio">
     <div className="sv-create-page">
       <header className="sv-create-header">
-        <div><Link className="sv-back" to="/history"><ArrowLeft size={16} /> 我的短片</Link><h1>{editId ? '编辑短片' : '创建短片'}</h1><p>从一个想法开始，每一步都可以查看和调整。</p></div>
-        <Stepper steps={kepuSteps(pipelineMode)} current={pipelineMode === 'full' && step === 1 ? 2 : step} />
+        <div><Link className="sv-back" to="/history"><ArrowLeft size={16} /> {c.myVideos}</Link><h1>{editId ? c.editTitle : c.createTitle}</h1><p>{c.intro}</p></div>
+        <Stepper steps={kepuSteps(pipelineMode).map(item => ({ ...item, label: pipelineMode === 'image_text' ? t(`shortVideoCreate.stillSteps.${item.key}`) : t(`shortVideoCreate.steps.${item.key}`) }))} current={pipelineMode === 'full' && step === 1 ? 2 : step} />
       </header>
-      {error && <BillingErrorNotice message={error} />}
-      {loading ? <div className="sv-loading"><LoaderCircle className="sv-spin" size={20} /> 正在加载项目…</div> : <>
-        {running && <div className="sv-running-note">项目正在制作中，请在工作台查看进度或停止任务。<Link to={`/studio/${project!.id}`}>查看工作台 <ArrowRight size={15} /></Link></div>}
+      {error && <BillingErrorNotice message={Object.hasOwn(c, error) ? text(error) : error} />}
+      {loading ? <div className="sv-loading"><LoaderCircle className="sv-spin" size={20} /> {c.loadingProject}</div> : <>
+        {running && <div className="sv-running-note">{c.runningNote}<Link to={`/studio/${project!.id}`}>{c.viewWorkspace} <ArrowRight size={15} /></Link></div>}
         <div className="sv-create-grid">
           <main>
             {step === 0 ? <form onSubmit={prepareCopy}>
               <section className="sv-panel">
-                <div className="sv-section-heading"><span>01</span><div><h2>选择画面风格</h2><p>四种动画与插画风格，生图时使用画风参考图，逐镜延续角色与视觉风格。</p></div></div>
-                <div className="sv-style-grid" role="group" aria-label="画面风格">
+                <div className="sv-section-heading"><span>01</span><div><h2>{c.styleTitle}</h2><p>{c.styleHint}</p></div></div>
+                <div className="sv-style-grid" role="group" aria-label={c.visualStyle}>
                   {templates.map(item => <button key={item.id} type="button" className={`sv-style-card${item.id === templateId ? ' is-selected' : ''}`} disabled={disabled} aria-pressed={item.id === templateId} onClick={() => setTemplateId(item.id)}>
-                    <img src={api.assetUrl(item.preview_cover)} alt="" /><div><strong>{item.name}</strong><p>{item.description}</p></div>
+                    <img src={api.assetUrl(item.preview_cover)} alt="" /><div><strong>{c.styles[item.id as keyof typeof c.styles]?.name || item.name}</strong><p>{c.styles[item.id as keyof typeof c.styles]?.description || item.description}</p></div>
                     {item.id === templateId && <span className="sv-style-check"><Check size={14} /></span>}
                   </button>)}
                 </div>
               </section>
               <section className="sv-panel">
-                <div className="sv-section-heading"><span>02</span><div><h2>写下你想表达的内容</h2><p>描述主题、受众和重点，或直接粘贴已有文案。</p></div></div>
-                <div className="sv-input-tabs"><button type="button" className={mode === 'idea' ? 'is-active' : ''} onClick={() => setMode('idea')} disabled={disabled}>输入想法</button><button type="button" className={mode === 'copy' ? 'is-active' : ''} onClick={() => setMode('copy')} disabled={disabled}>已有文案</button></div>
-                <label className="sv-field"><span>{mode === 'idea' ? '短片想法' : '完整文案'}</span><textarea aria-label={mode === 'idea' ? '短片想法' : '完整文案'} value={idea} onChange={event => setIdea(event.target.value)} rows={6} maxLength={20000} disabled={disabled} placeholder={mode === 'idea' ? '例如：用 3D 动画给小学生解释天空为什么是蓝色，语言轻松，约 60 秒。' : '粘贴可以直接配音的文案，下一步可以继续编辑。'} required /></label>
-                {mode === 'idea' && <div className="sv-examples">{EXAMPLES.map(example => <button type="button" key={example} onClick={() => setIdea(example)} disabled={disabled}>{example}</button>)}</div>}
-                <div className="sv-actions"><span>文案生成后可修改，再继续生成分镜。</span><div className="sv-action-buttons">{copy.trim() && <Button variant="outline" disabled={disabled} onClick={() => setStep(1)}>编辑已有文案</Button>}<Button type="submit" variant="lime" disabled={disabled || !idea.trim() || !selectedTemplate}>{busy ? <LoaderCircle size={16} className="sv-spin" /> : <Sparkles size={16} />}{busy || (mode === 'idea' ? '生成文案' : '下一步：检查文案')}<ArrowRight size={16} /></Button></div></div>
+                <div className="sv-section-heading"><span>02</span><div><h2>{c.contentTitle}</h2><p>{c.contentHint}</p></div></div>
+                <div className="sv-input-tabs"><button type="button" className={mode === 'idea' ? 'is-active' : ''} onClick={() => setMode('idea')} disabled={disabled}>{c.ideaTab}</button><button type="button" className={mode === 'copy' ? 'is-active' : ''} onClick={() => setMode('copy')} disabled={disabled}>{c.copyTab}</button></div>
+                <label className="sv-field"><span>{mode === 'idea' ? c.ideaLabel : c.copyLabel}</span><textarea aria-label={mode === 'idea' ? c.ideaLabel : c.copyLabel} value={idea} onChange={event => setIdea(event.target.value)} rows={6} maxLength={20000} disabled={disabled} placeholder={mode === 'idea' ? c.ideaPlaceholder : c.copyPlaceholder} required /></label>
+                {mode === 'idea' && <div className="sv-examples">{c.examples.map(example => <button type="button" key={example} onClick={() => setIdea(example)} disabled={disabled}>{example}</button>)}</div>}
+                <div className="sv-actions"><span>{c.copyHint}</span><div className="sv-action-buttons">{copy.trim() && <Button variant="outline" disabled={disabled} onClick={() => setStep(1)}>{c.editCopy}</Button>}<Button type="submit" variant="lime" disabled={disabled || !idea.trim() || !selectedTemplate}>{busy ? <LoaderCircle size={16} className="sv-spin" /> : <Sparkles size={16} />}{(busy && text(busy)) || (mode === 'idea' ? c.generateCopy : c.reviewNext)}<ArrowRight size={16} /></Button></div></div>
               </section>
             </form> : <section className="sv-panel">
-              <div className="sv-section-heading"><span>02</span><div><h2>检查文案，再生成分镜</h2><p>这份文案将作为旁白。确认内容后，再拆分画面与镜头。</p></div></div>
-              <label className="sv-field"><span>短片名称</span><input value={title} onChange={event => setTitle(event.target.value)} maxLength={200} disabled={disabled} /></label>
-              <label className="sv-field"><span>配音文案 <small>{copy.length} 字</small></span><textarea aria-label="配音文案" value={copy} onChange={event => setCopy(event.target.value)} rows={13} maxLength={20000} disabled={disabled} /></label>
-              <div className="sv-actions"><Button variant="outline" disabled={disabled} onClick={() => setStep(0)}><ArrowLeft size={15} /> 返回调整</Button><div className="sv-action-buttons">{canSaveDraft && <Button variant="outline" disabled={disabled || !copy.trim() || !selectedTemplate || Boolean(project && !draftChanged)} onClick={() => { void saveCopyDraft() }}><Save size={15} />保存草稿</Button>}<Button variant="lime" disabled={disabled || !copy.trim() || !selectedTemplate} onClick={() => { void generateStoryboard() }}>{busy ? <LoaderCircle size={16} className="sv-spin" /> : <Clapperboard size={16} />}{busy || '生成分镜脚本'}<ArrowRight size={16} /></Button></div></div>
-              {project && <p className="sv-saved-note">{draftChanged ? canSaveDraft ? '有未保存的修改，可先保存草稿，或生成分镜时一并保存。' : '修改将在重新生成分镜时保存。' : canSaveDraft ? '草稿已保存。' : '已载入项目文案。'}<Link to={`/studio/${project.id}`}>打开项目工作台</Link></p>}
+              <div className="sv-section-heading"><span>02</span><div><h2>{c.reviewTitle}</h2><p>{c.reviewHint}</p></div></div>
+              <label className="sv-field"><span>{c.videoName}</span><input value={title} onChange={event => setTitle(event.target.value)} maxLength={200} disabled={disabled} /></label>
+              <label className="sv-field"><span>{c.narrationScript} <small>{t('shortVideoCreate.characterCount', { count: copy.length })}</small></span><textarea aria-label={c.narrationScript} value={copy} onChange={event => setCopy(event.target.value)} rows={13} maxLength={20000} disabled={disabled} /></label>
+              <div className="sv-actions"><Button variant="outline" disabled={disabled} onClick={() => setStep(0)}><ArrowLeft size={15} /> {c.back}</Button><div className="sv-action-buttons">{canSaveDraft && <Button variant="outline" disabled={disabled || !copy.trim() || !selectedTemplate || Boolean(project && !draftChanged)} onClick={() => { void saveCopyDraft() }}><Save size={15} />{c.saveDraft}</Button>}<Button variant="lime" disabled={disabled || !copy.trim() || !selectedTemplate} onClick={() => { void generateStoryboard() }}>{busy ? <LoaderCircle size={16} className="sv-spin" /> : <Clapperboard size={16} />}{(busy && text(busy)) || c.generateStoryboard}<ArrowRight size={16} /></Button></div></div>
+              {project && <p className="sv-saved-note">{draftChanged ? canSaveDraft ? c.unsavedDraft : c.unsavedRestart : canSaveDraft ? c.draftSaved : c.scriptLoaded}<Link to={`/studio/${project.id}`}>{c.openWorkspace}</Link></p>}
             </section>}
           </main>
           <aside className="sv-panel sv-settings">
-            <h2>短片设置</h2><p>先用默认设置，也可以按需要调整。</p>
-            <div className="sv-field"><span>成片方式</span><div className="sv-output-modes" role="group" aria-label="成片方式">{([{ id: 'full', label: 'AI 视频', desc: '参考图生图 → 图生视频 → 合成' }, { id: 'image_text', label: '静图成片', desc: '参考图生图 → 图片运镜与配音' }] as const).map(item => <button key={item.id} type="button" className={pipelineMode === item.id ? 'is-selected' : ''} aria-pressed={pipelineMode === item.id} disabled={disabled} onClick={() => setPipelineMode(item.id)}><strong>{item.label}</strong><span>{item.desc}</span>{pipelineMode === item.id && <Check size={14} />}</button>)}</div></div>
-            <label className="sv-field"><span>画面比例</span><select value={mediaSettings.ratio} onChange={event => setRatio(event.target.value)} disabled={disabled || !mediaSettings.ratios.length}>{!mediaSettings.ratios.length && <option value="">暂无共同支持的画幅</option>}{mediaSettings.ratios.map(value => <option key={value} value={value}>{value}{value === '9:16' ? ' 竖屏' : value === '16:9' ? ' 横屏' : value === '1:1' ? ' 方形' : ''}</option>)}</select></label>
-            <label className="sv-field"><span>目标时长</span><select value={duration} onChange={event => setDuration(Number(event.target.value))} disabled={disabled}>{[...new Set([30, 60, 90, 120, 180, duration])].sort((a, b) => a - b).map(value => <option key={value} value={value}>约 {value} 秒</option>)}</select></label>
+            <h2>{c.settingsTitle}</h2><p>{c.settingsHint}</p>
+            <div className="sv-field"><span>{c.outputMode}</span><div className="sv-output-modes" role="group" aria-label={c.outputMode}>{([{ id: 'full', label: c.aiVideo, desc: c.aiVideoDesc }, { id: 'image_text', label: c.stillVideo, desc: c.stillVideoDesc }] as const).map(item => <button key={item.id} type="button" className={pipelineMode === item.id ? 'is-selected' : ''} aria-pressed={pipelineMode === item.id} disabled={disabled} onClick={() => setPipelineMode(item.id)}><strong>{item.label}</strong><span>{item.desc}</span>{pipelineMode === item.id && <Check size={14} />}</button>)}</div></div>
+            <label className="sv-field"><span>{c.aspectRatio}</span><select value={mediaSettings.ratio} onChange={event => setRatio(event.target.value)} disabled={disabled || !mediaSettings.ratios.length}>{!mediaSettings.ratios.length && <option value="">{c.noCommonRatio}</option>}{mediaSettings.ratios.map(value => <option key={value} value={value}>{value}{value === '9:16' ? ` ${c.portrait}` : value === '16:9' ? ` ${c.landscape}` : value === '1:1' ? ` ${c.square}` : ''}</option>)}</select></label>
+            <label className="sv-field"><span>{c.duration}</span><select value={duration} onChange={event => setDuration(Number(event.target.value))} disabled={disabled}>{[...new Set([30, 60, 90, 120, 180, duration])].sort((a, b) => a - b).map(value => <option key={value} value={value}>{t('shortVideoCreate.durationOption', { seconds: value })}</option>)}</select></label>
             {pipelineMode === 'image_text' ? <>
-              <label className="sv-field"><span>旁白音色</span><select value={voice} onChange={event => setVoice(event.target.value)} disabled={disabled}><option value="">默认普通话音色</option>{voice && !voices.some(item => (item.speaker || item.id) === voice) && <option value={voice}>项目原有音色</option>}{voices.map(item => <option key={item.id} value={item.speaker || item.id}>{item.label}</option>)}</select></label>
-              {voiceError && <p className="sv-saved-note">音色列表暂未加载，仍可使用默认配音。</p>}
-            </> : <p className="sv-saved-note">视频模型生成旁白与声音。</p>}
-            <details className="sv-model-settings" open={pipelineMode === 'full'}><summary>生成模型与清晰度</summary>
-              <label className="sv-field"><span>参考图生图模型</span><select value={mediaSettings.imageModel} disabled={disabled || !mediaSettings.imageOptions.length} onChange={event => setImageModel(event.target.value)}>{mediaSettings.imageSelectionUnavailable && <option value={mediaSettings.imageModel} disabled>{mediaSettings.imageModel}（当前不可用）</option>}{!mediaSettings.imageOptions.length && !mediaSettings.imageSelectionUnavailable && <option value="">{mediaCatalog ? '暂无可用参考图模型' : '正在加载模型…'}</option>}{mediaSettings.imageOptions.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
-              <label className="sv-field"><span>图片清晰度</span><select value={mediaSettings.imageResolution} disabled={disabled || !mediaSettings.imageResolutions.length} onChange={event => setImageResolution(event.target.value)}>{!mediaSettings.imageResolutions.length && <option value={mediaSettings.imageResolution}>{mediaSettings.imageResolution || '请选择可用模型'}</option>}{mediaSettings.imageResolutions.map(value => <option key={value} value={value}>{value}</option>)}</select><MediaCostNotice modelId={mediaSettings.imageModel} resolution={mediaSettings.imageResolution} /></label>
-              {pipelineMode === 'full' && <><label className="sv-field"><span>图生视频模型</span><select value={mediaSettings.videoModel} disabled={disabled || !mediaSettings.videoOptions.length} onChange={event => setVideoModel(event.target.value)}>{mediaSettings.videoSelectionUnavailable && <option value={mediaSettings.videoModel} disabled>{mediaSettings.videoModel}（当前不可用）</option>}{!mediaSettings.videoOptions.length && !mediaSettings.videoSelectionUnavailable && <option value="">{mediaCatalog ? '暂无可用图生视频模型' : '正在加载模型…'}</option>}{mediaSettings.videoOptions.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
-                <label className="sv-field"><span>视频清晰度</span><select value={mediaSettings.videoResolution} disabled={disabled || !mediaSettings.videoResolutions.length} onChange={event => setVideoResolution(event.target.value)}>{!mediaSettings.videoResolutions.length && <option value={mediaSettings.videoResolution}>{mediaSettings.videoResolution || '请选择可用模型'}</option>}{mediaSettings.videoResolutions.map(value => <option key={value} value={value}>{value}</option>)}</select><MediaCostNotice modelId={mediaSettings.videoModel} resolution={mediaSettings.videoResolution} seconds={1} /></label></>}
-              {mediaCatalog && !mediaSettings.ready && <p className="sv-model-error" role="status">请重新选择可用模型，生图需支持 {project?.ref_image_url ? 3 : 2} 张参考图{pipelineMode === 'full' ? '，视频需支持 2 张参考图' : ''}，并确认清晰度和画幅。</p>}
+              <label className="sv-field"><span>{c.voice}</span><select value={voice} onChange={event => setVoice(event.target.value)} disabled={disabled}><option value="">{c.defaultVoice}</option>{voice && !voices.some(item => (item.speaker || item.id) === voice) && <option value={voice}>{c.existingVoice}</option>}{voices.map(item => <option key={item.id} value={item.speaker || item.id}>{item.label}</option>)}</select></label>
+              {voiceError && <p className="sv-saved-note">{c.voiceError}</p>}
+            </> : <p className="sv-saved-note">{c.nativeAudio}</p>}
+            <details className="sv-model-settings" open={pipelineMode === 'full'}><summary>{c.modelsTitle}</summary>
+              <label className="sv-field"><span>{c.imageModel}</span><select value={mediaSettings.imageModel} disabled={disabled || !mediaSettings.imageOptions.length} onChange={event => setImageModel(event.target.value)}>{mediaSettings.imageSelectionUnavailable && <option value={mediaSettings.imageModel} disabled>{t('shortVideoCreate.unavailable', { model: mediaSettings.imageModel })}</option>}{!mediaSettings.imageOptions.length && !mediaSettings.imageSelectionUnavailable && <option value="">{mediaCatalog ? c.noImageModels : c.loadingModels}</option>}{mediaSettings.imageOptions.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+              <label className="sv-field"><span>{c.imageResolution}</span><select value={mediaSettings.imageResolution} disabled={disabled || !mediaSettings.imageResolutions.length} onChange={event => setImageResolution(event.target.value)}>{!mediaSettings.imageResolutions.length && <option value={mediaSettings.imageResolution}>{mediaSettings.imageResolution || c.selectModel}</option>}{mediaSettings.imageResolutions.map(value => <option key={value} value={value}>{value}</option>)}</select><MediaCostNotice modelId={mediaSettings.imageModel} resolution={mediaSettings.imageResolution} /></label>
+              {pipelineMode === 'full' && <><label className="sv-field"><span>{c.videoModel}</span><select value={mediaSettings.videoModel} disabled={disabled || !mediaSettings.videoOptions.length} onChange={event => setVideoModel(event.target.value)}>{mediaSettings.videoSelectionUnavailable && <option value={mediaSettings.videoModel} disabled>{t('shortVideoCreate.unavailable', { model: mediaSettings.videoModel })}</option>}{!mediaSettings.videoOptions.length && !mediaSettings.videoSelectionUnavailable && <option value="">{mediaCatalog ? c.noVideoModels : c.loadingModels}</option>}{mediaSettings.videoOptions.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+                <label className="sv-field"><span>{c.videoResolution}</span><select value={mediaSettings.videoResolution} disabled={disabled || !mediaSettings.videoResolutions.length} onChange={event => setVideoResolution(event.target.value)}>{!mediaSettings.videoResolutions.length && <option value={mediaSettings.videoResolution}>{mediaSettings.videoResolution || c.selectModel}</option>}{mediaSettings.videoResolutions.map(value => <option key={value} value={value}>{value}</option>)}</select><MediaCostNotice modelId={mediaSettings.videoModel} resolution={mediaSettings.videoResolution} seconds={1} /></label></>}
+              {mediaCatalog && !mediaSettings.ready && <p className="sv-model-error" role="status">{t('shortVideoCreate.modelHint', { count: project?.ref_image_url ? 3 : 2, videoRequirement: pipelineMode === 'full' ? c.videoRequirement : '' })}</p>}
             </details>
-            <div className="sv-setting-summary"><Clapperboard size={17} /><div><strong>{selectedTemplate?.name || '3D 动画'}</strong><span>{pipelineMode === 'full' ? '图生视频' : '图片运镜'} · 普通话旁白 · 中文字幕</span><span>使用画风参考图，并参考前镜画面保持一致。</span></div></div>
-            <div className="sv-workflow-hint"><Clock3 size={17} /><p>{pipelineMode === 'full' ? '确认分镜后先生成参考图画面，再将图片逐镜生成为视频，检查镜头后合成成片。' : '检查分镜后生成图片和配音，素材准备好后再合成视频。'}</p></div>
+            <div className="sv-setting-summary"><Clapperboard size={17} /><div><strong>{(selectedTemplate && c.styles[selectedTemplate.id as keyof typeof c.styles]?.name) || selectedTemplate?.name || c.styles.anim_3d.name}</strong><span>{pipelineMode === 'full' ? c.imageToVideo : c.imageMotion} · {c.narrationSummary}</span><span>{c.continuityHint}</span></div></div>
+            <div className="sv-workflow-hint"><Clock3 size={17} /><p>{pipelineMode === 'full' ? c.fullWorkflow : c.stillWorkflow}</p></div>
           </aside>
         </div>
       </>}
