@@ -21,6 +21,7 @@ import { Bot, Box, ChevronDown, FolderOpen, Hand, CircleHelp, Scan, LayoutGrid, 
 import '@xyflow/react/dist/style.css'
 import { useNavigate, useParams } from 'react-router-dom'
 import { dramaApi } from '../../api/drama'
+import { points, pointUnitRate } from '../../lib/points'
 import { decodeCanvasDocument, encodeCanvasDocument } from './canvas/canvasCodec'
 import { printfilmStudioApi } from './api'
 import type { AgentOptions, MediaOperation, ProjectAsset, FrameAnalysisReport } from './types'
@@ -685,7 +686,7 @@ function PrintfilmStudioWorkspace() {
     const type = String(event.type || 'event')
     if (type === 'message_start') { agentAnswerRef.current = ''; setAnswer('') }
     if (type === 'message_delta') { agentAnswerRef.current += String(event.content || ''); setAnswer(agentAnswerRef.current) }
-    if (['thinking', 'tool_start', 'tool_result', 'canvas_patch', 'task_created', 'error', 'reconnecting', 'proposal'].includes(type)) setAgentEvents((events) => [...events, eventFromWire(event)])
+    if (['thinking', 'model_progress', 'tool_start', 'tool_result', 'canvas_patch', 'task_created', 'error', 'reconnecting', 'proposal'].includes(type)) setAgentEvents((events) => [...events, eventFromWire(event)])
     if (type === 'canvas_updated' && Number(event.version) > versionRef.current) void printfilmStudioApi.getCanvas(projectId).then((result) => {
       if (!mountedRef.current || result.version <= versionRef.current) return
       if (dirtyRef.current || savingRef.current) { saveBlockedRef.current = true; setStatus('Agent 更新与本地编辑冲突，已保留本地修改，请导出后刷新核对'); return }
@@ -1131,7 +1132,7 @@ function PrintfilmStudioWorkspace() {
       if (toolId === 't2v') {
         const quote = await estimateStudioTool({ tool_id: 't2v', model_id: genModel, generate_audio: outputAudio, resolution: outputResolution, ratio: requestRatio, duration: outputDuration, video_mode: videoMode, references })
         priceVersion = quote.price_version ?? 0
-        setStatus(`预计消耗 ${quote.estimate_yuan} 元，正在创建任务`)
+        setStatus(`预计消耗 ${points(quote.estimate_fen)}，正在创建任务`)
       }
       const outputKind = action === 'audio' ? 'audio' : isVideoAction ? 'video' : 'image'
       const reuseSource = source && nodeMediaKind(source) === outputKind
@@ -1572,14 +1573,14 @@ function PrintfilmStudioWorkspace() {
     if (selectionAction === 'audio') {
       let active = true
       setEstimateText('正在估算…')
-      void printfilmStudioApi.estimateAudio(projectId).then((quote) => { if (active) setEstimateText(`预计消耗 ${quote.estimate_yuan.toFixed(2)} 元`) }).catch(() => { if (active) setEstimateText('费用估算暂不可用') })
+      void printfilmStudioApi.estimateAudio(projectId).then((quote) => { if (active) setEstimateText(`预计消耗 ${points(quote.estimate_fen)}`) }).catch(() => { if (active) setEstimateText('费用估算暂不可用') })
       return () => { active = false }
     }
     const video = selectionAction === 'video' || selectionAction === 'reference'
     if (!video) {
       let active = true
       setEstimateText('正在估算…')
-      void printfilmStudioApi.estimateImage(projectId, { model_id: genModel, resolution: imageResolution, ratio: outputRatio === 'auto' ? '2:3' : outputRatio, count: Number(outputCount) || 1 }).then((quote) => { if (active) setEstimateText(`预计消耗 ${quote.estimate_yuan.toFixed(2)} 元`) }).catch(() => { if (active) setEstimateText('费用估算暂不可用') })
+      void printfilmStudioApi.estimateImage(projectId, { model_id: genModel, resolution: imageResolution, ratio: outputRatio === 'auto' ? '2:3' : outputRatio, count: Number(outputCount) || 1 }).then((quote) => { if (active) setEstimateText(`预计消耗 ${points(quote.estimate_fen)}`) }).catch(() => { if (active) setEstimateText('费用估算暂不可用') })
       return () => { active = false }
     }
     const validation = referenceValidation || videoValidation
@@ -1601,8 +1602,8 @@ function PrintfilmStudioWorkspace() {
       }, controller.signal).then((quote) => {
         if (!active) return
         const price = catalogVideoModels(mediaCatalog).find((item) => item.id === genModel)?.prices?.[outputResolution]
-        const rate = price ? `${Number(price)} 元` : `约 ${(Number(quote.estimate_yuan) / Number(outputDuration)).toFixed(3)} 元`
-        setEstimateText(`${rate} / 秒 · 预计 ${quote.estimate_yuan} 元`)
+        const rate = price ? `${pointUnitRate(String(price))} 积分` : `约 ${(quote.estimate_fen / Number(outputDuration)).toLocaleString('zh-CN', { maximumFractionDigits: 3 })} 积分`
+        setEstimateText(`${rate} / 秒 · 预计 ${points(quote.estimate_fen)}`)
       }).catch((error) => { if (active) setEstimateText(error instanceof Error ? error.message : '费用估算暂不可用') })
     }, 280)
     return () => { active = false; window.clearTimeout(timer); controller.abort() }
@@ -1790,14 +1791,14 @@ function PrintfilmStudioWorkspace() {
       } catch (error) { setStatus(error instanceof Error ? error.message : '画布导入失败') }
     }} />
     <input ref={uploadRef} className="pf-upload-input" type="file" accept="image/*,video/*,audio/*" multiple onChange={(event) => { const files = event.target.files; const replacement = replaceTargetRef.current; replaceTargetRef.current = null; if (replacement && files?.length) { void uploadOntoNode(replacement, files); event.target.value = ''; return }; const target = selectedNodeId ? nodesRef.current.find((node) => node.id === selectedNodeId) : undefined; const empty = target && !(target.data.mediaUrl || target.data.url || target.data.cover) && (target.type === 'image' || target.type === 'video' || target.type === 'audio' || target.type === 'asset' || target.type === 'inpaint' || target.type === 'outpaint' || target.type === 'upscale'); if (empty && selectedNodeId) void uploadOntoNode(selectedNodeId, files); else void uploadFiles(files); event.target.value = '' }} />
-    <WorkspaceChrome dockWidth={agentOpen ? agentDockWidth : 0} title={projectTitle || `项目 #${projectId || '—'}`} status={savingRef.current ? '保存中…' : saveBlockedRef.current ? '保存冲突' : dirtyRef.current ? '待保存' : !canvasReady ? '加载中…' : '已保存'} balance={wallet ? wallet.balance_yuan.toFixed(2) : '—'} mode={viewMode} onMode={setViewMode} onAction={workspaceAction} />
+    <WorkspaceChrome dockWidth={agentOpen ? agentDockWidth : 0} title={projectTitle || `项目 #${projectId || '—'}`} status={savingRef.current ? '保存中…' : saveBlockedRef.current ? '保存冲突' : dirtyRef.current ? '待保存' : !canvasReady ? '加载中…' : '已保存'} balance={points(wallet?.balance_fen)} mode={viewMode} onMode={setViewMode} onAction={workspaceAction} />
     {tourOpen && <WorkspaceTour onClose={() => { setTourOpen(false); setAgentOpen(tourAgentWasOpen.current) }} onStep={step => {
       setPaneAddMenu(null)
       if (step === 'agent' || step === 'story') setAgentOpen(true)
       else setAgentOpen(false)
     }} />}
     {workspacePanel === 'defaults' && <DefaultModelPanel onClose={() => setWorkspacePanel(null)} />}
-    {workspacePanel === 'wallet' && <WalletPanel balance={wallet ? wallet.balance_yuan.toFixed(2) : '—'} onClose={() => setWorkspacePanel(null)} onNavigate={navigateWorkspace} />}
+    {workspacePanel === 'wallet' && <WalletPanel balance={points(wallet?.balance_fen)} onClose={() => setWorkspacePanel(null)} onNavigate={navigateWorkspace} />}
     {workspacePanel === 'share' && <SharePanel projectId={projectId} onClose={() => setWorkspacePanel(null)} />}
     {workspacePanel && !['defaults','wallet','share'].includes(workspacePanel) && <WorkspaceUtilityPanel key={workspacePanel} panel={workspacePanel} projectId={projectId} title={projectTitle} canvasName={String(documentExtrasRef.current.canvasName || '画布 1')} document={document} writable={canEdit && (workspacePanel !== 'project' || projectOwner)} onClose={() => setWorkspacePanel(null)} onAction={workspaceAction} onNavigate={navigateWorkspace} settings={{snap,showEdges,focusStoryEdges,showMap}} onSetting={(key,value) => { if(key==='snap')setSnap(value); if(key==='showEdges')setShowEdges(value); if(key==='focusStoryEdges')setFocusStoryEdges(value); if(key==='showMap')setShowMap(value) }} onRename={async(title,canvasName) => { await dramaApi.updateProject(projectId,{title}); setProjectTitle(title); documentExtrasRef.current={...documentExtrasRef.current,canvasName};setNodes(current=>[...current]);dirtyRef.current=true;setStatus('待保存') }} onRestore={(snapshot) => { const doc=decodeCanvasDocument(snapshot); documentExtrasRef.current=doc;commitGraph(doc.nodes as Node<Data>[],doc.edges as Edge[],'已恢复历史版本，正在保存');setViewport(doc.viewport);setFlowKey(key=>key+1) }} />}
     <output className="pf-workspace-feedback" aria-live="polite">{status}</output>

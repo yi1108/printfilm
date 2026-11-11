@@ -25,6 +25,7 @@ export type PresenceStore = ReturnType<typeof createPresenceStore>
 /** Token travels only in the first authenticated frame, never in a URL or log. */
 export function connectPresence(url: string, token: string, onPeers: (peers: CanvasPeer[]) => void, onStatus: (status: PresenceStatus) => void, Socket: typeof WebSocket = WebSocket) {
   let socket: WebSocket | null = null, closed = false, denied = false, retry = 500, lastSent = 0
+  let selfUserId: number | undefined
   let state = emptyAwareness(), flushTimer: ReturnType<typeof setTimeout> | undefined, reconnectTimer: ReturnType<typeof setTimeout> | undefined
   const send = () => {
     flushTimer = undefined
@@ -44,7 +45,10 @@ export function connectPresence(url: string, token: string, onPeers: (peers: Can
         const message = JSON.parse(String(event.data))
         if (message.type !== 'presence' || !Array.isArray(message.peers)) return
         retry=500;onStatus('online')
-        onPeers(message.peers.filter((peer: CanvasPeer) => peer.session_id !== message.self_id && Date.now()/1000-peer.seen_at<20).slice(0,64))
+        const self = message.peers.find((peer: CanvasPeer) => peer.session_id === message.self_id)
+        if (typeof self?.user_id === 'number') selfUserId = self.user_id
+        // Other tabs and reconnecting sessions of this account are still ourselves.
+        onPeers(message.peers.filter((peer: CanvasPeer) => peer.session_id !== message.self_id && (selfUserId === undefined || peer.user_id !== selfUserId) && Date.now()/1000-peer.seen_at<20).slice(0,64))
         // Background tabs throttle timers. Reply to the server's periodic snapshot
         // as well, so an open collaborator is not repeatedly evicted and rejoined.
         if (!lastSent || Date.now()-lastSent>=5000) send()

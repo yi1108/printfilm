@@ -47,6 +47,16 @@ test('generating status and pinned plan remain visible after partial assistant t
     const done = renderToStaticMarkup(h(AgentConversation, { ...props, running: false }))
     assert.doesNotMatch(done, /pf-agent-progress/)
     assert.match(done, /引导下一步/)
+    const proposal = {id:'card',nodes:[],edges:[]}
+    const controls = {nodes:[],states:{},writable:true,busy:false,async onAction(){},onRun(){}}
+    const events = [{type:'user',text:'写剧本'}, {type:'proposal',text:'',data:proposal}, {type:'assistant',text:'长剧本最后一段'}]
+    const history = renderToStaticMarkup(h(AgentConversation,{...props,events,answer:'',running:false,proposals:controls}))
+    assert.ok(history.indexOf('长剧本最后一段') < history.indexOf('pf-agent-proposal'))
+    const live = renderToStaticMarkup(h(AgentConversation,{...props,events:events.slice(0,2),answer:'流式正文最后一段',running:true,proposals:controls}))
+    assert.ok(live.indexOf('流式正文最后一段') < live.indexOf('pf-agent-proposal'))
+    const progress = renderToStaticMarkup(h(AgentConversation,{...props,events:[{type:'user',text:'规划'}, {type:'model_progress',text:'正在接收分镜方案，已收到 2048 字符'}],answer:'',running:true}))
+    assert.equal(progress.split('正在接收分镜方案').length-1,1)
+    assert.match(progress,/已收到 2048 字符/)
   } finally { await server.close() }
 })
 

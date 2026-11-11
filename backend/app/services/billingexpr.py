@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import math
+import re
 from typing import Any
 
 from app.config import Settings, get_settings
@@ -79,6 +80,14 @@ def quote_verified_charge_fen(
     if (not facts.get("tokens") or float(facts.get("tokens") or 0) <= 0) and int(total or 0) > 0:
         facts["tokens"] = int(total)
     if rate.billing_mode == "tiered_expr" and rate.billing_expr:
+        # Resolution tiers are the same size regardless of the caller's casing.
+        # Match the spelling used by this rule (image rules often use "2K",
+        # while video rules usually use "720p") without changing other facts.
+        resolution = str(facts.get("resolution") or "").strip()
+        tiers = re.findall(r'''u\(["']resolution["']\)\s*==\s*["']([^"']+)["']''', rate.billing_expr)
+        matches = {tier for tier in tiers if tier.casefold() == resolution.casefold()}
+        if len(matches) == 1:
+            facts["resolution"] = matches.pop()
         usd = expression_usd(
             rate.billing_expr,
             tokens={

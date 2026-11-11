@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Play, X } from 'lucide-react'
 import type { MediaModelOption } from '../../../api'
+import { points } from '../../../lib/points'
 import type { BatchQuote, BatchSettings } from './batchGeneration'
 import type { StoryNode } from './storyWorkflow'
 import { printfilmStudioApi } from '../api'
@@ -44,7 +45,7 @@ export function BatchRunDialog({ nodes, imageModels, videoModels, balance, onQuo
   return <div className="pf-batch-overlay"><section className="pf-batch-dialog" role="dialog" aria-modal="true" aria-label="确认运行节点" onKeyDown={event => { event.stopPropagation(); if (event.key === 'Escape' && !busy) onClose() }}>
     <header><b>运行这 {nodes.length} 个节点？</b><button disabled={busy} aria-label="关闭批量生成" onClick={onClose}><X size={19} /></button></header>
     <p>使用节点及默认生成设置，按依赖顺序在后台执行。有效结果直接复用，已提交的任务等待完成。</p>
-    {quote ? <div className="pf-batch-quote">{(['text', 'image', 'video'] as const).map(kind => { const items = quote.items.filter(item => item.input.kind === kind); return items.length ? <div key={kind}><span>{{text:'文本',image:'图片',video:'视频'}[kind]} {items.length} 个</span><b>¥{items.reduce((sum, item) => sum + item.yuan, 0).toFixed(2)}</b></div> : null })}<ol>{quote.items.map(item => <li key={item.input.id}>{item.input.label}</li>)}</ol><strong>预计消耗 ¥{quote.total.toFixed(2)}</strong><small>余额 {balance === undefined ? '—' : `¥${balance.toFixed(2)}`} · 文字与对话 ¥0.05 / 次</small></div> : !error && <p role="status">正在计算费用…</p>}
+    {quote ? <div className="pf-batch-quote">{(['text', 'image', 'video'] as const).map(kind => { const items = quote.items.filter(item => item.input.kind === kind); return items.length ? <div key={kind}><span>{{text:'文本',image:'图片',video:'视频'}[kind]} {items.length} 个</span><b>{points(Math.round(items.reduce((sum, item) => sum + item.yuan, 0) * 100))}</b></div> : null })}<ol>{quote.items.map(item => <li key={item.input.id}>{item.input.label}</li>)}</ol><strong>预计消耗 {points(Math.round(quote.total * 100))}</strong><small>积分余额 {points(balance === undefined ? undefined : Math.round(balance * 100))} · 文字与对话 {points(5)} / 次</small></div> : !error && <p role="status">正在计算费用…</p>}
     {error && <p role="alert">{error} <button onClick={() => setRetry(value => value + 1)}>重新报价</button></p>}
     <footer><button disabled={busy} onClick={onClose}>取消</button><button className="is-primary" disabled={busy || !quote || balance !== undefined && quote.total > balance} onClick={() => void run()}><Play size={15} />{busy ? '正在提交…' : '确定运行'}</button></footer>
   </section></div>

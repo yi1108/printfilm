@@ -213,7 +213,7 @@ async def execute_run(run_id, session_id, user_id, prompt, info, lock, factory=A
             complete = partial(chat_completions, model_id=model_id, timeout=TEXT_WRITING_TIMEOUT if writing else 300.0, strict_output=writing)
             stream = None if writing else partial(chat_completions_stream, model_id=model_id, timeout=300.0)
             skill_block = await load_director_skill_block(db, user_id, info)
-            async for event in iter_agent_turn(view=view, canvas=canvas, prompt=prompt, history=history, allow_write=True, stopped=stop.is_set, guard=guard, complete=complete, stream=stream, enabled_tools=info.get('studio_enabled_tools'), review_changes=bool(info.get('studio_review_changes')), skill_block=skill_block, required_tool=info.get('studio_required_tool')):
+            async for event in iter_agent_turn(view=view, canvas=canvas, prompt=prompt, history=history, allow_write=True, stopped=stop.is_set, guard=guard, complete=complete, stream=stream, enabled_tools=info.get('studio_enabled_tools'), review_changes=bool(info.get('studio_review_changes')), skill_block=skill_block, required_tool=info.get('studio_required_tool'), planning_node_ids=info.get('studio_planning_node_ids')):
                 if event.get('type') == 'message_delta':
                     parts.append(str(event.get('content') or ''))
                 await append_event(db, run_id, event)

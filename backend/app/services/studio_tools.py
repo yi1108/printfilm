@@ -207,7 +207,7 @@ async def run_image_tool(
         model=(model_id or "").strip() or get_settings().model_image,
         domain="studio",
         image_result=result,
-        extra_raw={"tool_id": tool_id},
+        extra_raw={"tool_id": tool_id, "size": resolution or size},
     )
     url = result.local_url or result.remote_url or ""
     if url:

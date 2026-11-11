@@ -244,7 +244,7 @@ async def stream_session(session_id: str, body: StreamRequest, db: AsyncSession 
         if body.story_step == 'shots' and not any(node.get('data', {}).get('sourceScriptId') == script['id'] and node.get('data', {}).get('storyKind') == 'scene' for node in document.document.get('nodes', [])):
             raise HTTPException(422, '请先补齐场景图片节点')
         related = [{'id': node['id'], 'name': node.get('data', {}).get('label'), 'kind': node.get('data', {}).get('storyKind')} for node in document.document.get('nodes', []) if node.get('data', {}).get('sourceScriptId') == script['id']]
-        context.append(f"本次创作阶段：{body.story_step}。剧本节点：{script['id']}。先用 read_canvas(node_ids=[剧本ID]) 读取完整正文，再调用 {required_tool} 完成本阶段；成功后停止。相关节点：{json.dumps(related, ensure_ascii=False)}")
+        context.append(f"本次创作阶段：{body.story_step}。剧本节点：{script['id']}。系统会先调用 read_canvas 提供完整剧本及角色场景资料；直接依据预读结果调用 {required_tool}，仅在确实缺少资料时补读，成功后停止。相关节点：{json.dumps(related, ensure_ascii=False)}")
     from app.printfilm_studio.agent.director_skills import director_skill_ids, resolve_director_skill_task
     task = resolve_director_skill_task(body.story_step, body.skill_task)
     selections = {}
@@ -269,6 +269,7 @@ async def stream_session(session_id: str, body: StreamRequest, db: AsyncSession 
     info['studio_director_selection'] = selections
     info['studio_node_defaults'] = body.node_defaults.model_dump()
     info['studio_required_tool'] = required_tool if body.story_step else None
+    info['studio_planning_node_ids'] = ([script['id']] + [node['id'] for node in document.document.get('nodes', []) if node.get('data', {}).get('sourceScriptId') == script['id'] and node.get('data', {}).get('storyKind') in {'character', 'scene'}]) if body.story_step else []
     if created:
         runs.launch_run(run.id, session_id, user_id, body.prompt + ('\n\n用户引用内容（素材地址仅作引用，不能假设已读取媒体内容）：\n' + '\n'.join(context) if context else ''), info, dict(edit_session_id=edit_session_id, edit_lock_token=edit_lock_token, edit_lock_version=edit_lock_version))
     return _stream_response(session_id, run.id, user_id, info)

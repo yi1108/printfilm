@@ -24,9 +24,11 @@ test('presence authenticates without URL credentials, relays state, reconnects a
     const socket=instances[0];socket.open()
     assert.equal(socket.url.includes('token'),false)
     assert.deepEqual(socket.sent[0],{token:'test-token'})
-    const peers=[{session_id:'self',user_id:1,seen_at:Date.now()/1000},{session_id:'another-tab',user_id:1,seen_at:Date.now()/1000},{session_id:'expired',seen_at:0}]
+    const peers=[{session_id:'self',user_id:1,name:'管理员',seen_at:Date.now()/1000},{session_id:'another-tab',user_id:1,name:'管理员',seen_at:Date.now()/1000},{session_id:'collaborator',user_id:2,name:'管理员',seen_at:Date.now()/1000},{session_id:'expired',user_id:3,seen_at:0}]
     socket.message({type:'presence',self_id:'self',peers})
-    assert.deepEqual(seen.at(-1).map(p=>p.session_id),['another-tab'])
+    assert.deepEqual(seen.at(-1).map(p=>p.session_id),['collaborator'],'hide all own sessions but keep other users even with the same name')
+    socket.message({type:'presence',self_id:'self',peers:peers.filter(peer=>peer.session_id!=='self')})
+    assert.deepEqual(seen.at(-1).map(p=>p.session_id),['collaborator'],'remember own identity when a later snapshot omits the current session')
     connection.update({cursor:{x:123,y:456},action:'dragging',node_ids:['n'],positions:[{id:'n',x:10,y:20}]})
     await delay(130)
     assert.equal(socket.sent.at(-1).action,'dragging')
@@ -37,7 +39,8 @@ test('presence authenticates without URL credentials, relays state, reconnects a
     socket.disconnect(1006);assert.equal(statuses.at(-1),'offline');assert.deepEqual(seen.at(-1),[])
     await delay(550)
     assert.equal(instances.length,2)
-    instances[1].open();instances[1].message({type:'presence',self_id:'new',peers:[]})
+    instances[1].open();instances[1].message({type:'presence',self_id:'new',peers})
+    assert.deepEqual(seen.at(-1).map(p=>p.session_id),['collaborator'],'reconnect must not show the old connection as another editor')
     assert.equal(instances[1].sent.at(-1).action,'dragging')
     instances[1].disconnect(4403);assert.equal(statuses.at(-1),'denied')
     await delay(550);assert.equal(instances.length,2)

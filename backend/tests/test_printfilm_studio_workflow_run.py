@@ -1,5 +1,6 @@
 """Dependency execution and real wallet settlement in a disposable database."""
 import copy
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -216,3 +217,169 @@ async def test_text_timeout_clears_running_state_and_refunds(store, monkeypatch)
         doc=await db.scalar(select(Document))
         assert next(n for n in doc.document['nodes'] if n['id']=='shot')['data']['status']=='failed'
         assert (await db.get(User,1)).balance_fen==100
+
+
+async def parallel_run(factory, nodes, edges=(), **plan_options):
+    async with factory() as db:
+        row = await db.scalar(select(Document))
+        row.document = {'nodes': [dict(node, position={'x': 0, 'y': 0}) for node in nodes],
+                        'edges': [{'id': a+b, 'source': a, 'target': b} for a, b in edges]}
+        run = Run(project_id=1, user_id=1, status='running',
+                  plan={'ids': [n['id'] for n in nodes], 'settings': {}, **plan_options})
+        db.add(run)
+        await db.commit()
+        return run.id
+
+
+@pytest.mark.asyncio
+async def test_independent_writers_overlap_and_keep_results_and_wallet(store, monkeypatch):
+    factory, _ = store
+    both_started = asyncio.Event()
+    prompts = []
+    async def complete(system, prompt, **kwargs):
+        prompts.append(prompt)
+        if len(prompts) == 2:
+            both_started.set()
+        await asyncio.wait_for(both_started.wait(), 2)
+        return 'result:' + prompt
+    monkeypatch.setattr('app.services.llm_client.chat_completions', complete)
+    identity = await parallel_run(factory, [
+        {'id': name, 'type': 'text', 'data': {'writingPrompt': name}}
+        for name in ('first', 'second')])
+    await asyncio.wait_for(workflow.execute_workflow(identity, {}, factory), 5)
+    async with factory() as db:
+        run = await db.get(Run, identity)
+        assert run.status == 'completed', run.error
+        assert set(run.completed) == {'first', 'second'}
+        doc = await db.scalar(select(Document))
+        assert all(n['data']['text'].startswith('result:') for n in doc.document['nodes'])
+        user = await db.get(User, 1)
+        assert (user.balance_fen, user.frozen_fen) == (90, 0)
+        tasks = (await db.scalars(select(TaskRun))).all()
+        assert len(tasks) == 2 and all(t.billing_charged_fen == 5 for t in tasks)
+
+
+@pytest.mark.asyncio
+async def test_media_submitted_together_and_downstream_starts_before_slow_sibling(store, monkeypatch):
+    factory, _ = store
+    submitted = []
+    all_roots = asyncio.Event()
+    child_started = asyncio.Event()
+    sessions = set()
+    async def media(canvas, kind, prompt, **params):
+        node_id = params['node_id']
+        sessions.add(id(canvas.db))
+        document, _ = await canvas.load()
+        node = next(n for n in document['nodes'] if n['id'] == node_id)
+        # Simulate asynchronous queue admission and exercise the real CAS save.
+        await asyncio.sleep(.01)
+        node['data'].update(status='queued', taskId='task-'+node_id)
+        await canvas.save(document)
+        submitted.append(node_id)
+        if {'fast', 'slow'} <= set(submitted):
+            all_roots.set()
+        if node_id == 'child':
+            assert next(n for n in document['nodes'] if n['id'] == 'fast')['data']['mediaUrl']
+            child_started.set()
+        return {'task_id': 'task-'+node_id}
+    async def tasks(project_id, body, db, user):
+        node_id = body.ids[0].removeprefix('task-')
+        await asyncio.wait_for(all_roots.wait(), 2)
+        if node_id == 'slow':
+            await asyncio.wait_for(child_started.wait(), 2)
+        return {'data': [{'status': 'succeeded', 'result': {'urls': ['/'+node_id+'.png']}}]}
+    monkeypatch.setattr('app.printfilm_studio.integration.media.create_media_task', media)
+    monkeypatch.setattr('app.printfilm_studio.integration.generation_routes.project_tasks', tasks)
+    identity = await parallel_run(factory, [
+        {'id': name, 'type': 'image', 'data': {'prompt': name}}
+        for name in ('fast', 'slow', 'child')], [('fast', 'child')])
+    await asyncio.wait_for(workflow.execute_workflow(identity, {}, factory), 5)
+    async with factory() as db:
+        run = await db.get(Run, identity)
+        assert run.status == 'completed', run.error
+        assert len(run.completed) == 3 and len(sessions) == 3
+        doc = await db.scalar(select(Document))
+        assert all(n['data']['mediaUrl'] == '/'+n['id']+'.png' for n in doc.document['nodes'])
+        assert sorted(submitted) == ['child', 'fast', 'slow']
+
+
+@pytest.mark.asyncio
+async def test_parallel_failure_drains_started_sibling_and_blocks_descendants(store, monkeypatch):
+    factory, _ = store
+    both = asyncio.Event()
+    calls = []
+    async def complete(system, prompt, **kwargs):
+        calls.append(prompt)
+        if len(calls) == 2:
+            both.set()
+        await asyncio.wait_for(both.wait(), 2)
+        if 'bad-input' in prompt:
+            raise ValueError('branch failed')
+        await asyncio.sleep(.1)
+        return 'sibling result'
+    monkeypatch.setattr('app.services.llm_client.chat_completions', complete)
+    identity = await parallel_run(factory, [
+        {'id': name, 'type': 'text', 'data': {'writingPrompt': name}}
+        for name in ('bad-input', 'good-input', 'child')], [('bad-input', 'child')])
+    await asyncio.wait_for(workflow.execute_workflow(identity, {}, factory), 5)
+    async with factory() as db:
+        run = await db.get(Run, identity)
+        assert run.status == 'failed' and 'branch failed' in run.error
+        assert run.completed == ['good-input'] and len(calls) == 2
+        doc = await db.scalar(select(Document))
+        nodes = {n['id']: n['data'] for n in doc.document['nodes']}
+        assert nodes['good-input']['text'] == 'sibling result'
+        assert nodes['bad-input']['status'] == 'failed'
+        assert not nodes['child'].get('status')
+        user = await db.get(User, 1)
+        assert (user.balance_fen, user.frozen_fen) == (95, 0)
+
+
+@pytest.mark.asyncio
+async def test_shutdown_cancels_all_parallel_writers_and_refunds(store, monkeypatch):
+    factory, _ = store
+    both = asyncio.Event()
+    calls = []
+    async def complete(system, prompt, **kwargs):
+        calls.append(prompt)
+        if len(calls) == 2:
+            both.set()
+        await asyncio.Event().wait()
+    monkeypatch.setattr('app.services.llm_client.chat_completions', complete)
+    identity = await parallel_run(factory, [
+        {'id': name, 'type': 'text', 'data': {'writingPrompt': name}}
+        for name in ('first', 'second')])
+    worker = asyncio.create_task(workflow.execute_workflow(identity, {}, factory))
+    try:
+        await asyncio.wait_for(both.wait(), 2)
+    finally:
+        worker.cancel()
+        await asyncio.wait_for(worker, 5)
+    async with factory() as db:
+        assert (await db.get(Run, identity)).status == 'failed'
+        doc = await db.scalar(select(Document))
+        assert all(n['data']['status'] == 'failed' for n in doc.document['nodes'])
+        user = await db.get(User, 1)
+        assert (user.balance_fen, user.frozen_fen) == (100, 0)
+
+
+@pytest.mark.asyncio
+async def test_parallel_worker_limit(store, monkeypatch):
+    factory, _ = store
+    monkeypatch.setattr(workflow, 'WORKFLOW_CONCURRENCY', 2)
+    active = peak = 0
+    async def complete(*args, **kwargs):
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        await asyncio.sleep(.08)
+        active -= 1
+        return 'result'
+    monkeypatch.setattr('app.services.llm_client.chat_completions', complete)
+    identity = await parallel_run(factory, [
+        {'id': str(i), 'type': 'text', 'data': {'writingPrompt': str(i)}} for i in range(5)])
+    await asyncio.wait_for(workflow.execute_workflow(identity, {}, factory), 5)
+    async with factory() as db:
+        run = await db.get(Run, identity)
+        assert run.status == 'completed', run.error
+        assert len(run.completed) == 5 and peak == 2

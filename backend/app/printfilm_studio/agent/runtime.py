@@ -64,6 +64,7 @@ async def iter_agent_turn(
     review_changes: bool = False,
     skill_block: str = "",
     required_tool: str | None = None,
+    planning_node_ids: list[str] | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     """Bounded tool loop; disabled tools are omitted from model context and enforced."""
     document, version = await canvas.load()
@@ -90,6 +91,24 @@ async def iter_agent_turn(
     if required_tool:
         system += f'\n本次创作必须实际调用 {required_tool}。不得以“现在提交”“现在创建”等过渡语结束；下一步必须立即输出该工具的 JSON 调用，只有工具成功或形成改动卡片后才算完成。'
     executions = 0
+    if planning_node_ids and required_tool in {'plan_story_assets', 'plan_story_shots'} and (enabled_tools is None or 'read_canvas' in enabled_tools):
+        # The stage already knows the source script and owned assets. Read them
+        # directly instead of spending model round trips deciding which IDs to read.
+        ids = list(dict.fromkeys(planning_node_ids))
+        for offset in range(0, len(ids), 20):
+            if guard:
+                await guard()
+            if stopped and stopped():
+                return
+            payload = {'node_ids': ids[offset:offset + 20]}
+            call_id = f'prefetch-{offset // 20}'
+            yield {'type': 'tool_start', 'tool': 'read_canvas', 'call_id': call_id, 'data': payload}
+            result = await execute_studio_tool('read_canvas', payload, view, canvas, allow_write=False)
+            yield {'type': 'tool_result', 'tool': 'read_canvas', 'call_id': call_id, 'ok': result.get('ok', False), 'summary': '已读取规划资料' if result.get('ok') else '规划资料读取失败', 'data': result}
+            if not result.get('ok'):
+                raise ValueError('规划资料已变化，请重新选择剧本后重试')
+            conversation.append('系统已调用 read_canvas 读取的完整规划资料：' + json.dumps(result, ensure_ascii=False))
+        system += '\n系统已经执行 read_canvas 并提供完整规划资料。不要重复读取相同节点，直接生成当前阶段的规划工具调用；只有缺少额外资料才补读。'
     review_failures = 0
     required_retries = 0
     required_satisfied = required_tool is None
@@ -101,12 +120,16 @@ async def iter_agent_turn(
         if stopped and stopped():
             return
         buffer = VisibleReplyBuffer()
+        progress_name = '分镜方案' if required_tool == 'plan_story_shots' else '资产方案'
+        if required_tool:
+            yield {'type': 'model_progress', 'content': f'正在等待模型返回{progress_name}（第 {_step + 1} 轮）'}
         # 必需工具缺席后的纠正轮使用完整响应，避免流式特殊标记截断工具 JSON。
         if stream is not None and required_retries == 0:
             source = stream(system, "\n".join(conversation))
             pending = None
             queued = ''
             last_flush = 0.0
+            last_progress = 0.0
             try:
                 while True:
                     pending = asyncio.create_task(anext(source))
@@ -124,6 +147,9 @@ async def iter_agent_turn(
                     except StopAsyncIteration:
                         break
                     queued += buffer.push(chunk)
+                    if required_tool and monotonic() - last_progress >= 2:
+                        yield {'type': 'model_progress', 'content': f'正在接收{progress_name}，已收到 {len(buffer.raw)} 字符'}
+                        last_progress = monotonic()
                     if queued and (len(queued) >= 128 or monotonic() - last_flush >= .1):
                         yield {'type': 'message_delta', 'content': queued}
                         queued, last_flush = '', monotonic()
@@ -156,6 +182,8 @@ async def iter_agent_turn(
         if stopped and stopped():
             return
         visible, action = split_assistant_action(answer)
+        if required_tool and action:
+            yield {'type': 'model_progress', 'content': f'{progress_name}已接收，正在校验节点与连线'}
         remaining = buffer.remainder(visible)
         calls = action.get('tool_calls', [action]) if action else []
         if action:
