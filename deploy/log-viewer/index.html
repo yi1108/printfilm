@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>生产日志 · PRINTFILM</title><link rel="stylesheet" href="./style.css"><script src="./app.js" defer></script></head>
+<body>
+<header><a class="brand" href="/">PRINTFILM <span>OPERATIONS</span></a><a class="back" href="https://admin.printfilm.com/">返回管理后台 ↗</a></header>
+<main>
+  <section class="heading"><div><div class="eyebrow">PRODUCTION / 生产环境</div><h1>运行中的每一刻<span>。</span></h1><p>查看服务请求、任务执行与异常，快速找到问题发生的位置。</p></div><div class="live"><i id="light"></i><span id="connection">等待连接</span><small id="updated">每 5 秒更新</small></div></section>
+  <section id="auth" class="auth" hidden><div><strong id="auth-title">需要日志访问密码</strong><p id="auth-message">请刷新页面，输入专用日志账号和密码。</p></div><div class="actions"><button id="reconnect">重新连接</button></div></section>
+  <section class="console" aria-label="生产日志查看器">
+    <div class="toolbar"><nav aria-label="日志来源"><button class="tab active" data-source="api" aria-pressed="true">API 服务</button><button class="tab" data-source="access" aria-pressed="false">Nginx 访问</button><button class="tab" data-source="error" aria-pressed="false">Nginx 错误</button></nav><div class="actions"><button id="refresh" title="立即刷新">↻ 刷新</button><button id="pause" aria-pressed="false">Ⅱ 暂停</button></div></div>
+    <div class="filters"><label class="search"><span>⌕</span><input id="search" type="search" placeholder="筛选接口、任务编号或错误关键词…" aria-label="筛选日志关键词" maxlength="200"></label><select id="level" aria-label="日志级别"><option value="all">全部级别</option><option value="error">错误 / 5xx</option><option value="warning">警告 / 4xx</option><option value="info">常规信息</option></select><label class="noise"><input id="noise" type="checkbox" checked>隐藏健康检查</label></div>
+    <div class="meta"><span id="window">最近日志</span><span id="count">0 条</span></div>
+    <div id="error-message" class="error-message" role="status" hidden></div>
+    <div id="logs" class="logs" tabindex="0" aria-label="日志内容"><div class="empty"><span>⌁</span><strong>正在连接日志</strong><p>连接后将显示最新原始日志。</p></div></div>
+    <footer><span><i></i>只读视图 · 原始日志</span><span id="foot-status">日志时间遵循原始记录，采集时间为北京时间</span></footer>
+  </section>
+  <p class="note">记录按源日志顺序显示，最新记录在底部。筛选仅作用于当前采集窗口；暂停后可固定内容排查。</p>
+</main>
+</body></html>

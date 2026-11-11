@@ -295,6 +295,9 @@ async def record_seedream_image_usage(
             raw["usage"] = {**(raw.get("usage") or {}), **raw_usage}
     if upstream_cost is not None:
         raw["usage"] = {**(raw.get("usage") or {}), "cost_fen": int(upstream_cost)}
+    if delivered and image_result is not None:
+        # Each call records one delivered image, even when the provider omits usage.
+        raw["usage"] = {**(raw.get("usage") or {}), "image_count": 1}
     if not delivered:
         raw.pop("delivery_id", None)
         if isinstance(raw.get("usage"), dict):

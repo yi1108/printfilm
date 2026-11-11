@@ -1,0 +1,23 @@
+[Unit]
+Description=Printfilm production log snapshots
+After=docker.service
+
+[Service]
+Type=oneshot
+Group=printfilm-logs
+ExecStart=/usr/bin/python3 /opt/printfilm-log-viewer/current/collector.py
+RuntimeDirectory=printfilm-log-viewer
+RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=yes
+UMask=0027
+TimeoutStartSec=20
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ReadWritePaths=/run/printfilm-log-viewer
+MemoryMax=128M
+CPUQuota=20%
+TasksMax=16
+RestrictSUIDSGID=yes

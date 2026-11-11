@@ -15,7 +15,7 @@ from app.deps import get_current_user
 from app.models import ToolRun, User
 from app.models_tasks import TaskRun
 from app.models_drama import DramaAsset, DramaProject
-from app.schemas_tools import ToolEstimateRequest, ToolReferenceAssetOut, ToolRunListOut, ToolRunOut, ToolRunRecordOut, ToolTaskOut
+from app.schemas_tools import ToolEstimateRequest, ToolReferenceAssetOut, ToolRunListOut, ToolRunOut, ToolRunRecordOut, ToolTaskOut, ToolTaskQueryOut, ToolTaskQueryRequest
 from app.services.billing import settle_deferred_video_poll
 from app.services.billing.http import http_exception_for_value_error
 from app.services.studio_generation import enqueue_generation, sync_generation_record, validate_generation
@@ -86,7 +86,7 @@ async def estimate_generation(
         params.update(await reference_params(db, user, params["references"]))
         validate_generation(body.tool_id, body.prompt, params, 0, quote=True)
         payload = {**params, "tool_id": body.tool_id, "duration": int(str(body.duration).removesuffix("s")),
-                   "generate_audio": False}
+                   "generate_audio": params["generate_audio"]}
         task = TaskRun(domain="studio", task_type="tool_video", requested_by=user.id, payload=payload)
         await prepare_task_media(db, task)
         enabled = billing_active(user)
@@ -117,6 +117,8 @@ async def run_tool(
     pack: str = Form("", max_length=32, description="电商图片组合方式：主图拼接、详情排版或卖点海报"), duration: str = Form("", max_length=16, description="生成视频的时长，如 5s；支持范围取决于所选模型"),
     motion: str = Form("", max_length=16, description="视频运动幅度：弱、强，其他值使用中等运动"), voice: str = Form("narrator_calm", max_length=64, description="配音音色：narrator_calm、warm_storyteller 或 teacher_clear"),
     model_id: str = Form("", max_length=128, description="生成模型标识；留空时使用工具默认模型"), resolution: str = Form("", max_length=16, description="输出分辨率，按所选模型支持的值填写"),
+    generate_audio: bool | None = Form(default=None, description="生成声音；留空按模型能力默认开启"),
+    node_id: str = Form("", max_length=128, description="画布节点编号，供批量轮询按 node_id 回写"),
     video_mode: str = Form("", max_length=32, description="视频模式：text_to_video 文生视频、first_last_frame 首尾帧、omni_reference 全能参考；留空兼容旧流程"), references: str = Form("[]", max_length=8000, description="最多 12 项的 JSON 数组；每项包含 role，并且仅提供 file_index 上传文件索引或 asset_id 个人资产编号之一"),
     price_version: int | None = Form(default=None, ge=0, description="客户端确认的价格版本；传入有效版本时用于价格一致性校验"),
     files: list[UploadFile] | None = File(default=None, description="参考图片、视频或音频文件；单个文件最大 40 MB，格式由工具及素材角色决定"),
@@ -124,7 +126,9 @@ async def run_tool(
 ) -> ToolRunOut:
     tid = tool_id.strip()
     params = dict(negative=negative, ratio=ratio, strength=strength, mode=mode, pack=pack,
-                  duration=duration, motion=motion, voice=voice, model_id=model_id, resolution=resolution)
+                  duration=duration, motion=motion, voice=voice, model_id=model_id, resolution=resolution, generate_audio=generate_audio)
+    if node_id.strip():
+        params["node_id"] = node_id.strip()
     saved = []
     try:
         if video_mode:
@@ -145,7 +149,13 @@ async def run_tool(
             if not raw or len(raw) > MAX_UPLOAD_BYTES:
                 raise ValueError("文件不能为空，且单个文件不能超过 40MB")
             name = item.filename or "upload.png"
-            suffix = name.rsplit(".", 1)[-1].lower()
+            suffix = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+            if suffix not in {"jpg", "jpeg", "png", "webp", "mp4", "mov", "webm"}:
+                mime = (item.content_type or "").split(";", 1)[0].lower()
+                sniffed = "png" if raw.startswith(b"\x89PNG") or mime == "image/png" else "webp" if (len(raw) >= 12 and raw[8:12] == b"WEBP") or mime == "image/webp" else "jpg" if raw.startswith(b"\xff\xd8") or mime in {"image/jpeg", "image/jpg"} else ""
+                if sniffed:
+                    name = f"{name}.{sniffed}"
+                    suffix = sniffed
             if video_mode:
                 validate_upload(raw, name, upload_kinds[index], item.content_type)
             elif suffix in {"mp4", "mov", "webm"} and tid == "v2v":
@@ -161,7 +171,7 @@ async def run_tool(
             saved.append(save_upload(user.id, raw, name))
         if video_mode:
             params.update(await reference_params(db, user, params["references"], files=saved))
-        data = await enqueue_generation(db, user, tool_id=tid, prompt=prompt, params=params, files=saved)
+        data = await enqueue_generation(db, user, tool_id=tid, prompt=prompt, params=params, files=saved, drama_project_id=db.info.get('printfilm_studio_project_id'))
         await db.commit()
     except ValueError as exc:
         await db.rollback()
@@ -174,6 +184,74 @@ async def run_tool(
             path.unlink(missing_ok=True)
         raise
     return ToolRunOut.model_validate(data)
+
+
+def _canvas_task_status(status: str) -> str:
+    """把平台状态收成画布轮询使用的 running / succeeded / failed。"""
+    if status in {"pending", "leased", "queued", "running", "awaiting_poll"}:
+        return "running"
+    if status == "succeeded":
+        return "succeeded"
+    return status or "running"
+
+
+def _canvas_task_item(row: ToolRun, user: User) -> dict:
+    """把一条生成记录整理成批量查询项。"""
+    params = row.params or {}
+    status = _canvas_task_status(row.status)
+    urls = [str(item) for item in (row.urls or []) if item]
+    created = row.created_at.timestamp() if row.created_at else 0
+    return {
+        "id": row.task_id or "",
+        "status": status,
+        "result": {"urls": urls, "preview_url": row.preview_url} if status == "succeeded" and urls else None,
+        "error": row.error,
+        "user_id": str(user.id),
+        "node_id": str(params.get("node_id") or ""),
+        "created_at": created,
+        "spec": {
+            "prompt": row.prompt or "",
+            "model": str(params.get("model_id") or ""),
+            "size": str(params.get("ratio") or "auto"),
+            "count": int(str(params.get("pack") or "1") or 1) if str(params.get("pack") or "1").isdigit() else 1,
+            "references": params.get("references") if isinstance(params.get("references"), list) else [],
+            "image_options": {},
+            "mask": "",
+        },
+        "kind": row.kind or "image",
+    }
+
+
+@router.post(
+    "/tasks/query",
+    response_model=ToolTaskQueryOut,
+    summary="按编号批量查询画布生成任务",
+    description="需要登录。一次传入最多 50 个任务编号，返回状态、结果和所属节点；查不到的编号放在 missing_ids。",
+    response_description="任务状态列表",
+)
+async def query_tool_tasks(body: ToolTaskQueryRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)) -> ToolTaskQueryOut:
+    wanted = []
+    for raw in body.ids:
+        task_id = str(raw or "").strip()
+        if task_id and task_id not in wanted:
+            wanted.append(task_id)
+    if not wanted:
+        return ToolTaskQueryOut()
+    rows = list((await db.execute(
+        select(ToolRun).where(ToolRun.user_id == user.id, ToolRun.task_id.in_(wanted))
+    )).scalars().all())
+    data = []
+    found = set()
+    for row in rows:
+        task = await sync_generation_record(db, row)
+        if task and task.result_payload and task.result_payload.get("urls") and not row.urls:
+            row.urls = list(task.result_payload["urls"])
+        item = _canvas_task_item(row, user)
+        if item["id"]:
+            found.add(item["id"])
+            data.append(item)
+    await db.commit()
+    return ToolTaskQueryOut(data=data, missing_ids=[task_id for task_id in wanted if task_id not in found])
 
 
 @router.get(
@@ -240,6 +318,7 @@ async def list_runs(
     kind: str | None = Query(None, pattern="^(video|image|audio)$", description="媒体类型：video 视频、image 图片、audio 音频"),
     status: str | None = Query(None, pattern="^(processing|succeeded|failed|cancelled)$", description="记录状态：processing 处理中、succeeded 成功、failed 失败、cancelled 已取消"),
     task_id: str | None = Query(None, max_length=128, description="任务标识，可匹配工具、平台或供应商任务编号"),
+    q: str | None = Query(None, max_length=200, description="搜索提示词"),
     created_from: datetime | None = None, created_to: datetime | None = None,
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ) -> ToolRunListOut:
@@ -248,6 +327,8 @@ async def list_runs(
     task_ref = func.coalesce(ToolRun.params["platform_task_id"].as_integer(), ToolRun.params["billing_task_id"].as_integer())
     join = (TaskRun.id == task_ref) & (TaskRun.requested_by == ToolRun.user_id)
     filters = [ToolRun.user_id == user.id]
+    if isinstance(q, str) and q.strip():
+        filters.append(ToolRun.prompt.icontains(q.strip(), autoescape=True))
     if kind:
         filters.append(ToolRun.kind == kind)
     if task_id:

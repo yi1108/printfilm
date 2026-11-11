@@ -1,0 +1,79 @@
+.pf-studio-shell .pf-workspace-toolbar {
+  --toolbar-panel:#fff; --toolbar-line:#e7e5ed; --toolbar-ink:#35343d;
+  --toolbar-accent:#78559b; --toolbar-hover:#eeedf3; --toolbar-active:#eee7f5;
+  display:flex; align-items:center; gap:5px; flex:none; width:max-content;
+  box-sizing:border-box; padding:6px; border:1px solid var(--toolbar-line);
+  border-radius:12px; background:var(--toolbar-panel); color:var(--toolbar-ink);
+  box-shadow:0 2px 12px #27203408;
+}
+.pf-studio-shell.is-dark .pf-workspace-toolbar {
+  --toolbar-panel:#282630; --toolbar-line:#45404f; --toolbar-ink:#e9e4ee;
+  --toolbar-hover:#403849; --toolbar-active:#493b59;
+}
+.pf-studio-shell .pf-workspace-toolbar > button,
+.pf-studio-shell .pf-workspace-toolbar > .pf-board-add > button {
+  display:inline-flex; align-items:center; justify-content:center; gap:6px; flex:none;
+  width:38px; min-width:38px; height:38px; padding:8px; box-sizing:border-box;
+  border:0; border-radius:8px; background:transparent; color:var(--toolbar-ink);
+  font:13px/1 'Segoe UI','Microsoft YaHei',sans-serif; cursor:pointer; white-space:nowrap;
+}
+.pf-studio-shell .pf-workspace-toolbar button > svg { width:19px; height:19px; flex:none; }
+.pf-studio-shell .pf-workspace-toolbar > button:hover:not(:disabled),
+.pf-studio-shell .pf-workspace-toolbar > .pf-board-add > button:hover:not(:disabled) { background:var(--toolbar-hover); }
+.pf-studio-shell .pf-workspace-toolbar > button[aria-pressed=true],
+.pf-studio-shell .pf-workspace-toolbar > button.is-active { background:var(--toolbar-active); color:var(--toolbar-accent); }
+.pf-studio-shell .pf-workspace-toolbar > .pf-toolbar-primary,
+.pf-studio-shell .pf-workspace-toolbar > .pf-board-add > .pf-toolbar-primary { width:40px; background:var(--toolbar-accent); color:#fff; }
+.pf-studio-shell .pf-workspace-toolbar > .pf-toolbar-primary:hover:not(:disabled),
+.pf-studio-shell .pf-workspace-toolbar > .pf-board-add > .pf-toolbar-primary:hover:not(:disabled) { background:#694788; }
+.pf-studio-shell .pf-workspace-toolbar .pf-toolbar-primary > svg { width:23px; height:23px; }
+.pf-studio-shell .pf-workspace-toolbar button:disabled { opacity:.4; cursor:not-allowed; }
+.pf-studio-shell .pf-workspace-toolbar button:focus-visible { outline:2px solid #ac8cc7; outline-offset:2px; }
+.pf-studio-shell .pf-workspace-toolbar > .pf-toolbar-label { width:auto; min-width:38px; padding-inline:10px; }
+.pf-studio-shell .pf-workspace-toolbar > .pf-toolbar-zoom { min-width:32px; text-align:center; font-size:12px; font-variant-numeric:tabular-nums; }
+.pf-workspace-toolbar .pf-dock-sep { background:var(--toolbar-line); }
+.pf-canvas-dock { position:absolute; left:50%; bottom:16px; transform:translateX(-50%); z-index:12; }
+.pf-studio-shell .pf-canvas-agent {
+  position:absolute; left:calc(100% + 18px); top:50%; transform:translateY(-50%);
+  display:grid; place-items:center; width:50px; height:50px; padding:8px;
+  border:1px solid #8e73a8; border-radius:16px; cursor:pointer;
+  background:#3d2d50; color:#f3eafa;
+  box-shadow:inset 0 1px 0 #ffffff24,0 4px 12px #35244724;
+  transition:background .18s ease,box-shadow .18s ease,border-color .18s ease;
+}
+.pf-canvas-agent-mark { width:32px; height:32px; overflow:visible; transition:transform .18s ease; }
+.pf-canvas-agent-mark > path { stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.pf-canvas-agent-mark > .pf-canvas-agent-play { fill:#e6d4f7; stroke:none; }
+.pf-canvas-agent-mark > .pf-canvas-agent-spark { fill:#dbefab; stroke:none; }
+.pf-studio-shell .pf-canvas-agent:hover { background:#513c69; border-color:#ad8dcb; box-shadow:inset 0 1px 0 #ffffff30,0 5px 18px #35244730; }
+.pf-canvas-agent:hover .pf-canvas-agent-mark { transform:translateY(-1px) rotate(-5deg); }
+.pf-studio-shell .pf-canvas-agent.is-open { background:#684c85; border-color:#d1b6e7; box-shadow:0 0 0 3px #9773b825,0 4px 12px #35244724; }
+.pf-studio-shell .pf-canvas-agent:focus-visible { outline:3px solid #ac8cc7; outline-offset:4px; }
+.pf-studio-shell .pf-canvas-agent:active .pf-canvas-agent-mark { transform:scale(.94); }
+.pf-canvas-agent-status { position:absolute; right:3px; top:3px; width:8px; height:8px; border-radius:50%; background:#dbefab; border:2px solid #3d2d50; }
+.pf-canvas-agent-tooltip {
+  position:absolute; left:50%; bottom:calc(100% + 12px); transform:translate(-50%,4px);
+  display:flex; align-items:center; gap:8px; padding:9px 12px; border-radius:9px;
+  color:#f9f5fc; background:#352a42; box-shadow:0 4px 16px #35244720;
+  white-space:nowrap; font-family:inherit; font-size:12px; line-height:1.3; pointer-events:none; opacity:0; visibility:hidden;
+  transition:opacity .15s ease,transform .15s ease,visibility .15s ease;
+}
+.pf-canvas-agent-tooltip b { font-size:12px; letter-spacing:.02em; }
+.pf-canvas-agent-tooltip > span { color:#d3c5df; font-size:11px; }
+.pf-canvas-agent:hover .pf-canvas-agent-tooltip,.pf-canvas-agent:focus-visible .pf-canvas-agent-tooltip { opacity:1; visibility:visible; transform:translate(-50%,0); }
+.pf-studio-shell.is-dark .pf-canvas-agent { background:#4d385f; border-color:#9b7ab4; box-shadow:inset 0 1px 0 #ffffff1c,0 4px 16px #0003; }
+.pf-canvas-navigation { position:absolute; left:16px; bottom:16px; z-index:7; }
+@media(max-width:1250px) { .pf-canvas-navigation { bottom:80px; } }
+@media(max-width:600px) {
+  .pf-studio-shell .pf-workspace-toolbar { gap:2px; padding:5px; }
+  .pf-canvas-dock { display:flex; align-items:center; gap:10px; width:max-content; max-width:calc(100% - 20px); }
+  .pf-canvas-dock > .pf-workspace-toolbar { flex:0 1 auto; min-width:0; overflow-x:auto; }
+  .pf-studio-shell .pf-canvas-agent { position:relative; left:auto; top:auto; transform:none; flex:none; width:46px; height:46px; border-radius:14px; }
+  .pf-canvas-agent-tooltip { left:auto; right:0; transform:translateY(4px); }
+  .pf-canvas-agent:hover .pf-canvas-agent-tooltip,.pf-canvas-agent:focus-visible .pf-canvas-agent-tooltip { transform:translateY(0); }
+  .pf-canvas-navigation { left:10px; max-width:calc(100% - 20px); overflow-x:auto; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .pf-studio-shell .pf-canvas-agent,.pf-canvas-agent-mark,.pf-canvas-agent-tooltip { transition:none; }
+  .pf-canvas-agent:hover .pf-canvas-agent-mark,.pf-studio-shell .pf-canvas-agent:active .pf-canvas-agent-mark { transform:none; }
+}

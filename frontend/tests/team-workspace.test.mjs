@@ -3,13 +3,11 @@ import assert from 'node:assert/strict'
 import { workspaceScope, setWorkspaceTeam, scopedRequestInit } from '../src/features/teams/workspaceScope.ts'
 import { apiErrorMessage, createHttpTransport, isRequestAborted } from '../src/api/http.ts'
 
-test('首次切空间也取消最初的个人请求', () => {
-  const initial = workspaceScope.signal
+test('retired team switching cannot change the request scope', () => {
+  const initial=workspaceScope.signal
   setWorkspaceTeam(77)
-  assert.equal(initial.aborted, true)
-  assert.equal(initial.reason.name, 'AbortError')
-  assert.match(initial.reason.message, /空间|身份/)
-  setWorkspaceTeam(null)
+  assert.equal(workspaceScope.teamId,null)
+  assert.equal(initial.aborted,false)
 })
 
 test('主动取消不作为业务报错展示，真正的网络和权限错误仍保留', () => {
@@ -48,14 +46,11 @@ test('换登录账号即使仍在个人空间也取消旧身份请求', () => {
   assert.equal(previousAccount.aborted, true)
 })
 
-test('团队范围只附加到创作接口，切回个人立即清除', () => {
+test('retired team scope is never sent to creative or billing APIs', () => {
   setWorkspaceTeam(12)
-  assert.equal(new Headers(scopedRequestInit('/api/drama/projects').headers).get('X-Team-Id'), '12')
-  assert.equal(new Headers(scopedRequestInit('/api/billing/wallet').headers).get('X-Team-Id'), null)
-  const previous = workspaceScope.signal
-  setWorkspaceTeam(null)
-  assert.equal(previous.aborted, true)
-  assert.equal(new Headers(scopedRequestInit('/api/drama/projects').headers).get('X-Team-Id'), null)
+  for(const path of ['/api/drama/projects','/api/billing/wallet','/api/tasks']) {
+    assert.equal(new Headers(scopedRequestInit(path).headers).get('X-Team-Id'),null)
+  }
 })
 
 test('显式归属读取不继承团队空间，调用方头信息仍保留', () => {
@@ -72,7 +67,7 @@ test('后台写入按资源真实归属传递，不受当前导航空间影响',
   assert.equal(new Headers(own.headers).get('X-Team-Id'), null)
   assert.equal(new Headers(own.headers).get('X-Workspace-Personal'), null)
   const actual = scopedRequestInit('/api/drama/assets/4', { method: 'PATCH', headers: { 'X-Team-Id': '9', 'X-Edit-Token': 'lease' } })
-  assert.equal(new Headers(actual.headers).get('X-Team-Id'), '9')
+  assert.equal(new Headers(actual.headers).get('X-Team-Id'), null)
   assert.equal(new Headers(actual.headers).get('X-Edit-Token'), 'lease')
   setWorkspaceTeam(null)
 })

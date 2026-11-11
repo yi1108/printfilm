@@ -14,6 +14,7 @@ from app.deps import get_current_user
 from app.models import UsageEvent, User
 from app.models_drama import DramaAsset, DramaEpisode, DramaProject, DramaScript
 from app.models_tasks import TaskRun
+from app.printfilm_studio.sharing import CanvasMember
 from app.schemas_common import PageMeta
 from app.schemas_drama import (
     DramaProjectCreate,
@@ -63,7 +64,7 @@ def _project_out(project: DramaProject, usage: DramaProjectUsageStats | None = N
     return DramaProjectOut(
         id=project.id,
         user_id=project.user_id,
-        team_id=project.team_id,
+        team_id=None,
         title=project.title,
         description=project.description,
         content=project.content,
@@ -139,11 +140,9 @@ def _status_condition(status: str | None):
     summary="分页查询漫剧与自由画布项目",
     description=(
         "查询当前空间内可访问的项目，按更新时间、项目编号倒序排列。"
-        "不传 team_id 查询参数或 X-Team-Id 请求头时，仅列出本人个人空间项目；"
-        "指定团队空间时列出该团队项目，需为有效团队成员，二者同时提供时必须一致。"
+        "画布项目包含本人创建和已加入的项目，relation 按 all/owned/joined 分类。旧团队空间已停用。"
         "工作流、进度、标题筛选均在分页前执行；超过最后一页的页码自动回落到最后一页。"
-        "usage 仅汇总当前计费空间的项目用量：团队所有者查看团队合计，其他成员仅查看本人用量，"
-        "迁入团队前的个人用量不计入团队统计。进度筛选依据剧本、资产和分集数量，非任务运行状态。"
+        "usage 仅显示当前用户的个人用量。进度筛选依据剧本、资产和分集数量，非任务运行状态。"
     ),
     response_description="项目列表及分页信息，每项包含工作流、封面状态和可见用量统计",
 )
@@ -152,6 +151,7 @@ async def list_projects(
     user: User = Depends(get_current_user),
     scope_team_id: int | None = Depends(workspace_team),
     workflow: Annotated[Literal["script", "canvas"] | None, Query(description="工作流：script 为剧本分集，canvas 为自由画布；省略时查询全部，兼容按标题及创意识别的历史画布项目")] = None,
+    relation: Literal["all", "owned", "joined"] = Query("all", description="创建或参与的画布项目"),
     status: Literal["all", "running", "done", "draft"] | None = Query(None, description="进度：all 或省略为全部；draft 为无资产的画布或无剧本的漫剧；running 为已有资产的画布或有剧本且至少 1 集的漫剧；done 为有剧本且至少 8 集的漫剧。running 与 done 可重叠，画布不进入 done"),
     q: str | None = Query(None, description="项目标题的大小写不敏感子串搜索，忽略首尾空白，% 和 _ 按普通字符匹配；空值不筛选"),
     page: int = Query(1, ge=1, description="页码，从 1 开始；超出范围时返回最后一页，空列表页码为 1"),
@@ -159,11 +159,10 @@ async def list_projects(
 ) -> DramaProjectListOut:
     # List current workspace's drama projects, paged；筛选与分页均在服务端完成
     team_id = scope_team_id if isinstance(scope_team_id, int) else None
-    conditions = [
-        DramaProject.team_id == team_id
-        if team_id is not None
-        else ((DramaProject.user_id == user.id) & DramaProject.team_id.is_(None))
-    ]
+    owned = DramaProject.user_id == user.id
+    joined = and_(~owned, _workflow_condition("canvas"), exists(select(CanvasMember.id).where(CanvasMember.project_id == DramaProject.id, CanvasMember.user_id == user.id)))
+    relation = relation if isinstance(relation, str) else "all"
+    conditions = [owned if workflow == "script" or relation == "owned" else joined if relation == "joined" else or_(owned, joined)]
     if workflow is not None:
         conditions.append(_workflow_condition(workflow))
     status_cond = _status_condition(status)
@@ -198,7 +197,8 @@ async def list_projects(
         items.append(
             DramaProjectListItem(
                 id=p.id,
-                team_id=p.team_id,
+                team_id=None,
+                is_owner=p.user_id == user.id,
                 title=p.title,
                 description=p.description,
                 created_at=p.created_at,
@@ -221,8 +221,7 @@ async def list_projects(
     summary="创建漫剧或自由画布项目",
     description=(
         "创建项目及初始剧本草稿，source 去除首尾空白后至少 20 字。标题为空时按创意前 40 字自动生成。"
-        "team_id 优先使用请求体，否则沿用 team_id 查询参数或 X-Team-Id 指定的当前空间；"
-        "请求体与当前团队空间不一致时返回 422，创建团队项目需为该团队成员。"
+        "项目归属创建者，成员通过画布项目分享加入。旧 team_id 参数返回 410。"
         "params 会保留扩展配置，但 workflow、episode_count、image_style_id 以请求的专用字段为准；"
         "自由画布项目的目标集数保存为 0，剧本生成状态标记为 skipped。此接口不启动 AI 生成任务。"
     ),
@@ -254,7 +253,7 @@ async def create_project(
     if body.team_id and isinstance(scope_team_id, int) and body.team_id != scope_team_id:
         raise HTTPException(status_code=422, detail="项目团队与当前空间不匹配")
     if team_id is not None:
-        await get_team(db, team_id, user.id, lock=True)
+        raise HTTPException(status_code=410, detail="独立团队已停用，请通过画布项目分享邀请成员")
     project = DramaProject(
         user_id=user.id,
         team_id=team_id,
@@ -306,7 +305,7 @@ async def get_project(
     project = await get_owned_drama_project(
         db, project_id, user, with_script=True, with_assets=True, with_episodes=True
     )
-    usage = await get_drama_project_usage(db, user_id=await _usage_actor(db, project.team_id, user.id), project_id=project.id, team_id=project.team_id)
+    usage = await get_drama_project_usage(db, user_id=user.id, project_id=project.id, team_id=None)
     return _project_out(project, usage)
 
 
@@ -318,8 +317,7 @@ async def get_project(
         "按 project_id 更新项目，省略或传 null 的字段保持原值；title 去除首尾空白后为空时保留原标题。"
         "content 与 params 均整体替换，不做增量合并，调用方应保留仍需使用的配置。"
         "镜间尾帧衔接开关变化时，会按新设置重排仍在排队的分镜视频任务。"
-        "个人项目需为所有者；团队项目需为有效成员，并携带结构资源的 X-Edit-Session、"
-        "X-Edit-Token、X-Edit-Version 编辑租约请求头，租约或任务占用冲突时无法写入。"
+        "此项目管理接口仅限所有者；协作者通过画布专用接口编辑。"
     ),
     response_description="更新后的完整项目详情及当前用户可见的累计用量",
 )
@@ -354,7 +352,7 @@ async def update_project(
     project = await get_owned_drama_project(
         db, project_id, user, with_script=True, with_assets=True, with_episodes=True
     )
-    usage = await get_drama_project_usage(db, user_id=await _usage_actor(db, project.team_id, user.id), project_id=project.id, team_id=project.team_id)
+    usage = await get_drama_project_usage(db, user_id=user.id, project_id=project.id, team_id=None)
     return _project_out(project, usage)
 
 
@@ -364,8 +362,7 @@ async def update_project(
     description=(
         "按 project_id 删除项目并级联清理剧本、资产、分集及分镜等关联数据，同时请求取消关联任务。"
         "任务与用量历史保留，仅解除对已删除项目和子资源的外键引用。"
-        "个人项目需为所有者；团队项目仅团队所有者或管理员可删除，"
-        "且需携带结构资源的 X-Edit-Session、X-Edit-Token、X-Edit-Version 编辑租约请求头，不能存在冲突任务。"
+        "仅项目所有者可以删除。"
     ),
     response_description="删除成功标记，ok 为 true",
 )

@@ -152,6 +152,8 @@ async def create_task(
     )
     from app.services.media_models.planning import prepare_task_media
     await prepare_task_media(db, balance_probe)
+    if body.domain == "studio" and body.drama_project_id is not None:
+        balance_probe.billing_payer_user_id = user.id
     estimate_fen = await ensure_balance_for_task(db, user, balance_probe)
     planned_steps = handler.plan_steps(body)
     first_step = planned_steps[0] if planned_steps else None
@@ -920,6 +922,22 @@ async def count_user_active_runtime_tasks(db: AsyncSession, user_id: int, *, que
 
 async def _validate_task_scope(db: AsyncSession, user: User, body: TaskCreateRequest) -> None:
     """Resolve every reference to its persisted project; never trust client team IDs."""
+    if body.domain == 'studio' and body.drama_project_id is not None:
+        # Studio's grant is limited to this canvas and cannot create drama tasks.
+        from app.printfilm_studio.sharing import project_for
+        if body.task_type not in {'tool_image', 'tool_video', 'tool_audio'} or any(
+            value is not None for value in (body.project_id, body.shot_id, body.script_id, body.episode_id, body.fragment_id, body.asset_id)
+        ):
+            raise ValueError('画布权限不允许操作其他项目内容')
+        if body.team_id is not None:
+            raise ValueError('画布生成使用发起人的个人余额')
+        await project_for(db, body.drama_project_id, user, lock=True)
+        for asset_id in (body.payload or {}).get('reference_asset_ids') or []:
+            asset = await db.get(DramaAsset, int(asset_id))
+            if not asset or asset.project_id != body.drama_project_id:
+                raise ValueError('引用资产不属于当前画布')
+        body.team_id = None
+        return
     if body.project_id is not None:
         project = await db.get(Project, body.project_id)
         if not project or int(project.user_id) != int(user.id):
@@ -964,6 +982,8 @@ async def _validate_task_scope(db: AsyncSession, user: User, body: TaskCreateReq
         project_ids.add(int(asset.project_id))
     if len(project_ids) > 1:
         raise ValueError("任务资源与漫剧项目不匹配")
+    if body.team_id is not None:
+        raise ValueError("独立团队已停用，生成费用使用发起人的个人余额")
     actual_team_id = None
     if project_ids:
         pid = project_ids.pop()
@@ -971,10 +991,7 @@ async def _validate_task_scope(db: AsyncSession, user: User, body: TaskCreateReq
         if project is None:
             raise ValueError("漫剧项目不存在或无权限")
         actual_team_id = project.team_id
-        if actual_team_id is not None:
-            from app.services.teams.access import get_team
-            await get_team(db, int(actual_team_id), int(user.id), lock=True)
-        elif int(project.user_id) != int(user.id):
+        if int(project.user_id) != int(user.id):
             raise ValueError("漫剧项目不存在或无权限")
         # Hold project ownership through task insertion. A concurrent personal transfer
         # must either observe this active task or finish before our scope is accepted.
@@ -986,14 +1003,14 @@ async def _validate_task_scope(db: AsyncSession, user: User, body: TaskCreateReq
         )).one_or_none()
         if locked_project is None or locked_project.team_id != actual_team_id:
             raise ValueError("项目归属已变化，请刷新页面后重试")
-        if actual_team_id is None and int(locked_project.user_id) != int(user.id):
+        if int(locked_project.user_id) != int(user.id):
             raise ValueError("漫剧项目不存在或无权限")
         body.drama_project_id = pid
     if body.team_id is not None and body.team_id != actual_team_id:
         raise ValueError("任务与团队不匹配")
     if actual_team_id is not None and body.domain != "drama":
         raise ValueError("当前功能不支持团队空间")
-    body.team_id = actual_team_id
+    body.team_id = None
 
 
 async def get_task_for_user(

@@ -16,7 +16,7 @@ import { HOME_NAV, CREATION_NAV, RESOURCE_NAV, PERSONAL_NAV, resolveNavActive, t
 import { useI18n } from '../../i18n'
 import LanguageSwitch from './LanguageSwitch'
 import AccountMenu from './AccountMenu'
-import { useTeamPreview } from '../../features/teams/useTeamPreview'
+import { setWorkspaceTeam } from '../../features/teams/workspaceScope'
 import { useMarketplace } from '../../features/marketplace/hooks'
 
 export type { NavActive } from '../../lib/siteNavigation'
@@ -38,7 +38,7 @@ export default function SiteNav({ active }: Props) {
   const nav = useNavigate()
   const location = useLocation()
   const { t, locale } = useI18n()
-  const { selectTeam } = useTeamPreview()
+  const selectTeam = setWorkspaceTeam
   const [user, setUser] = useState<User | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)

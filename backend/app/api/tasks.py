@@ -128,9 +128,9 @@ async def create_mock_delay_task(
 
 
 def _generation_workspace(team_id: int | None, workspace_team_id: int | None) -> int | None:
-    if team_id is not None and workspace_team_id is not None and team_id != workspace_team_id:
-        raise HTTPException(status_code=422, detail="团队空间参数不一致")
-    return team_id if team_id is not None else workspace_team_id
+    if team_id is not None or workspace_team_id is not None:
+        raise HTTPException(status_code=410, detail="独立团队已停用，请按画布项目查看生成记录")
+    return None
 
 
 @router.get(
@@ -239,9 +239,7 @@ async def list_task_runs(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> TaskListOut:
-    if team_id is not None and workspace_team_id is not None and team_id != workspace_team_id:
-        raise HTTPException(status_code=422, detail="团队空间参数不一致")
-    selected_team_id = team_id if team_id is not None else workspace_team_id
+    selected_team_id = _generation_workspace(team_id, workspace_team_id)
     access: TaskAccessContext = {}
     rows, total = await list_tasks_for_user(
         db,

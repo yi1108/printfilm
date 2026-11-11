@@ -35,6 +35,7 @@ class ToolEstimateRequest(BaseModel):
     prompt: str = Field(default="", max_length=7000)
     model_id: str = Field(default="", max_length=128)
     video_mode: VideoMode
+    generate_audio: bool | None = None
     ratio: str = Field(default="9:16", max_length=16)
     resolution: str = Field(default="480p", max_length=16)
     duration: str | int = "5s"
@@ -65,6 +66,31 @@ class ToolTaskOut(BaseModel):
     provider_task_id: str | None = None
     queue_type: str | None = None
     preview_url: str | None = None
+
+
+class ToolTaskQueryRequest(BaseModel):
+    """按任务编号批量查询画布生成状态。"""
+
+    ids: list[str] = Field(default_factory=list, max_length=50)
+
+
+class ToolTaskQueryItem(BaseModel):
+    """单条生成任务，字段对齐画布批量轮询。"""
+
+    id: str
+    status: str
+    result: dict | None = None
+    error: str | None = None
+    user_id: str
+    node_id: str = ""
+    created_at: float = 0
+    spec: dict = Field(default_factory=dict)
+    kind: str = "image"
+
+
+class ToolTaskQueryOut(BaseModel):
+    data: list[ToolTaskQueryItem] = Field(default_factory=list)
+    missing_ids: list[str] = Field(default_factory=list)
 
 
 class ToolRunRecordOut(BaseModel):

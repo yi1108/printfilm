@@ -329,6 +329,7 @@ async def test_seedream_once_protocol_error_raises(monkeypatch):
 
     settings = Settings(
         ark_mock=False,
+        local_media_mock=False,
         ark_api_key="sk-test",
         ark_base_url="https://www.tokenfree.com/v1",
     )
@@ -384,6 +385,7 @@ async def test_seedream_once_http200_failed_task(monkeypatch):
     }
     settings = Settings(
         ark_mock=False,
+        local_media_mock=False,
         ark_api_key="sk-test",
         ark_base_url="https://www.tokenfree.com/v1",
     )
@@ -426,3 +428,13 @@ async def test_seedream_once_http200_failed_task(monkeypatch):
         )
     assert "Seedream missing url" not in str(ei.value)
     assert "resp_gag" not in str(ei.value)
+
+
+def test_response_image_references_are_multimodal_inputs_when_enabled():
+    body = build_tokenfree_image_body(model='seedream-5.0', prompt='Change the ball to green', ref_urls=['https://example.test/ball.png', 'https://example.test/mask.png'], style_ref_urls=['https://example.test/style.png'], structured_refs=True)
+    parts = body['input'][0]['content']
+    assert parts[0]['type'] == 'input_text'
+    assert 'Change the ball to green' in parts[0]['text']
+    assert [part['image_url'] for part in parts[1:]] == ['https://example.test/ball.png', 'https://example.test/mask.png', 'https://example.test/style.png']
+    assert all(part['type'] == 'input_image' for part in parts[1:])
+    assert isinstance(build_tokenfree_image_body(model='seedream-5.0', prompt='A ball', structured_refs=True)['input'], str)

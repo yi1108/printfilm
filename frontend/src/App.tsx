@@ -1,5 +1,5 @@
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { lazy, Suspense, useLayoutEffect, useSyncExternalStore } from 'react'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { lazy, Suspense } from 'react'
 import { useI18n } from './i18n'
 import DialogHost from './components/ui/DialogHost'
 import BillingAlertHost from './components/billing/BillingAlertHost'
@@ -29,32 +29,25 @@ import AssetLibraryPage from './pages/drama/AssetLibraryPage'
 import ProjectWorkspacePage from './pages/drama/ProjectWorkspacePage'
 import EpisodeEditPage from './pages/drama/EpisodeEditPage'
 import EpisodesPage from './pages/drama/EpisodesPage'
-import CanvasPage from './pages/drama/canvas/CanvasPage'
+import PrintfilmStudioPage from './features/printfilm-studio/PrintfilmStudioPage'
 import EpisodeStoryboardPage from './pages/drama/episodeCanvas/EpisodeStoryboardPage'
-import TeamInvitationPage from './features/teams/TeamInvitationPage'
+import ProjectInvitationPage from './features/printfilm-studio/ProjectInvitationPage'
 import RequireAuth from './pages/drama/RequireAuth'
-import { setWorkspaceTeam, subscribeWorkspace, workspaceScope } from './features/teams/workspaceScope'
-import TeamPage from './features/teams/TeamPage'
-import { TeamPreviewProvider } from './features/teams/TeamPreviewContext'
 import './styles/printfilm.css'
 import './App.css'
 
 const Marketplace = lazy(() => import('./features/marketplace/Marketplace'))
 
-/** 生成队列支持个人和团队空间，余额引导仅在个人业务空间展示。 */
+/** 生成和余额均属于当前登录用户。 */
 function PersonalBusinessOverlays() {
-  const { pathname } = useLocation()
-  const teamId = useSyncExternalStore(subscribeWorkspace, () => workspaceScope.teamId)
-  useLayoutEffect(() => { if (!/^\/teams\/\d+/.test(pathname) && !/^\/drama\/projects\/\d+/.test(pathname)) setWorkspaceTeam(null) }, [pathname])
-  const personal = teamId === null && pathname !== '/teams' && !pathname.startsWith('/teams/') && pathname !== '/team-invitations'
-  return <><DramaGenQueuePanel />{personal && <BillingAlertHost />}</>
+  return <><DramaGenQueuePanel /><BillingAlertHost /></>
 }
 
-/** 用户端路由及全局交互宿主，团队界面使用真实认证服务。 */
+/** 用户端路由及全局交互宿主；旧团队书签转向项目团队。 */
 export default function App() {
   const { locale } = useI18n()
   return (
-    <TeamPreviewProvider><BrowserRouter>
+    <BrowserRouter>
       <Routes>
         <Route path="/marketplace/*" element={<Suspense fallback={<p>{locale === 'en' ? 'Loading marketplace…' : '正在加载作品与招募…'}</p>}><Marketplace /></Suspense>} />
         <Route path="/" element={<HomePage />} />
@@ -71,10 +64,10 @@ export default function App() {
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/teams" element={<RequireAuth><TeamPage /></RequireAuth>} />
-        <Route path="/teams/join" element={<TeamInvitationPage />} />
-        <Route path="/team-invitations" element={<TeamInvitationPage />} />
-        <Route path="/teams/:teamId" element={<RequireAuth><TeamPage /></RequireAuth>} />
+        <Route path="/teams" element={<Navigate to="/settings?tab=team" replace />} />
+        <Route path="/teams/join" element={<Navigate to="/settings?tab=team" replace />} />
+        <Route path="/team-invitations" element={<Navigate to="/settings?tab=team" replace />} />
+        <Route path="/teams/:teamId" element={<Navigate to="/settings?tab=team" replace />} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/history" element={<HistoryPage />} />
         <Route path="/studio/new" element={<CreateProjectPage />} />
@@ -86,6 +79,7 @@ export default function App() {
         {/* Agent home (mirrors novel agent entry) */}
         <Route path="/drama" element={<DramaListPage />} />
         <Route path="/canvas" element={<CanvasListPage />} />
+        <Route path="/canvas/join" element={<ProjectInvitationPage />} />
         <Route path="/drama/dramas" element={<DramaListPage />} />
         <Route path="/drama/assets" element={<AssetLibraryPage />} />
         <Route path="/drama/projects/:projectId" element={<ProjectWorkspacePage />} />
@@ -95,12 +89,14 @@ export default function App() {
           path="/drama/projects/:projectId/episodes/:episodeId/canvas"
           element={<EpisodeStoryboardPage />}
         />
-        <Route path="/drama/projects/:projectId/canvas" element={<CanvasPage />} />
+        {/* Legacy URL remains routable for bookmarks but opens the new workspace. */}
+        <Route path="/drama/projects/:projectId/canvas" element={<RequireAuth><PrintfilmStudioPage /></RequireAuth>} />
+        <Route path="/drama/projects/:projectId/printfilm-studio" element={<RequireAuth><PrintfilmStudioPage /></RequireAuth>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <WeChatGroupFab />
       <PersonalBusinessOverlays />
       <DialogHost />
-    </BrowserRouter></TeamPreviewProvider>
+    </BrowserRouter>
   )
 }

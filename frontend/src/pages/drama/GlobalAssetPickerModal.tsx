@@ -6,8 +6,6 @@ import { DRAMA_VOICE_BINDING_ENABLED } from '../../lib/dramaVoiceBinding'
 import BillingErrorNotice from '../../components/billing/BillingErrorNotice'
 import Modal from '../../components/ui/Modal'
 import { AssetBanner, AssetCard, AssetEmpty, AssetGrid, AssetSearch, AssetTypeFilter } from '../../components/assets/AssetLibrary'
-import { teamsApi } from '../../api/teams'
-import { projectTeam } from '../../features/teams/editLocks'
 import { TeamPagination } from '../../features/teams/TeamPagination'
 import './drama.css'
 
@@ -102,11 +100,8 @@ export function GlobalAssetPickerModal({
     let active = true
     setLoading(true); setError('')
     const timer = window.setTimeout(() => {
-      void projectTeam(projectId).then(async (teamId) => {
-        if (teamId === null) { const rows = await dramaApi.listAssets(undefined, { libraryOnly: true }); if (active) { setAllAssets(filterDramaLibraryAssets(rows)); setTotal(0) }; return }
-        const kind = allowedTypesKey && !allowedTypesKey.includes(',') ? allowedTypesKey : tab === 'all' ? undefined : tab
-        const result = await teamsApi.assets(String(teamId), { page, page_size: 12, q: query, type: kind }, controller.signal)
-        if (active) { setAllAssets(result.items.map((asset) => ({ id: Number(asset.id), name: asset.name, type: asset.type, asset_type: asset.type === 'voice' ? 'audio' : 'image', url: asset.url, cover: asset.cover, project_id: Number(asset.projectId) }))); setTotal(result.meta.total) }
+      void dramaApi.listAssets(undefined, { libraryOnly: true }).then(rows => {
+        if (active) { setAllAssets(filterDramaLibraryAssets(rows)); setTotal(0) }
       }).catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : '资产库加载失败') }).finally(() => { if (active) setLoading(false) })
     }, 180)
     return () => { active = false; controller.abort(); window.clearTimeout(timer) }

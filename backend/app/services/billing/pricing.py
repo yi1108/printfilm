@@ -361,6 +361,12 @@ def _verified_rule_fen(
     if facts.get("resolution"):
         facts["resolution"] = str(facts["resolution"]).strip().lower()
     key = (billing_key or "").strip()
+    if key == "seedream":
+        from app.services.tokenfree_pricing import resolve_billing_image_size
+
+        facts["resolution"] = resolve_billing_image_size(
+            settings, model=model, size=size or _image_size_from_raw(raw_usage)
+        )
     if (key.startswith("seedance") or "video" in (model or "").lower()) and not facts.get("resolution"):
         from app.services.tokenfree_pricing import normalize_video_resolution
 
@@ -403,7 +409,7 @@ def _catalog_image_fen_if_per_call(settings: Settings, model: str, *, size: str 
         mid = "gpt-image-2"
     rate = lookup_rate(mid)
     # 纯 token 模型（非 Seedream 族）无 token 时不要误用按张表
-    if rate and rate.billing == "token" and not (
+    if rate and rate.billing == "token" and not rate.billing_expr and not (
         is_seedream_family(raw) or "seedream" in mid.lower()
     ):
         return None

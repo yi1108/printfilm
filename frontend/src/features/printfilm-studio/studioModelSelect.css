@@ -1,0 +1,20 @@
+.pf-model-mark{display:inline-flex;align-items:center;justify-content:center;flex:none;width:26px;height:26px;color:#30313b}
+.pf-model-mark svg{width:100%;height:100%}.pf-model-mark.is-seed{color:#6c5ba4}.pf-model-mark.is-deepseek{color:#4e76ec}
+.pf-model-select>.pf-composer-param{display:flex;align-items:center;gap:9px;white-space:nowrap}.pf-model-select>.pf-composer-param>.pf-model-mark{width:20px;height:20px}
+.pf-model-select.is-large{display:block;width:100%}
+.pf-model-select.is-large>.pf-composer-param{box-sizing:border-box;display:flex;width:100%;min-height:54px;justify-content:flex-start;border:1px solid #e4e2eb;border-radius:11px;padding:12px 15px;background:#f7f7f9;color:#30313b;font:15px/1.5 'Segoe UI','Microsoft YaHei',sans-serif}
+.pf-model-select.is-large>.pf-composer-param>svg:last-child{margin-left:auto;width:17px;height:17px}
+.pf-model-select>.pf-composer-param[aria-expanded=true],.pf-model-select>.pf-composer-param:focus-visible{border-color:#8965ae;outline:2px solid #8965ae1a;outline-offset:1px}
+.pf-composer-popover.pf-model-options{position:fixed;box-sizing:border-box;z-index:1000;max-width:calc(100vw - 24px);max-height:min(440px,calc(100vh - 24px));overflow:auto;padding:7px;background:white;border:1px solid #eeedf2;border-radius:17px;box-shadow:0 16px 48px #24233424;color:#30313b;font:14px/1.5 'Segoe UI','Microsoft YaHei',sans-serif}
+.pf-composer-popover.pf-model-options button{display:flex;align-items:center;justify-content:flex-start;gap:14px;width:100%;border:0;border-radius:11px;padding:13px 12px;text-align:left;background:transparent;color:inherit;font:inherit;cursor:pointer}
+.pf-composer-popover.pf-model-options button:hover,.pf-composer-popover.pf-model-options button:focus-visible{background:#f3f2f7;outline:0}
+.pf-composer-popover.pf-model-options button[aria-checked=true]{background:#f0edf5}
+.pf-model-options .pf-model-mark{width:40px;height:40px;padding:5px;box-sizing:border-box;border-radius:10px;background:#f0f0f4}
+.pf-model-options .pf-model-option-copy{display:flex;flex:1;min-width:0;flex-direction:column;gap:3px}
+.pf-model-options .pf-model-option-copy b{font-size:16px;font-weight:600}.pf-model-options .pf-model-option-copy small{margin:0;color:#81808c;font-size:12px;line-height:1.5}
+.pf-model-options button>svg:last-child{flex:none;color:#79559c}
+.pf-default-field-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+.pf-default-field-heading b{display:flex;align-items:center;gap:9px;font-size:16px}
+.pf-workspace-dialog .pf-default-reset{border:0;background:transparent;padding:0;color:#87828e;font-size:12px}
+.pf-default-field>small{display:block;margin-top:6px;color:#888391;font-size:12px}
+.pf-workspace-dialog.is-defaults{width:min(440px,calc(100vw - 32px))}.pf-workspace-dialog.is-defaults::backdrop{background:#29233408;backdrop-filter:none}.is-defaults .pf-dialog-inner>header{margin-bottom:12px}.is-defaults .pf-panel-note{border-top:1px solid #e8e5ee;margin-top:28px;padding-top:17px;color:#888391;font-size:12px}

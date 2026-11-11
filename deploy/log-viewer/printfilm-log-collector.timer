@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh Printfilm production logs every five seconds
+
+[Timer]
+OnBootSec=5s
+OnUnitActiveSec=5s
+AccuracySec=1s
+Unit=printfilm-log-collector.service
+
+[Install]
+WantedBy=timers.target

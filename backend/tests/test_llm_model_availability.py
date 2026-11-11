@@ -46,12 +46,17 @@ def text_client(monkeypatch):
     {"default": False},
     {"binding_enabled": False},
 ], ids=["disabled-model", "empty-managed-default", "disabled-bindings"])
-async def test_managed_text_unavailable_never_uses_environment_credentials(text_client, options):
+@pytest.mark.parametrize('streaming', [False, True])
+async def test_managed_text_unavailable_never_uses_environment_credentials(text_client, options, streaming):
     configure, requests = text_client
     configure(**options)
 
     with pytest.raises(llm_client.LlmUnavailableError):
-        await llm_client.chat_completions("system", "user")
+        if streaming:
+            from app.printfilm_studio.integration.llm_stream import chat_completions_stream
+            _ = [chunk async for chunk in chat_completions_stream("system", "user")]
+        else:
+            await llm_client.chat_completions("system", "user")
 
     assert requests == []
 

@@ -1,0 +1,28 @@
+[Unit]
+Description=Printfilm password-protected independent HTTP log viewer
+After=network.target printfilm-log-collector.service
+Wants=printfilm-log-collector.service
+
+[Service]
+Type=simple
+DynamicUser=yes
+SupplementaryGroups=printfilm-logs
+LoadCredential=auth.json:/etc/printfilm-log-viewer/auth.json
+ExecStart=/usr/bin/python3 /opt/printfilm-log-viewer/current/server.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+InaccessiblePaths=-/run/docker.sock -/var/run/docker.sock -/www/wwwlogs -/opt/ai_movie -/opt/printfilm-prod -/var/lib/docker
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictSUIDSGID=yes
+MemoryMax=128M
+CPUQuota=20%
+TasksMax=32
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

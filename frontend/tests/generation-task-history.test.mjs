@@ -118,11 +118,11 @@ test('结算状态不根据完成时间推断，隐藏费用不能显示成免�
   assert.equal(generationBillingState({ ...record, billing_charged_fen: 500 }), 'settled')
 })
 
-test('统一任务列表和详情继承当前团队范围，切回个人时清除', () => {
+test('统一任务列表和详情始终使用个人范围，忽略旧团队导航', () => {
   try {
     setWorkspaceTeam(12)
-    assert.equal(new Headers(scopedRequestInit('/api/tasks/generations?page=1').headers).get('X-Team-Id'), '12')
-    assert.equal(new Headers(scopedRequestInit(generationDetailPath({ ...record, source: 'task' })).headers).get('X-Team-Id'), '12')
+    assert.equal(new Headers(scopedRequestInit('/api/tasks/generations?page=1').headers).get('X-Team-Id'), null)
+    assert.equal(new Headers(scopedRequestInit(generationDetailPath({ ...record, source: 'task' })).headers).get('X-Team-Id'), null)
     setWorkspaceTeam(null)
     assert.equal(new Headers(scopedRequestInit('/api/tasks/generations').headers).get('X-Team-Id'), null)
   } finally { setWorkspaceTeam(null) }

@@ -3,7 +3,6 @@ import { pointText } from '../../lib/points'
 import { useI18n } from '../../i18n'
 import { Link } from 'react-router-dom'
 import { isBillingError, billingPointsMessage, PRICING_PATH } from '../../lib/billingError'
-import { workspaceScope } from '../../features/teams/workspaceScope'
 import { formatCopyrightError, formatGenerationErrorMessage } from '../../lib/generationError'
 
 type Props = {
@@ -38,8 +37,8 @@ export default function BillingErrorNotice({
   return (
     <Tag className={className} style={style} role={inline ? undefined : 'alert'}>
       {billingPointsMessage(text)}{' '}
-      <Link to={workspaceScope.teamId === null ? PRICING_PATH : `/teams/${workspaceScope.teamId}?tab=billing`} className="pf-link pf-billing-topup-link">
-        {workspaceScope.teamId === null ? (linkText || pointText('去充值 →', 'Top up →')) : pointText('查看团队用量 →', 'View team usage →')}
+      <Link to={PRICING_PATH} className="pf-link pf-billing-topup-link">
+        {linkText || pointText('去充值 →', 'Top up →')}
       </Link>
     </Tag>
   )

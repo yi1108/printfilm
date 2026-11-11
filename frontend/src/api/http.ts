@@ -67,8 +67,11 @@ export function createHttpTransport(options: {
       throw cause
     }
     if (!result.ok) {
-      if (result.status === 409 && typeof window !== 'undefined') window.dispatchEvent(new Event('media-prices-changed'))
       const error = await result.json().catch(() => ({ detail: result.statusText }))
+      // 画布版本、编辑占用等冲突不应触发价格目录刷新和重新报价。
+      if (result.status === 409 && /^价格(?:已更新|版本已变化)/.test(apiErrorMessage(error?.detail, '')) && typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('media-prices-changed'))
+      }
       onError(result, error?.detail)
     }
     return result

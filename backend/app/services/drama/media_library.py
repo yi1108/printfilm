@@ -112,8 +112,11 @@ def tool_items(run: ToolRun) -> list[MediaLibraryItem]:
 async def library_page(db, user_id: int, team_id: int | None, *, kind="all", media_filter=None, project_id=None,
                        project_kind="drama", generation_status: LibraryGenerationStatus = "all",
                        unassigned=False, q="", page=1, page_size=12) -> MediaLibraryPage:
-    scope = (DramaProject.team_id == team_id) if team_id is not None else (
-        (DramaProject.user_id == user_id) & DramaProject.team_id.is_(None))
+    from sqlalchemy import exists, or_
+    from app.printfilm_studio.sharing import CanvasMember
+    if team_id is not None:
+        raise HTTPException(status_code=410, detail="独立团队已停用，请按项目浏览素材")
+    scope = or_(DramaProject.user_id == user_id, exists(select(CanvasMember.id).where(CanvasMember.project_id == DramaProject.id, CanvasMember.user_id == user_id)))
     # Project ID namespaces are separate; a short-video ID must never select a drama with the same ID.
     dramas = {row.id: row for row in (await db.scalars(select(DramaProject).where(scope)
         .options(selectinload(DramaProject.script)))).all()}

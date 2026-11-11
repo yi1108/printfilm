@@ -80,22 +80,13 @@ async def get_owned_episode(
 
 
 async def require_drama_project_access(db: AsyncSession, project: DramaProject, user_id: int) -> None:
-    """个人所有权或实时团队成员关系统一授权，原创建者不能绕过离队限制。"""
-    if project.team_id is not None:
-        from app.services.teams.access import get_team
-
-        await get_team(db, project.team_id, user_id)
-    elif int(project.user_id) != int(user_id):
+    """Generic drama APIs are owner-only. Canvas members use canvas-scoped APIs."""
+    if int(project.user_id) != int(user_id):
         raise HTTPException(status_code=404, detail="漫剧项目不存在")
 
 
 async def require_drama_project_manager(db: AsyncSession, project: DramaProject, user_id: int) -> None:
-    """删除等项目级管理操作限制为个人所有者或团队所有者/管理员。"""
     await require_drama_project_access(db, project, user_id)
-    if project.team_id is not None:
-        from app.services.teams.access import get_team
-
-        await get_team(db, project.team_id, user_id, roles=("owner", "admin"))
 
 
 async def get_owned_asset(db: AsyncSession, asset_id: int, user: User) -> DramaAsset:

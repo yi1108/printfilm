@@ -1,0 +1,24 @@
+import { useEffect, useRef, useState } from 'react'
+import { RotateCcw } from 'lucide-react'
+import { canvasBlob, readCanvasImage } from './maskMedia'
+import { centeredCrop, dragCrop, type CropHandle, type CropRect } from './imageCropGeometry'
+
+const handles: CropHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
+export function ImageCropEditor({ url, onSave, onBusy }: { url: string; onSave: (blob: Blob) => Promise<void>; onBusy: (busy: boolean) => void }) {
+  const original = useRef<HTMLImageElement | null>(null)
+  const [dimensions, setDimensions] = useState({ width: 1, height: 1 }), [rect, setRect] = useState<CropRect>({ x: 0, y: 0, width: 1, height: 1 })
+  const [ratio, setRatio] = useState('free'), [busy, setBusy] = useState(false), [error, setError] = useState(''), [ready, setReady] = useState(false)
+  const drag = useRef<{ x: number; y: number; rect: CropRect; handle: CropHandle } | null>(null)
+  useEffect(() => { let active = true; setReady(false); void readCanvasImage(url).then((image) => { if (!active) return; original.current = image; const width = image.naturalWidth, height = image.naturalHeight; setDimensions({ width, height }); setRect(centeredCrop(width, height)); setReady(true) }).catch((e) => { if (active) setError(e.message) }); return () => { active = false } }, [url])
+  const numericRatio = (value: string) => value === 'free' ? undefined : value === 'original' ? dimensions.width / dimensions.height : Number(value.split(':')[0]) / Number(value.split(':')[1])
+  const save = async () => {
+    if (!original.current || busy) return
+    setBusy(true); onBusy(true); setError('')
+    try { const output = document.createElement('canvas'); output.width = Math.max(1, Math.round(rect.width)); output.height = Math.max(1, Math.round(rect.height)); output.getContext('2d')!.drawImage(original.current, rect.x, rect.y, rect.width, rect.height, 0, 0, output.width, output.height); await onSave(await canvasBlob(output)) } catch (e) { setError(e instanceof Error ? e.message : '裁剪失败') } finally { setBusy(false); onBusy(false) }
+  }
+  return <><fieldset className="pf-image-edit-tools" disabled={!ready || busy}>{[['free', '自由'], ['original', '原图'], ...['1:1', '16:9', '9:16', '4:3', '3:4'].map((value) => [value, value])].map(([value, label]) => <button key={value} aria-pressed={ratio === value} onClick={() => { setRatio(value); setRect(centeredCrop(dimensions.width, dimensions.height, numericRatio(value))) }}>{label}</button>)}<span /><button onClick={() => { setRatio('free'); setRect(centeredCrop(dimensions.width, dimensions.height)) }}><RotateCcw size={16} />重置</button></fieldset>
+    <div className="pf-image-edit-stage"><div className="pf-image-edit-surface" style={{ aspectRatio: `${dimensions.width}/${dimensions.height}`, width: `min(100%, ${Math.min(900, 560 * dimensions.width / dimensions.height)}px)` }}><img src={url} alt="裁剪原图" draggable={false} />
+      {ready && <div className="pf-crop-overlay" onPointerDown={(event) => { if (busy) return; const handle = (event.target as HTMLElement).dataset.cropHandle as CropHandle | undefined; if (!handle) return; event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); drag.current = { x: event.clientX, y: event.clientY, rect, handle } }} onPointerMove={(event) => { const start = drag.current; if (!start || busy) return; const box = event.currentTarget.getBoundingClientRect(); setRect(dragCrop(start.rect, start.handle, (event.clientX - start.x) * dimensions.width / box.width, (event.clientY - start.y) * dimensions.height / box.height, dimensions, numericRatio(ratio))) }} onPointerUp={() => { drag.current = null }} onPointerCancel={() => { drag.current = null }}><div className="pf-crop-selection" data-crop-handle="move" style={{ left: `${rect.x / dimensions.width * 100}%`, top: `${rect.y / dimensions.height * 100}%`, width: `${rect.width / dimensions.width * 100}%`, height: `${rect.height / dimensions.height * 100}%` }}>{handles.map((handle) => <button key={handle} className={`pf-crop-handle is-${handle}`} data-crop-handle={handle} aria-label={`裁剪边角 ${handle}`} onKeyDown={(event) => { if (busy) return; const delta = event.shiftKey ? 10 : 1, dx = event.key === 'ArrowRight' ? delta : event.key === 'ArrowLeft' ? -delta : 0, dy = event.key === 'ArrowDown' ? delta : event.key === 'ArrowUp' ? -delta : 0; if (dx || dy) { event.preventDefault(); setRect(dragCrop(rect, handle, dx, dy, dimensions, numericRatio(ratio))) } }} />)}</div></div>}
+    </div></div><p className="pf-crop-dimensions">裁剪后 {Math.round(rect.width)} × {Math.round(rect.height)} · 拖动边角裁剪，拖动选区移动</p>
+    {error && <p role="alert">{error}</p>}<footer><span>保留原图，裁剪结果保存为新节点</span><button className="is-primary" disabled={!ready || busy} onClick={() => void save()}>{busy ? '正在保存…' : '另存为新图片'}</button></footer></>
+}

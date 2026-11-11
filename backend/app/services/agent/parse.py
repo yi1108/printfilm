@@ -10,6 +10,14 @@ from typing import Any
 SLUG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 FRONTMATTER_PATTERN = re.compile(r"\A---\s*\n([\s\S]*?)\n---\s*\n?", re.MULTILINE)
 TASK_ALIASES = {
+    "script_write": "script_write",
+    "剧本创作": "script_write",
+    "edit_plan": "edit_plan",
+    "剪辑规划": "edit_plan",
+    "asset_plan": "asset_plan",
+    "asset-plan": "asset_plan",
+    "资产规划": "asset_plan",
+    "视觉资产": "asset_plan",
     "shot_plan": "shot_plan",
     "shot-plan": "shot_plan",
     "规划镜头": "shot_plan",
@@ -130,7 +138,7 @@ def parse_skill_markdown(markdown: str) -> dict[str, Any]:
         raise SkillParseError("Skill 正文不能为空")
     return {
         "slug": slug,
-        "name": name or slug,
+        "name": str(meta.get("display_name") or name or slug).strip()[:128],
         "description": description,
         "tasks": normalize_tasks(meta.get("tasks")),
         "body": body,

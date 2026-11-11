@@ -329,6 +329,8 @@ async def settle_task(db: AsyncSession, task_id: int) -> dict[str, int]:
         }
 
     charged = sum(int(e.charge_fen or 0) for e in events)
+    from app.services.billing.text_price import text_charge
+    charged = text_charge(task, events, charged)
     for e in events:
         e.settled = True
 

@@ -2,8 +2,6 @@ import { throwApiError } from '../lib/apiError'
 import { API_BASE, createJsonRequester } from './client'
 import { ensureCharacterVoiceGenerationEnabled } from './publicCapabilities'
 import { withDramaEditLock, recordDramaResponse } from '../features/teams/editLocks'
-import { teamsApi } from './teams'
-import { projectTeam } from '../features/teams/editLocks'
 import { workspaceScope } from '../features/teams/workspaceScope'
 import type { AssetDetailReference } from '../lib/assetDetailReferences'
 
@@ -155,6 +153,7 @@ export type DramaProject = {
 }
 
 export type DramaProjectListItem = {
+  is_owner?: boolean
   team_id?: number | null
   id: number
   title: string
@@ -179,6 +178,7 @@ export type DramaProjectListPage = {
 
 /** 项目列表筛选参数，均由服务端处理 */
 export type DramaProjectListParams = {
+  relation?: 'all' | 'owned' | 'joined'
   workflow?: 'script' | 'canvas'
   status?: 'all' | 'running' | 'done' | 'draft'
   q?: string
@@ -287,6 +287,7 @@ export type DramaVoiceGenerateResult = {
 export const dramaApi = {
   listProjects: (params?: DramaProjectListParams) => {
     const sp = new URLSearchParams()
+    if (params?.relation) sp.set('relation', params.relation)
     if (params?.workflow) sp.set('workflow', params.workflow)
     if (params?.status && params.status !== 'all') sp.set('status', params.status)
     if (params?.q) sp.set('q', params.q)
@@ -397,12 +398,6 @@ export const dramaApi = {
     request<DramaAsset>('/api/drama/assets', { method: 'POST', body: JSON.stringify(body) }),
   /** 由服务端校验来源和目标空间，复制后独立保存。 */
   copyAsset: async (asset: DramaAsset, projectId: number) => {
-    const teamId = await projectTeam(projectId)
-    if (teamId !== null) {
-      const copy = await withDramaEditLock('/api/drama/assets', { method: 'POST', body: JSON.stringify({ project_id: projectId }) }, (init) => teamsApi.copyAsset(String(teamId), asset.id, projectId, init?.headers || {}))
-      recordDramaResponse('/api/drama/assets', copy)
-      return copy
-    }
     return request<DramaAsset>(`/api/drama/assets/${asset.id}/copy`, { method: 'POST', body: JSON.stringify({ project_id: projectId }) })
   },
   updateAsset: (id: number, body: Partial<DramaAsset>) =>

@@ -11,6 +11,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tiptap/extension-image": "^3.32.3",
+    "@tiptap/extension-list": "^3.32.3",
+    "@tiptap/extension-table": "^3.32.3",
+    "@tiptap/markdown": "^3.32.3",
+    "@tiptap/pm": "^3.32.3",
+    "@tiptap/react": "^3.32.3",
+    "@tiptap/starter-kit": "^3.32.3",
     "@xyflow/react": "^12.11.2",
     "jszip": "^3.10.1",
     "lucide-react": "^1.31.0",
@@ -18,7 +25,9 @@
     "qrcode": "^1.5.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router-dom": "^7.18.2"
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.18.2",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@types/jszip": "^3.4.0",
@@ -28,6 +37,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-legacy": "^8.2.3",
     "@vitejs/plugin-react": "^6.0.4",
+    "jsdom": "^26.1.0",
     "oxlint": "^1.75.0",
     "typescript": "~6.0.2",
     "vite": "^8.2.0"

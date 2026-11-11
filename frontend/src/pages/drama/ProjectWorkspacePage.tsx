@@ -78,7 +78,7 @@ function WorkspaceInner() {
   async function reload() {
     const p = await dramaApi.getProject(id)
     if (isCanvasWorkflow(p)) {
-      navigate(`/drama/projects/${id}/canvas`, { replace: true })
+      navigate(`/drama/projects/${id}/printfilm-studio`, { replace: true })
       return null
     }
     setProject(p)
@@ -191,7 +191,7 @@ function WorkspaceInner() {
               type="button"
               className="drama-icon-btn"
               aria-label="返回"
-              onClick={() => navigate(project.team_id ? `/teams/${project.team_id}?tab=projects` : '/drama/dramas')}
+              onClick={() => navigate('/drama/dramas')}
             >
               <ChevronLeft size={20} strokeWidth={1.75} />
             </button>

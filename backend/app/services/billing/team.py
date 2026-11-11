@@ -119,6 +119,8 @@ async def settle_team_task(db: AsyncSession, task: TaskRun) -> dict[str, int]:
         raise ValueError("付款所有者不存在")
     disabled = task.billing_enabled_snapshot is False or task.billing_status == "skipped"
     charged = 0 if disabled else sum(int(e.charge_fen or 0) for e in events)
+    from app.services.billing.text_price import text_charge
+    charged = text_charge(task, events, charged)
     for event in events:
         event.user_id = int(task.requested_by)
         event.team_id = int(task.team_id)

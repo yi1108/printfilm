@@ -1,0 +1,11 @@
+.pf-project-teams { min-width:0; padding:24px; background:white; border:1px solid #e2e6db; border-radius:18px; }
+.pf-project-teams header,.pf-project-teams footer { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.pf-project-teams h2 { margin:0; }.pf-project-teams p { color:#75816e; line-height:1.7; font-size:13px; }
+.pf-project-teams nav { display:flex; gap:8px; margin:20px 0; }
+.pf-project-teams button { border:1px solid #dfe5d8; border-radius:9px; padding:9px 13px; background:white; cursor:pointer; }
+.pf-project-teams button[aria-pressed=true] { background:#e9f5b5; border-color:#cbe18f; }
+.pf-project-teams-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.pf-project-teams-grid article { border:1px solid #e2e6db; border-radius:14px; padding:20px; min-width:0; }
+.pf-project-teams-grid article>span { float:right; font-size:12px; color:#75816e; }
+.pf-project-teams h3 { overflow-wrap:anywhere; }.pf-project-teams footer { border-top:1px solid #e7e9e2; padding-top:16px; font-size:13px; }
+@media(max-width:650px){.pf-project-teams-grid{grid-template-columns:1fr}}

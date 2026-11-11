@@ -10,7 +10,7 @@ import AccountProfileCard from './settings/AccountProfileCard'
 import ChangePasswordCard from './settings/ChangePasswordCard'
 import ComingSoon from '../components/ui/ComingSoon'
 import { useI18n } from '../i18n'
-import TeamDirectory from '../features/teams/TeamDirectory'
+import CanvasProjectTeams from '../features/printfilm-studio/CanvasProjectTeams'
 import { USER_UPDATED_EVENT } from '../lib/userEvents'
 
 type SettingsTab = 'account' | 'subscription' | 'team' | 'notify' | 'security'
@@ -134,7 +134,7 @@ function AccountSettings() {
           ) : null}
 
           {tab === 'security' ? <ChangePasswordCard email={user?.email || ''} /> : null}
-          {tab === 'team' ? <TeamDirectory compact /> : null}
+          {tab === 'team' ? <CanvasProjectTeams /> : null}
           {tab === 'notify' ? (
             <section className="pf-settings-card">
               <h1>{t('settings.tabs.notify')}</h1>

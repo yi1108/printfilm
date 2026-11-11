@@ -141,6 +141,7 @@ class DramaProjectOut(BaseModel):
 
 
 class DramaProjectListItem(BaseModel):
+    is_owner: bool = True
     """项目列表中的概要信息。"""
 
     id: int = Field(description="项目编号")

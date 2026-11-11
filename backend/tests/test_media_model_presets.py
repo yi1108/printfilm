@@ -19,11 +19,12 @@ from app.services.seedance_resolutions import (
 
 def test_all_preset_channel_models_covers_four_caps() -> None:
     models = all_preset_channel_models()
-    assert "kimi-k2.6" in models
-    assert "seedream-5.0-pro" in models
+    assert set(preset_ids("text")) == {"gpt-6.1-sol", "gpt-6-astra", "deepseek-v4-pro"}
+    assert "kimi-k2.6" not in models and "gpt-5.5" not in models
+    assert "seedream-5.0-pro" not in models
     assert "seedream-5.0" in models
-    assert "seedream-5.0-flash" in models
-    assert "gpt-image-2" in models
+    assert "seedream-5.0-flash" not in models
+    assert "gpt-image-2" not in models
     assert "gpt-image-2.5" in models
     assert "seedance-2.5" in models
     assert "seedance-2.0-fast" in models
@@ -32,10 +33,7 @@ def test_all_preset_channel_models_covers_four_caps() -> None:
     assert "gemini-3.1-flash-tts" not in models
     assert len(models) == sum(len(preset_ids(c)) for c in ("text", "image", "video", "audio"))
     assert preset_ids("image") == [
-        "seedream-5.0-pro",
         "seedream-5.0",
-        "seedream-5.0-flash",
-        "gpt-image-2",
         "gpt-image-2.5",
     ]
     assert preset_ids("audio") == ["qwen-tts-2025-05-22"]
@@ -64,14 +62,14 @@ def test_clamp_seedance_aliases_to_canonical() -> None:
 
 
 def test_clamp_seedream_aliases_to_canonical() -> None:
-    assert clamp_default_to_preset("image", "seedream-5-0-pro") == "seedream-5.0-pro"
+    assert clamp_default_to_preset("image", "seedream-5-0-pro") == "seedream-5.0"
     assert clamp_default_to_preset("image", "seedream-5-0") == "seedream-5.0"
-    assert clamp_default_to_preset("image", "seedream-5.0-flash") == "seedream-5.0-flash"
-    assert clamp_default_to_preset("image", "gpt-image-2") == "gpt-image-2"
+    assert clamp_default_to_preset("image", "seedream-5.0-flash") == "seedream-5.0"
+    assert clamp_default_to_preset("image", "gpt-image-2") == "gpt-image-2.5"
     assert clamp_default_to_preset("image", "gpt-image-2.5") == "gpt-image-2.5"
     assert clamp_default_to_preset("image", "gpt-image-2-5") == "gpt-image-2.5"
     assert clamp_default_to_preset("image", "gpt-image-2.5-sunburst") == "gpt-image-2.5"
-    assert is_preset_model("image", "gpt-image-2") is True
+    assert is_preset_model("image", "gpt-image-2") is False
     assert is_preset_model("image", "gpt-image-2.5") is True
     assert is_preset_model("image", "seedream-5.0") is True
     assert is_preset_model("image", "nano-banana-2") is False
@@ -150,8 +148,8 @@ def test_catalog_image_row_has_allowed_params() -> None:
     payload = build_media_catalog(
         logical_models=[
             LogicalModel(
-                id="seedream-5.0-pro",
-                name="Seedream 5 Pro",
+                id="seedream-5.0",
+                name="Seedream 5.0",
                 capability="image",
                 enabled=True,
                 bindings=[],
@@ -165,9 +163,9 @@ def test_catalog_image_row_has_allowed_params() -> None:
             ),
         ],
         channels=[],
-        defaults=DefaultModels(image_model="seedream-5.0-pro", video_model="MiniMax-H3"),
+        defaults=DefaultModels(image_model="seedream-5.0", video_model="MiniMax-H3"),
     )
-    img = {row["id"]: row for row in payload["image_models"]}["seedream-5.0-pro"]
+    img = {row["id"]: row for row in payload["image_models"]}["seedream-5.0"]
     assert img["allowed_resolutions"] == ["1K", "2K"]
     assert "3:4" in img["allowed_aspect_ratios"]
     assert img["description"]

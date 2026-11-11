@@ -17,19 +17,10 @@ from app.services.teams.edit_locks import _task_conflicts, episode_resource_id, 
 
 
 async def workspace_team(request: Request, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)) -> int | None:
-    """仅列表/创建读取显式空间；资源授权始终根据数据库真实归属。"""
-    query = request.query_params.get("team_id")
-    header = request.headers.get("X-Team-Id")
-    if not query and not header:
-        return None
-    try:
-        team_id = int(query or header or "0")
-        if team_id < 1 or (query and header and int(query) != int(header)):
-            raise ValueError
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail="无效的团队空间") from exc
-    await get_team(db, team_id, user.id)
-    return team_id
+    """The retired organization scope must never grant project permissions."""
+    if request.query_params.get("team_id") or request.headers.get("X-Team-Id"):
+        raise HTTPException(status_code=410, detail="独立团队已停用，请通过画布项目分享邀请成员")
+    return None
 
 
 async def write_target(db: AsyncSession, path: str, values: dict) -> tuple[int, str, int] | None:
@@ -99,29 +90,4 @@ async def enforce_drama_write(request: Request, db: AsyncSession = Depends(get_d
         raise HTTPException(status_code=422, detail="无效的创作资源编号") from exc
     if not target:
         return
-    project = await get_owned_drama_project(db, target[0], user)
-    if project.team_id is None:
-        # 与个人项目迁入串行，不能用迁入前的 identity-map 快照绕过团队租约。
-        project = (await db.execute(select(DramaProject).where(DramaProject.id == project.id).with_for_update().execution_options(populate_existing=True))).scalar_one_or_none()
-        if project is None:
-            raise HTTPException(status_code=404, detail="漫剧项目不存在")
-        if project.team_id is not None:
-            raise HTTPException(status_code=409, detail="项目空间已变化，请刷新后重试")
-        return
-    if request.method == "DELETE" and re.search(r"/projects/\d+$", request.url.path):
-        await require_drama_project_manager(db, project, user.id)
-    if re.search(r"/scripts/\d+$", request.url.path) and "episode_content" in values:
-        raise HTTPException(status_code=409, detail="团队剧本请按集保存，避免覆盖其他成员的修改")
-    session_id = request.headers.get("X-Edit-Session", "")
-    token = request.headers.get("X-Edit-Token", "")
-    try:
-        version = int(request.headers.get("X-Edit-Version", "0"))
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail="无效的编辑版本") from exc
-    if not session_id or not token:
-        raise HTTPException(status_code=428, detail="请先获取此内容的编辑权限")
-    await validate_lock(db, project, user.id, target[1], target[2], session_id, token, version)
-    # 批量任务在本次路由内部创建；新的 HTTP 请求不能越过既有系统写回占用。
-    await _task_conflicts(db, project.id, (target[1], target[2]))
-    db.info.update(team_edit_session_id=session_id, team_edit_token=token, team_edit_version=version,
-                   team_edit_resource=target[1:], team_edit_project_id=project.id)
+    await get_owned_drama_project(db, target[0], user)

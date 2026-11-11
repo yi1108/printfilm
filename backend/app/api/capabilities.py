@@ -15,4 +15,9 @@ router = APIRouter(prefix="/capabilities", tags=["capabilities"])
     response_description="公开功能开关",
 )
 async def capabilities() -> dict[str, bool]:
-    return {"drama_voice_generation_enabled": get_settings().drama_voice_generation_enabled}
+    settings = get_settings()
+    result = {"drama_voice_generation_enabled": settings.drama_voice_generation_enabled}
+    # Preserve the legacy response shape while the new workspace is disabled.
+    if settings.printfilm_studio_enabled:
+        result["printfilm_studio_enabled"] = True
+    return result

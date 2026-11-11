@@ -106,3 +106,7 @@ button.pf-library-cover { cursor: pointer; }
   .pf-library-card, .pf-library-cover > img, .pf-library-pill { transition: none; }
   .pf-library-spinner { animation: none; }
 }
+
+.pf-digital-library .pf-library-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 800px) { .pf-digital-library .pf-library-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .pf-digital-library .pf-library-grid { grid-template-columns: 1fr; } }

@@ -1,0 +1,21 @@
+.pf-tidy-motion{position:absolute;inset:0;z-index:30;overflow:hidden;cursor:wait;background:linear-gradient(90deg,#eef8f33d,transparent 18%,transparent 82%,#fff5de40)}
+.pf-tidy-hand{position:absolute;top:0;left:0;width:72px;height:82px;pointer-events:none;filter:drop-shadow(0 9px 8px #263f5529);will-change:transform}
+.pf-tidy-glove{width:72px;height:82px;transform:rotate(22deg);transform-origin:50% 75%;transition:transform .13s ease}
+.pf-tidy-glove.is-right{transform:scaleX(-1) rotate(22deg)}
+.pf-tidy-hand[data-active=true] .pf-tidy-glove{transform:rotate(8deg) scale(.93)}
+.pf-tidy-hand[data-active=true] .pf-tidy-glove.is-right{transform:scaleX(-.93) scaleY(.93) rotate(8deg)}
+.pf-tidy-hand>span{position:absolute;right:-5px;top:4px;color:#d7a545;font-size:24px;opacity:0;transform:scale(.3);transition:opacity .1s,transform .15s}
+.pf-tidy-hand[data-active=true]>span{opacity:1;transform:scale(1)}
+.pf-tidy-progress{position:absolute;bottom:80px;left:50%;transform:translateX(-50%);width:min(380px,calc(100% - 40px));padding:17px 20px 13px;border:1px solid #d5e7e3;border-radius:18px;background:#fffffff5;box-shadow:0 16px 56px #345b6830;backdrop-filter:blur(16px);color:#34475b;font-size:12px}
+.pf-tidy-progress-title{display:flex;align-items:center;gap:8px;color:#356f65}.pf-tidy-progress-title strong{font-size:14px}.pf-tidy-progress-title>span{margin-left:auto;font-variant-numeric:tabular-nums;color:#7b8993}
+.pf-tidy-progress p{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:10px 0;color:#6f7d88}
+.pf-tidy-progress-track{height:4px;background:#eaf0ee;border-radius:9px;overflow:hidden}.pf-tidy-progress-track i{height:100%;display:block;background:linear-gradient(90deg,#79b9ac,#d9bd78);border-radius:9px;transition:width .16s linear}
+.pf-tidy-progress footer{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:11px;color:#8a959d;font-size:10px}.pf-tidy-progress button{border:0;border-radius:7px;background:#edf4f2;color:#466f66;padding:6px 8px;cursor:pointer;font:inherit}.pf-tidy-progress button:focus-visible{outline:2px solid #3f8a77;outline-offset:3px}.pf-tidy-progress kbd{font:inherit;margin-left:5px;opacity:.6}
+.pf-flow-area.is-organizing .react-flow__edges{opacity:.16;transition:opacity .2s}.pf-flow-area.is-organizing .pf-skel-slot,.pf-flow-area.is-organizing .pf-node-resize-handle{visibility:hidden!important}
+.pf-flow-area.is-organizing .react-flow__node[data-tidy-active=true]>.pf-skel{outline:2px solid #75baa9;outline-offset:5px;filter:drop-shadow(0 8px 12px #2b796626)}
+.pf-source-dock .pf-tidy-trigger{gap:5px;width:auto;padding:0 10px;color:#477c70}.pf-tidy-trigger span{font-size:11px}.pf-tidy-trigger:disabled{opacity:.45;cursor:default}
+.pf-group-frame.is-organized{border-color:#bad8d0;background:linear-gradient(135deg,#edf7f354,#f7f9f738)}.pf-group-frame.is-organized>header{color:#517f72}.pf-group-frame.is-organized>header b{font-weight:600}
+.pf-flow-area .react-flow__node-group{pointer-events:none!important}.pf-flow-area .pf-group-frame>header,.pf-flow-area .react-flow__node-group .react-flow__resize-control{pointer-events:auto}.pf-flow-area .pf-group-frame>header{cursor:grab}.pf-flow-area .react-flow__node-group.dragging .pf-group-frame>header{cursor:grabbing}
+.pf-studio-shell:has(.pf-tidy-motion) .pf-workspace-chrome,.pf-studio-shell:has(.pf-tidy-motion) .pf-agent{pointer-events:none}
+@media(max-width:600px){.pf-tidy-trigger span{display:none}.pf-tidy-progress{bottom:74px}.pf-tidy-hand{width:58px;height:68px}.pf-tidy-glove{width:58px;height:68px}}
+@media(prefers-reduced-motion:reduce){.pf-tidy-hand,.pf-tidy-motion{animation:none}.pf-tidy-progress-track i{transition:none}}

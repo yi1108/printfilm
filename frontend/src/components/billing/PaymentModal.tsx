@@ -4,7 +4,6 @@ import QRCode from 'qrcode'
 import Modal from '../ui/Modal'
 import PaymentBrandIcon from './PaymentBrandIcon'
 import { api } from '../../api'
-import { teamsApi } from '../../api/teams'
 import { cnyAmountDisplay } from '../../lib/billingPayments'
 
 export type PayCheckout = {
@@ -23,7 +22,6 @@ export type PayCheckout = {
 }
 
 type Props = {
-  teamId?: string
   open: boolean
   checkout: PayCheckout | null
   onClose: () => void
@@ -38,7 +36,7 @@ function formatRemain(sec: number) {
 }
 
 /** 扫码支付弹窗：展示二维码或等待收银台回跳，并轮询订单状态 */
-export default function PaymentModal({ open, checkout, onClose, onPaid, teamId }: Props) {
+export default function PaymentModal({ open, checkout, onClose, onPaid }: Props) {
   /*
    * qrDataUrl 二维码 data URL
    * remain 剩余秒数
@@ -62,7 +60,7 @@ export default function PaymentModal({ open, checkout, onClose, onPaid, teamId }
     const tradeNo = checkout?.out_trade_no
     if (tradeNo && status !== 'paid') {
       try {
-        await (teamId ? teamsApi.closeOrder(teamId, tradeNo) : api.closeBillingOrder(tradeNo))
+        await api.closeBillingOrder(tradeNo)
       } catch {
         /* 忽略关闭失败，仍允许退出弹窗 */
       }
@@ -140,14 +138,14 @@ export default function PaymentModal({ open, checkout, onClose, onPaid, teamId }
         setStatus('expired')
         window.clearInterval(tick)
         // 倒计时结束：后端自动关闭（拉取一次触发过期清理）
-        void (teamId ? teamsApi.order(teamId, checkout.out_trade_no) : api.getBillingOrder(checkout.out_trade_no)).catch(() => undefined)
+        void api.getBillingOrder(checkout.out_trade_no).catch(() => undefined)
       }
     }, 250)
 
     const poll = window.setInterval(async () => {
       if (!checkout.out_trade_no) return
       try {
-        const order = await (teamId ? teamsApi.order(teamId, checkout.out_trade_no) : api.getBillingOrder(checkout.out_trade_no))
+        const order = await api.getBillingOrder(checkout.out_trade_no)
         if (order.status === 'paid') {
           setStatus('paid')
           window.clearInterval(poll)
@@ -168,7 +166,7 @@ export default function PaymentModal({ open, checkout, onClose, onPaid, teamId }
       window.clearInterval(tick)
       window.clearInterval(poll)
     }
-  }, [open, checkout, teamId])
+  }, [open, checkout])
 
   /** 主动查询订单到账状态，与后台轮询共用最新支付成功回调。 */
   async function confirmPaid() {
@@ -176,7 +174,7 @@ export default function PaymentModal({ open, checkout, onClose, onPaid, teamId }
     setChecking(true)
     setError('')
     try {
-      const order = await (teamId ? teamsApi.order(teamId, checkout.out_trade_no) : api.getBillingOrder(checkout.out_trade_no))
+      const order = await api.getBillingOrder(checkout.out_trade_no)
       if (order.status === 'paid') {
         setStatus('paid')
         onPaidRef.current()

@@ -67,23 +67,23 @@ def _message_content(data: dict[str, Any]) -> str:
     return str(reasoning or "")
 
 
-# 调用 OpenAI 兼容 chat/completions
-async def chat_completions(
+def prepare_chat_request(
     system: str,
     user: str,
     *,
     temperature: float = 0.6,
     max_tokens: int = DEFAULT_MAX_TOKENS,
-    timeout: float = 300.0,
     response_format: dict[str, Any] | None = None,
-) -> str:
+    model_id: str | None = None,
+) -> tuple[str, dict[str, str], dict[str, Any]]:
+    """Resolve the same managed model and request policy for batch and streaming calls."""
     settings = get_settings()
     # Apply managed model switches before falling back to environment credentials.
     try:
-        resolve_upstream_model("text", None)
+        resolve_upstream_model("text", model_id)
     except ValueError as exc:
         raise LlmUnavailableError(str(exc)) from exc
-    logical_id = resolve_logical_model_id("text", None)
+    logical_id = resolve_logical_model_id("text", model_id)
     route = resolve_logical_model("text", logical_id)
     if route:
         api_key = route.api_key
@@ -91,7 +91,7 @@ async def chat_completions(
         base = route.base_url.rstrip("/") or resolve_llm_base_url()
     else:
         api_key = resolve_llm_api_key()
-        model = (settings.model_llm or "").strip()
+        model = (resolve_upstream_model("text", model_id) if model_id else settings.model_llm or "").strip()
         base = resolve_llm_base_url()
     if not model:
         raise LlmUnavailableError(
@@ -115,6 +115,29 @@ async def chat_completions(
     if response_format:
         payload["response_format"] = response_format
 
+    return f"{base}/chat/completions", {
+        "Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
+    }, payload
+
+
+# 调用 OpenAI 兼容 chat/completions
+async def chat_completions(
+    system: str,
+    user: str,
+    *,
+    temperature: float = 0.6,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
+    timeout: float = 300.0,
+    response_format: dict[str, Any] | None = None,
+    model_id: str | None = None,
+    strict_output: bool = False,
+) -> str:
+    url, headers, payload = prepare_chat_request(
+        system, user, temperature=temperature, max_tokens=max_tokens,
+        response_format=response_format, model_id=model_id,
+    )
+    model, base = payload['model'], url.removesuffix('/chat/completions')
+
     logger.info(
         "调用文字 LLM model=%s base=%s user_len=%s max_tokens=%s",
         model,
@@ -124,11 +147,8 @@ async def chat_completions(
     )
     async with httpx.AsyncClient(timeout=timeout) as client:
         res = await observed_request(client, "POST",
-            f"{base}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
+            url,
+            headers=headers,
             json=payload,
         )
         if res.status_code >= 400:
@@ -147,6 +167,12 @@ async def chat_completions(
             data = res.json()
         except json.JSONDecodeError as exc:
             raise RuntimeError(f"LLM 响应不是合法 JSON: {body[:200]}") from exc
+    if strict_output:
+        choice = (data.get('choices') or [{}])[0]
+        if choice.get('finish_reason') in {'length', 'content_filter', 'tool_calls'}:
+            raise RuntimeError('模型未完成正文，请调整要求后重试')
+        if not (choice.get('message') or {}).get('content'):
+            raise RuntimeError('模型没有返回正文，请重试')
     content = _message_content(data)
     logger.info("文字 LLM 返回 content_len=%s", len(content))
     return content
