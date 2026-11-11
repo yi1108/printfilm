@@ -93,10 +93,13 @@ async def test_locked_recheck_blocks_changed_balances(monkeypatch, migration):
 
 
 @pytest.mark.asyncio
-async def test_completed_migration_enables_wallet_but_keeps_maintenance(monkeypatch, migration):
+@pytest.mark.parametrize("refresh_fails", [False, True])
+async def test_completed_migration_enables_wallet_but_keeps_maintenance(monkeypatch, migration, refresh_fails):
     from app.services import model_settings
     db, state = migration
     row = SimpleNamespace(config_json={"flat": {"unified_wallet_enabled": False}})
+    if refresh_fails:
+        monkeypatch.setattr(cutover, "sync_runtime", AsyncMock(side_effect=RuntimeError("refresh failed after commit")))
     monkeypatch.setattr(cutover, "backup", AsyncMock(return_value="digest"))
     monkeypatch.setattr(cutover, "build_report", AsyncMock(return_value=([{"status": "ready"}], ["plan"])))
     apply = AsyncMock()
@@ -133,6 +136,7 @@ async def test_resume_rechecks_before_reopening(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_backup_credentials_are_not_in_command_arguments(monkeypatch, tmp_path):
+    monkeypatch.setattr(cutover.shutil, "which", lambda tool: tool)
     monkeypatch.setattr(cutover, "BACKUPS", tmp_path)
     monkeypatch.setattr(cutover, "get_settings", lambda: SimpleNamespace(database_url="postgresql+asyncpg://u:secret@db:5432/platform?sslmode=require"))
     calls = []

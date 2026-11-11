@@ -139,3 +139,47 @@ async def test_http_maintenance_blocks_callbacks_and_writes_but_allows_reads(wal
         assert (await client.get("/api/billing/epay/notify")).status_code == 503
         assert (await client.get("/api/test-read")).status_code == 200
     assert not writes
+
+
+@pytest.mark.asyncio
+async def test_approval_is_invalidated_by_fresh_database_state(wallet_ctx, monkeypatch):
+    ctx = wallet_ctx
+    await setup(ctx)
+    unknown = User(email="opening-approval@test.invalid", hashed_password="unused", balance_fen=50, frozen_fen=0)
+    ctx.db.add(unknown)
+    await ctx.db.commit()
+    user_id = unknown.id
+    job = await cutover.pause(ctx.db, 1, "核对期初余额")
+    first = next(row for row in (await cutover.report(ctx.db))["accounts"] if row["user_id"] == user_id)
+    assert first["approval_status"] == "required"
+    await cutover.approve(ctx.db, user_id, first["fingerprint"], "Production", job["job_id"], 1, "人工核对确认")
+    # Load an identity-map snapshot, then simulate a late external write in the
+    # isolated test schema. A locked recheck must not reuse this cached balance.
+    assert (await ctx.db.get(User, user_id)).balance_fen == 50
+    async with ctx.factory() as writer:
+        await writer.execute(User.__table__.update().where(User.id == user_id).values(balance_fen=60))
+        await writer.commit()
+    current = next(row for row in (await cutover.report(ctx.db))["accounts"] if row["user_id"] == user_id)
+    assert current["balance_fen"] == 60 and current["approval_status"] == "required"
+    assert current["fingerprint"] != first["fingerprint"]
+    backup = AsyncMock()
+    monkeypatch.setattr(cutover, "backup", backup)
+    with pytest.raises(ValueError):
+        await cutover.apply(ctx.db, job["job_id"], 1, "使用旧确认迁移")
+    backup.assert_not_awaited()
+    await ctx.db.rollback()
+    assert (await cutover.state(ctx.db))["paused"]
+
+
+@pytest.mark.asyncio
+async def test_overlapping_funding_ranges_block_existing_account(wallet_ctx):
+    ctx = wallet_ctx
+    await setup(ctx)
+    ctx.user.balance_fen = 100
+    ctx.db.add(WalletFundingLot(user_id=ctx.user.id, environment="Production", source_type="signup_grant",
+        source_ref="bad-interval", total_units=100, total_amount_fen=0,
+        available_ranges=[[0, 60], [50, 90]], void_ranges=[], active=True, revision=0, settlement_status="reconciled"))
+    await ctx.db.flush()
+    result = await cutover.report(ctx.db)
+    row = next(row for row in result["accounts"] if row["user_id"] == ctx.user.id)
+    assert row["status"] == "blocked" and "区间" in row["reason"]

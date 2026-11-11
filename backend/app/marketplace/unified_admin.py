@@ -87,10 +87,8 @@ async def review_web_funding(db, body, operator_id):
             app_fail("MARKETPLACE_IDEMPOTENCY_CONFLICT", "本次对账编号已用于其他资金记录。", 409)
         return prior
     order = await db.scalar(select(Order).where(Order.out_trade_no == lot.source_ref))
-    cash = order.amount_fen if order else None
-    if order and order.payment_currency and order.payment_currency != "cny":
-        from .apple_fx import cny_amount
-        cash = cny_amount(order.payment_amount_minor, order.payment_exchange_rate)
+    from app.services.billing.wallet_valuation import order_cash
+    cash = order_cash(order) if order else None
     if (not order or order.pay_type not in ("alipay", "wxpay", "stripe") or order.status != "paid"
             or order.user_id != lot.user_id or order.credit_fen != lot.total_units or not lot.active
             or lot.settlement_status == "reconciled" or cash != lot.total_amount_fen):

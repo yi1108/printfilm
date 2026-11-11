@@ -61,7 +61,7 @@ Apple月度对账沿用原不可变交易事件，充值、退款和退款撤销
 
 ## 迁移、切换与回滚
 
-后台现已提供标准切换入口：系统管理“支付与通知 → 统一钱包迁移与核对”。支持只读检查、维护暂停、服务端数据库备份、锁内迁移和复核恢复。操作与部署要求见 [后台迁移说明](WALLET_ADMIN_MIGRATION.md)。下方命令保留供停服运维使用，不要求后台操作人员执行脚本。
+后台现已提供标准切换入口：系统管理“支付与通知 → 统一钱包迁移与核对”。支持只读检查、维护暂停、服务端数据库备份、锁内迁移和复核恢复。操作与部署要求见 [后台迁移说明](WALLET_ADMIN_MIGRATION.md)。下方命令仅保留结构准备和只读核对；资金写入必须经过后台入口，旧 --apply 已停用。
 
 本次代码交付不会自动执行本地业务余额切换。上线先备份，停新充值和新任务、排空所有AI在途任务；不能排空则不切换。在`backend`目录使用现有虚拟环境：
 
@@ -73,12 +73,12 @@ python -m scripts.prepare_marketplace_app_schema --check
 python -m scripts.prepare_unified_wallet_schema --schema
 python -m scripts.prepare_unified_wallet_schema --check
 python -m scripts.prepare_unified_wallet_schema --report
-python -m scripts.prepare_unified_wallet_schema --apply --backup-file "实际数据库备份路径"
+# 资金迁移：使用系统管理 → 支付与通知 → 统一钱包迁移与核对（旧 --apply 已停用）
 ```
 
-`--schema`只新增统一资金结构；`--check/--report`不改余额。`--apply`要求统一开关关闭、真实非空备份文件，记录SHA256；锁定任务和相关资金表后重新核对。任一账户有无法解释的余额、冻结、实收来源或历史解锁映射则整体停止，不按面值猜现金。历史负余额转明确欠费。旧生产观影币只合入未用额度，保留成本区间和权益，不重放历史充值；Sandbox不并入生产。
+`--schema`只新增统一资金结构；`--check/--report`不改余额。历史资金迁移只能从后台入口执行：暂停写入并排空任务，逐户确认缺失期初历史，服务端备份后锁内复核，原子迁移并开启统一钱包。Sandbox、重复入账、凭证冲突、区间损坏及缺少正式充值入账证据必须先修复；缺失期初结余保留为待核算来源，不能认定为零成本赠额。历史负余额转明确欠费。旧生产观影币只合入未用额度，保留成本区间和权益，不重放历史充值；Sandbox不并入生产。
 
-核对完成后设置`UNIFIED_WALLET_ENABLED=true`并重启，再验证登录、共同余额、任务预扣和内容解锁。回滚应停新业务并保留资金处理，不直接切回会继续独立增减的旧钱包，不删财务历史。
+迁移成功后仍保持维护，通过后台复核恢复服务，不再手动设置环境变量启用。回滚应停新业务并保留资金处理，不直接切回会继续独立增减的旧钱包，不删财务历史。
 
 离线契约导出：`python -m scripts.export_marketplace_app_openapi`。静态OpenAPI包含App接口及共同充值、余额、Apple验单通知路径，不包含真实凭证。真实Apple Sandbox、TestFlight、生产财务及OSS长播仍须分别联调；测试替身不代表真实支付验收。
 

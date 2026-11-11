@@ -486,11 +486,11 @@ async def credit_topup(
         order = await db.scalar(select(Order).where(Order.out_trade_no == ref_id, Order.user_id == user.id))
         if ref_type != "order" or not order:
             raise ValueError("充值资金来源缺少有效订单")
-        amount = order.amount_fen
-        if order.payment_currency and order.payment_currency != "cny":
-            from decimal import Decimal, ROUND_HALF_UP
-            amount = int((Decimal(order.payment_amount_minor) * Decimal(order.payment_exchange_rate)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-        await wallet.credit(db, user.id, int(credit_fen), source_type="web_order", source_ref=ref_id, amount_fen=amount, note=note)
+        from .wallet_valuation import order_cash
+        amount = order_cash(order)
+        lot = await wallet.credit(db, user.id, int(credit_fen), source_type="web_order", source_ref=ref_id, amount_fen=amount or 0, note=note)
+        if amount is None:
+            lot.settlement_status = "pending_fx"
         return
     locked = await _lock_user(db, int(user.id))
     target = locked or user
