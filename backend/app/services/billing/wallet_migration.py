@@ -86,8 +86,16 @@ def replay_ledger(entries, orders, expected_balance, expected_frozen):
         elif delta > 0:
             if kind == "topup":
                 order = order_refs.get(ref)
-                if order is None or order.status != "paid" or order.credit_fen != delta or order.team_id is not None:
-                    raise RuntimeError(f"流水 {entry.id} 缺少可核对的个人充值订单")
+                if order is None:
+                    raise RuntimeError(f"流水 {entry.id} 的充值没有对应订单")
+                if order.team_id is not None:
+                    raise RuntimeError(f"流水 {entry.id} 对应团队订单 {order.out_trade_no}，不能记入个人来源")
+                if getattr(order, "payment_environment", None) not in (None, "Production"):
+                    raise RuntimeError(f"流水 {entry.id} 的订单 {order.out_trade_no} 属于 {order.payment_environment}，不能并入正式余额")
+                if order.status != "paid":
+                    raise RuntimeError(f"流水 {entry.id} 的订单 {order.out_trade_no} 状态是 {order.status}，不是已支付")
+                if order.credit_fen != delta:
+                    raise RuntimeError(f"流水 {entry.id} 到账 {delta}，订单 {order.out_trade_no} 到账 {order.credit_fen}")
                 source = Source("web_order", order.out_trade_no, delta, order.amount_fen, [[0, delta]])
             elif kind == "grant":
                 source = Source("signup_grant" if entry.ref_type == "signup" else "admin_grant",
@@ -113,6 +121,159 @@ def replay_ledger(entries, orders, expected_balance, expected_frozen):
     return sources, [item for item in allocations if item["units"]], deficit
 
 
+def _active_available(lots):
+    """累计仍有效来源的可用额度；区间损坏时整户视为不可核对。"""
+    total = 0
+    for lot in lots:
+        if not lot.active:
+            continue
+        try:
+            total += ranges.units(lot.available_ranges or [])
+        except (TypeError, ValueError):
+            return 0, True
+    return total, False
+
+
+def kept_balance(original, proposed):
+    """迁移后的可用积分不得低于原来的正余额。"""
+    floor = max(0, int(original or 0))
+    if int(proposed) < floor:
+        raise RuntimeError(f"迁移后余额 {int(proposed)} 低于当前可用 {floor}")
+    return int(proposed)
+
+
+def ledger_findings(entries, balance):
+    """从完整流水解释余额从哪来；用户明细只展示最新几条，不能代替这里。"""
+    if not entries:
+        return [f"没有钱包流水，账户余额 {balance}"] if balance else []
+    first = entries[0]
+    opening = int(first.balance_after) - int(first.delta_fen)
+    net = sum(int(entry.delta_fen) for entry in entries)
+    credits = [entry for entry in entries if int(entry.delta_fen) > 0 and entry.kind in ("grant", "topup")]
+    parts = [f"流水 {len(entries)} 笔，最早一笔前余额 {opening}，流水净额 {net}"]
+    if opening > 0 and not credits:
+        parts.append(f"最早一笔扣费前余额是 {opening}，没有赠送或充值流水")
+    if net != balance:
+        parts.append(f"流水净额 {net} 与账户余额 {balance} 相差 {balance - net}")
+    task_count = sum(1 for entry in entries if str(entry.ref_id).startswith("task:"))
+    if task_count:
+        parts.append(f"任务冻结或结算 {task_count} 笔")
+    return parts
+
+
+def payment_findings(entries, orders, lots=()):
+    """已支付订单必须能在流水或来源批次中找到，Sandbox 不并入正式余额。"""
+    refs = {str(entry.ref_id) for entry in entries if getattr(entry, "ref_id", None)}
+    refs.update(str(lot.source_ref) for lot in lots if getattr(lot, "source_ref", None))
+    missing, sandbox = [], []
+    for order in orders:
+        if order.status != "paid" or order.team_id is not None:
+            continue
+        if order.out_trade_no in refs or str(order.id) in refs:
+            continue
+        text = f"{order.out_trade_no} 实付 {order.amount_fen} 到账 {order.credit_fen}"
+        if getattr(order, "payment_environment", None) not in (None, "Production"):
+            sandbox.append(text)
+        else:
+            missing.append(text)
+    return missing, sandbox
+
+
+def source_payment_problems(lots, orders):
+    """来源批次上的实付必须和正式个人订单一致，赠送不能被记成实付。"""
+    by_ref = {}
+    for order in orders:
+        by_ref[order.out_trade_no] = order
+        by_ref[str(order.id)] = order
+    problems = []
+    for lot in lots:
+        if lot.source_type == "web_order":
+            order = by_ref.get(str(lot.source_ref))
+            if order is None:
+                problems.append(f"来源订单 {lot.source_ref} 不存在")
+            elif (order.status != "paid" or order.team_id is not None
+                  or getattr(order, "payment_environment", None) not in (None, "Production")):
+                problems.append(f"来源订单 {lot.source_ref} 不是已支付的正式个人订单")
+            elif int(order.credit_fen) != int(lot.total_units) or int(order.amount_fen) != int(lot.total_amount_fen):
+                problems.append(f"来源订单 {order.out_trade_no} 到账 {order.credit_fen} 实付 {order.amount_fen}，记录是 {lot.total_units}/{lot.total_amount_fen}")
+        elif lot.source_type in ("signup_grant", "admin_grant", "legacy_opening") and int(lot.total_amount_fen) != 0:
+            problems.append(f"{lot.source_type} 记了实付 {lot.total_amount_fen}")
+    return problems
+
+
+def existing_account_row(user, marker, lots, reserved, environment, entries=(), orders=()):
+    """已有统一钱包账户时带回当前积分，并把环境、来源、流水和订单差额写进核对原因。"""
+    balance = int(user.balance_fen or 0)
+    frozen = int(user.frozen_fen or 0)
+    available, unreadable = _active_available(lots)
+    reserved_units = sum(int(item.units) for item in reserved)
+    missing, sandbox = payment_findings(entries, orders, lots)
+    lot_problems = source_payment_problems(lots, orders)
+    valid = (not unreadable and marker.environment == environment
+             and all(lot.environment == environment for lot in lots)
+             and available == balance and reserved_units == frozen
+             and not missing and not lot_problems)
+    row = {"user_id": user.id, "status": "already_migrated" if valid else "blocked",
+           "balance_fen": balance, "merged_balance_fen": balance}
+    if valid and not sandbox:
+        return row
+    gaps = []
+    if marker.environment != environment:
+        gaps.append(f"账户环境 {marker.environment}，当前环境 {environment}")
+    foreign = sorted({lot.environment for lot in lots if lot.environment != environment})
+    if foreign:
+        gaps.append(f"来源环境 {'、'.join(foreign)}，当前环境 {environment}")
+    if unreadable:
+        gaps.append("来源区间无法读取")
+    elif available != balance:
+        gaps.append(f"来源可用 {available}，账户余额 {balance}")
+    if reserved_units != frozen:
+        gaps.append(f"预留冻结 {reserved_units}，账户冻结 {frozen}")
+    if lots:
+        shown = [f"{lot.source_type} {lot.total_units}（实付 {lot.total_amount_fen}，环境 {lot.environment}"
+                 f"{'' if lot.active else '，已停用'}）" for lot in lots[:5]]
+        text = "、".join(shown)
+        if len(lots) > len(shown):
+            text += f"，另有 {len(lots) - len(shown)} 笔"
+        gaps.append(f"已有来源：{text}")
+    else:
+        gaps.append("没有资金来源批次")
+    reference = marker.migration_reference or ""
+    if reference == "new-account":
+        gaps.append("账户是注册时创建的")
+    elif reference.startswith("admin:"):
+        gaps.append("账户由历史迁移写入")
+    gaps.extend(ledger_findings(entries, balance))
+    if missing:
+        gaps.append("已支付订单未入账：" + "、".join(missing[:5]))
+    gaps.extend(lot_problems[:5])
+    if sandbox:
+        gaps.append("Sandbox 已支付订单不并入正式余额：" + "、".join(sandbox[:3]))
+    row["reason"] = "已有统一钱包账户。" + "；".join(gap for gap in gaps if gap)
+    return row
+
+
+def guard_merged(row, missing, sandbox):
+    """正余额不能被迁少；未入账的正式订单不能当成已经核对。"""
+    floor = max(0, int(row.get("balance_fen") or 0))
+    merged = int(row.get("merged_balance_fen") or 0)
+    reasons = []
+    if merged < floor:
+        reasons.append(f"迁移后积分 {merged} 低于当前可用 {floor}")
+        row["merged_balance_fen"] = floor
+    if missing:
+        reasons.append("已支付订单未入账：" + "、".join(missing[:5]))
+    if sandbox:
+        reasons.append("Sandbox 已支付订单不并入正式余额：" + "、".join(sandbox[:3]))
+    if merged < floor or missing:
+        row["status"] = "blocked"
+        row["reason"] = "；".join(reasons)
+        return False
+    if reasons:
+        row["reason"] = "；".join(reasons)
+    return True
+
+
 async def build_report(db, environment):
     """只读报告不建表、不创建账户、不修改旧钱包或余额。"""
     from sqlalchemy import inspect
@@ -122,51 +283,73 @@ async def build_report(db, environment):
     existing_accounts = {row.user_id: row for row in (await db.execute(select(WalletAccount))).scalars()} if "wallet_accounts" in tables else {}
     reports, plans = [], []
     for user in (await db.execute(select(User).order_by(User.id))).scalars():
+        entries = list((await db.execute(select(WalletLedger).where(WalletLedger.user_id == user.id)
+                      .order_by(WalletLedger.id))).scalars())
+        orders = list((await db.execute(select(Order).where(Order.user_id == user.id))).scalars())
         if user.id in existing_accounts:
             marker = existing_accounts[user.id]
             lots = list((await db.execute(select(WalletFundingLot).where(WalletFundingLot.user_id == user.id))).scalars())
             reserved = list((await db.execute(select(WalletAllocation).where(
                 WalletAllocation.user_id == user.id, WalletAllocation.state == "reserved"))).scalars())
-            valid = (marker.environment == environment and all(lot.environment == environment for lot in lots)
-                     and sum(ranges.units(lot.available_ranges) for lot in lots if lot.active) == int(user.balance_fen or 0)
-                     and sum(item.units for item in reserved) == int(user.frozen_fen or 0))
-            reports.append({"user_id": user.id, "status": "already_migrated" if valid else "blocked",
-                            **({} if valid else {"reason": "已迁移账户的环境、余额或冻结来源不一致"})})
+            row = existing_account_row(user, marker, lots, reserved, environment, entries, orders)
+            try:
+                coin = await coin_snapshot(db, user.id, environment, tables)
+                coin_error = ""
+            except RuntimeError as error:
+                coin, coin_error = None, str(error)
+            if coin_error or (coin and coin["balance"]):
+                row["status"] = "blocked"
+                extra = coin_error or f"还有观影币 {coin['balance']} 未并入当前积分"
+                row["reason"] = (row.get("reason") or "已有统一钱包账户。") + extra
+                row["merged_balance_fen"] = max(0, int(user.balance_fen or 0))
+            reports.append(row)
             continue
-        entries = list((await db.execute(select(WalletLedger).where(WalletLedger.user_id == user.id)
-                      .order_by(WalletLedger.id))).scalars())
-        orders = list((await db.execute(select(Order).where(Order.user_id == user.id, Order.team_id.is_(None),
-            (Order.payment_environment.is_(None)) | (Order.payment_environment == "Production")))).scalars())
         try:
             sources, allocations, debt = replay_ledger(entries, orders, int(user.balance_fen or 0), int(user.frozen_fen or 0))
             coin = await coin_snapshot(db, user.id, environment, tables)
-            plans.append((user, sources, allocations, debt, coin))
             combined = max(0, int(user.balance_fen or 0)) + coin["balance"]
-            reports.append({"user_id": user.id, "status": "ready", "source_count": len(sources),
-                            "balance_fen": user.balance_fen, "legacy_debt_fen": debt,
-                            "coin_remaining": coin["balance"], "coin_source_count": len(coin["lots"]),
-                            "merged_balance_fen": max(0, combined - debt),
-                            "remaining_debt_fen": max(0, debt - combined)})
+            merged = max(0, combined - debt)
+            missing, sandbox = payment_findings(entries, orders)
+            row = {"user_id": user.id, "status": "ready", "source_count": len(sources),
+                   "balance_fen": user.balance_fen, "legacy_debt_fen": debt,
+                   "coin_remaining": coin["balance"], "coin_source_count": len(coin["lots"]),
+                   "merged_balance_fen": merged, "remaining_debt_fen": max(0, debt - combined)}
+            if not guard_merged(row, missing, sandbox):
+                reports.append(row)
+                continue
+            plans.append((user, sources, allocations, debt, coin))
+            reports.append(row)
         except RuntimeError as error:
             if "仍有冻结额度" in str(error):
-                reports.append({"user_id": user.id, "status": "blocked", "reason": str(error)})
+                reports.append({"user_id": user.id, "status": "blocked", "balance_fen": int(user.balance_fen or 0), "reason": str(error)})
                 continue
             try:
                 coin = await coin_snapshot(db, user.id, environment, tables)
             except RuntimeError as coin_error:
-                reports.append({"user_id": user.id, "status": "blocked", "reason": str(coin_error)})
+                reports.append({"user_id": user.id, "status": "blocked", "balance_fen": int(user.balance_fen or 0), "reason": str(coin_error)})
                 continue
             balance = int(user.balance_fen or 0)
             debt = max(0, -balance)
             sources = [Source("legacy_opening", f"user:{user.id}", balance, 0, [[0, balance]])] if balance > 0 else []
-            plans.append((user, sources, [], debt, coin))
             combined = max(0, balance) + coin["balance"]
-            reports.append({"user_id": user.id, "status": "opening", "source_count": len(sources) + len(coin["lots"]),
-                            "balance_fen": user.balance_fen, "legacy_debt_fen": debt,
-                            "coin_remaining": coin["balance"], "coin_source_count": len(coin["lots"]),
-                            "merged_balance_fen": max(0, combined - debt),
-                            "remaining_debt_fen": max(0, debt - combined),
-                            "reason": f"历史流水无法追溯（{error}）。可用积分按当前余额记为无实付来源。"})
+            merged = max(0, combined - debt)
+            missing, sandbox = payment_findings(entries, orders)
+            detail = "；".join([*ledger_findings(entries, balance),
+                               *(["已支付订单未入账：" + "、".join(missing[:5])] if missing else []),
+                               *(["Sandbox 已支付订单不并入正式余额：" + "、".join(sandbox[:3])] if sandbox else [])])
+            row = {"user_id": user.id, "status": "opening", "source_count": len(sources) + len(coin["lots"]),
+                   "balance_fen": user.balance_fen, "legacy_debt_fen": debt,
+                   "coin_remaining": coin["balance"], "coin_source_count": len(coin["lots"]),
+                   "merged_balance_fen": merged, "remaining_debt_fen": max(0, debt - combined),
+                   "reason": f"历史流水无法追溯（{error}）。{detail + '。' if detail else ''}可用积分按当前余额保留。"}
+            if merged < max(0, balance):
+                row["status"] = "blocked"
+                row["merged_balance_fen"] = max(0, balance)
+                row["reason"] = f"迁移后积分 {merged} 低于当前可用 {max(0, balance)}。" + row["reason"]
+                reports.append(row)
+                continue
+            plans.append((user, sources, [], debt, coin))
+            reports.append(row)
     return reports, plans
 
 
@@ -323,6 +506,7 @@ async def apply_plans(db, plans, environment, backup_reference):
                 db.add(WalletRepayment(user_id=user.id, debt_id=original_debt.id,
                     allocation_id=payment.id, units=payment.units, active=True))
             user.balance_fen -= repaid
+        user.balance_fen = kept_balance(original_balance, user.balance_fen)
         delta = user.balance_fen - original_balance
         db.add(WalletEvent(user_id=user.id, reference="migration:" + backup_reference, kind="migration",
             delta_fen=delta, frozen_delta_fen=0, balance_after=user.balance_fen, frozen_after=0,

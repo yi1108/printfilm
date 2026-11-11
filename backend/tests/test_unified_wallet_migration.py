@@ -9,7 +9,8 @@ from sqlalchemy import func, select, text
 from app.models import Order, User, WalletLedger
 from app.models_wallet import WalletAccount, WalletAllocation, WalletDebt, WalletFundingLot, WalletRepayment
 from app.services.billing.wallet_migration import (apply_plans, assert_no_active_tasks, build_report,
-                                                  coin_snapshot, replay_ledger, validate_coin_allocation, validate_coin_source)
+                                                  coin_snapshot, existing_account_row, kept_balance, payment_findings,
+                                                  replay_ledger, validate_coin_allocation, validate_coin_source)
 from test_unified_wallet_core import wallet_ctx  # noqa: F401
 
 
@@ -60,6 +61,74 @@ def test_replay_negative_balance_repaid_by_unfreeze():
 def test_unexplained_balance_or_unknown_refund_stops_migration(entries, balance, frozen):
     with pytest.raises(RuntimeError):
         replay_ledger(entries, [], balance, frozen)
+
+
+def account(environment="Production", reference="new-account"):
+    """已有统一钱包账户标记，不访问数据库。"""
+    return SimpleNamespace(environment=environment, migration_reference=reference)
+
+
+def lot(units=500, environment="Production", source_type="signup_grant", active=True, ranges=None):
+    """注册赠送或其他来源批次。"""
+    return SimpleNamespace(environment=environment, active=active, available_ranges=[[0, units]] if ranges is None else ranges,
+                           source_type=source_type, total_units=units, total_amount_fen=0)
+
+
+def test_existing_signup_account_shows_current_points_and_missing_source():
+    user = SimpleNamespace(id=1130, balance_fen=20, frozen_fen=0)
+    row = existing_account_row(user, account(), [], [], "Production")
+    assert row["status"] == "blocked" and row["balance_fen"] == 20 and row["merged_balance_fen"] == 20
+    assert "来源可用 0，账户余额 20" in row["reason"] and "没有资金来源批次" in row["reason"]
+    assert "账户是注册时创建的" in row["reason"]
+
+
+def test_matching_signup_grant_is_already_checked():
+    user = SimpleNamespace(id=8, balance_fen=500, frozen_fen=0)
+    row = existing_account_row(user, account(), [lot()], [], "Production")
+    assert row == {"user_id": 8, "status": "already_migrated", "balance_fen": 500, "merged_balance_fen": 500}
+
+
+def test_missing_grant_is_named_from_the_first_debit():
+    entry = SimpleNamespace(id=1, delta_fen=-80, balance_after=420, kind="freeze", ref_id="task:8664:freeze", ref_type="unified_wallet")
+    order = SimpleNamespace(id=9, out_trade_no="WEB-9", status="paid", amount_fen=100, credit_fen=500, team_id=None, payment_environment="Production")
+    user = SimpleNamespace(id=1280, balance_fen=20, frozen_fen=0)
+    row = existing_account_row(user, account(), [], [], "Production", [entry], [order])
+    assert row["status"] == "blocked" and row["balance_fen"] == 20 and row["merged_balance_fen"] == 20
+    assert "最早一笔扣费前余额是 500，没有赠送或充值流水" in row["reason"]
+    assert "已支付订单未入账：WEB-9 实付 100 到账 500" in row["reason"]
+    assert "任务冻结或结算 1 笔" in row["reason"]
+
+
+def test_paid_order_outside_ledger_is_reported():
+    order = SimpleNamespace(id=9, out_trade_no="WEB-9", status="paid", amount_fen=100, credit_fen=500, team_id=None, payment_environment="Production")
+    sandbox = SimpleNamespace(id=8, out_trade_no="SB-1", status="paid", amount_fen=10, credit_fen=10, team_id=None, payment_environment="Sandbox")
+    missing, isolated = payment_findings([], [order, sandbox])
+    assert missing == ["WEB-9 实付 100 到账 500"] and isolated == ["SB-1 实付 10 到账 10"]
+
+
+def test_replay_names_team_order_and_credit_mismatch():
+    team = SimpleNamespace(id=3, out_trade_no="TEAM-1", status="paid", credit_fen=120, amount_fen=100, team_id=9, payment_environment="Production")
+    with pytest.raises(RuntimeError, match="团队订单 TEAM-1"):
+        replay_ledger([line(1, 120, "topup", "TEAM-1", "order")], [team], 120, 0)
+    wrong = paid_order()
+    wrong.credit_fen = 100
+    with pytest.raises(RuntimeError, match="到账 120，订单 WEB-1 到账 100"):
+        replay_ledger([line(1, 120, "topup", "WEB-1", "order")], [wrong], 120, 0)
+
+
+def test_migration_refuses_to_reduce_positive_balance():
+    assert kept_balance(20, 20) == 20 and kept_balance(-5, 0) == 0
+    with pytest.raises(RuntimeError, match="低于当前可用 20"):
+        kept_balance(20, 19)
+
+
+def test_existing_account_names_environment_and_source_gap():
+    user = SimpleNamespace(id=9, balance_fen=20, frozen_fen=0)
+    row = existing_account_row(user, account("Sandbox"), [lot(500, "Sandbox")], [], "Production")
+    assert row["status"] == "blocked" and row["balance_fen"] == 20
+    assert "账户环境 Sandbox，当前环境 Production" in row["reason"]
+    assert "来源可用 500，账户余额 20" in row["reason"]
+    assert "signup_grant 500（实付 0，环境 Sandbox）" in row["reason"]
 
 
 async def prepare_legacy_tables(ctx):

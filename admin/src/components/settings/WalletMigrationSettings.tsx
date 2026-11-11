@@ -58,7 +58,7 @@ export function WalletMigrationSettings() {
   const openingRows = matched.filter(row => row.status === "opening").sort((a, b) => a.user_id - b.user_id);
   const otherRows = matched.filter(row => row.status !== "blocked" && row.status !== "opening").sort((a, b) => a.user_id - b.user_id);
   const rows = [...blockedRows, ...openingRows, ...otherRows.slice(0, 100)];
-  return <SettingsPanel title="统一钱包迁移与核对" description="只读检查不会改余额。能追溯的账号按历史订单和流水建立来源。无法追溯且没有冻结的账号按当前余额迁移：正数记为无实付历史结余，负数记为欠费。不会重新充值，也不会把 Sandbox 资金转换为正式资金。">
+  return <SettingsPanel title="统一钱包迁移与核对" description="只读检查不会改余额。能追溯的账号按历史订单和流水建立来源。无法追溯且没有冻结的账号按当前余额迁移：正数记为无实付历史结余，负数记为欠费。已有统一钱包账户时显示当前积分，并写明环境、来源额度、流水差额和未入账订单。迁移后的可用积分不会低于当前正余额。不会重新充值，也不会把 Sandbox 资金转换为正式资金。">
     <div className="space-y-4">
       <Button type="button" disabled={busy} onClick={() => void run()}>刷新只读核对报告</Button>
       <p>迁移期间全站暂停写入，浏览与查询继续开放。支付回调返回可重试状态；在途任务必须全部结算，排队任务请在任务页取消。失败后保持维护，请复核后重试或取消。</p>
