@@ -233,3 +233,27 @@ async def test_cutover_coin_balance_immediately_repays_legacy_debt_and_refund_re
     assert await debt_units(ctx.db, old.user.id) == debt
     assert await ctx.db.scalar(select(func.count()).select_from(WalletDebt).where(WalletDebt.user_id == old.user.id)) == 1
     assert old.user.balance_fen == 0
+
+
+@pytest.mark.asyncio
+async def test_untraceable_ledger_migrates_current_balance_without_cash_source(wallet_ctx):
+    """对不上的历史流水按当前余额收口：正数无实付来源，负数记欠费，冻结仍阻断。"""
+    ctx = wallet_ctx
+    await prepare_legacy_tables(ctx)
+    positive = User(email=f"{uuid.uuid4().hex}@test.invalid", hashed_password="unused", balance_fen=500, frozen_fen=0)
+    negative = User(email=f"{uuid.uuid4().hex}@test.invalid", hashed_password="unused", balance_fen=-200, frozen_fen=0)
+    frozen = User(email=f"{uuid.uuid4().hex}@test.invalid", hashed_password="unused", balance_fen=100, frozen_fen=40)
+    ctx.db.add_all([positive, negative, frozen])
+    await ctx.db.flush()
+    ctx.db.add(WalletLedger(user_id=positive.id, delta_fen=500, balance_after=500, kind="unfreeze", ref_type="task_run", ref_id="missing"))
+    reports, plans = await build_report(ctx.db, "Production")
+    assert next(row for row in reports if row["user_id"] == positive.id)["status"] == "opening"
+    assert next(row for row in reports if row["user_id"] == negative.id)["merged_balance_fen"] == 0
+    assert next(row for row in reports if row["user_id"] == frozen.id)["status"] == "blocked"
+    await apply_plans(ctx.db, plans, "Production", "backup-proof")
+    source = await ctx.db.scalar(select(WalletFundingLot).where(WalletFundingLot.user_id == positive.id))
+    assert source.source_type == "legacy_opening" and source.total_units == 500 and source.total_amount_fen == 0
+    assert positive.balance_fen == 500 and negative.balance_fen == 0
+    debt = await ctx.db.scalar(select(WalletDebt).where(WalletDebt.user_id == negative.id))
+    assert debt.units == 200
+    assert not await ctx.db.scalar(select(WalletAccount.id).where(WalletAccount.user_id == frozen.id))

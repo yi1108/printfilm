@@ -9,7 +9,7 @@ from app.services.billing import wallet_cutover as cutover
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("changes", [
-    {"ready": 1}, {"blocked": 1}, {"active_tasks": True}, {"missing_schema": ["wallet_accounts"]},
+    {"ready": 1}, {"blocked": 1}, {"opening": 1}, {"active_tasks": True}, {"missing_schema": ["wallet_accounts"]},
 ])
 async def test_switch_refuses_incomplete_reconciliation(monkeypatch, changes):
     result = dict(ready=0, blocked=0, active_tasks=False, missing_schema=[])

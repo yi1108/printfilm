@@ -148,7 +148,25 @@ async def build_report(db, environment):
                             "merged_balance_fen": max(0, combined - debt),
                             "remaining_debt_fen": max(0, debt - combined)})
         except RuntimeError as error:
-            reports.append({"user_id": user.id, "status": "blocked", "reason": str(error)})
+            if "仍有冻结额度" in str(error):
+                reports.append({"user_id": user.id, "status": "blocked", "reason": str(error)})
+                continue
+            try:
+                coin = await coin_snapshot(db, user.id, environment, tables)
+            except RuntimeError as coin_error:
+                reports.append({"user_id": user.id, "status": "blocked", "reason": str(coin_error)})
+                continue
+            balance = int(user.balance_fen or 0)
+            debt = max(0, -balance)
+            sources = [Source("legacy_opening", f"user:{user.id}", balance, 0, [[0, balance]])] if balance > 0 else []
+            plans.append((user, sources, [], debt, coin))
+            combined = max(0, balance) + coin["balance"]
+            reports.append({"user_id": user.id, "status": "opening", "source_count": len(sources) + len(coin["lots"]),
+                            "balance_fen": user.balance_fen, "legacy_debt_fen": debt,
+                            "coin_remaining": coin["balance"], "coin_source_count": len(coin["lots"]),
+                            "merged_balance_fen": max(0, combined - debt),
+                            "remaining_debt_fen": max(0, debt - combined),
+                            "reason": f"历史流水无法追溯（{error}）。可用积分按当前余额记为无实付来源。"})
     return reports, plans
 
 

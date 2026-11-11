@@ -10,12 +10,12 @@ type CutoverState = {
   history?: { action: string; operator_id: number; reason: string; at: string; job_id?: string; report?: unknown }[];
 };
 type Report = {
-  state: CutoverState; missing_schema: string[]; ready: number; blocked: number;
+  state: CutoverState; missing_schema: string[];   ready: number; blocked: number; opening?: number;
   already_migrated: number; active_tasks: boolean;
   accounts: { user_id: number; status: string; balance_fen?: number; merged_balance_fen?: number; reason?: string }[];
 };
 const endpoint = "/api/admin/settings/wallet-migration";
-const statusNames: Record<string, string> = { ready: "可迁移", blocked: "需人工核对", already_migrated: "已核对" };
+const statusNames: Record<string, string> = { ready: "可迁移", opening: "按当前余额迁移", blocked: "需人工核对", already_migrated: "已核对" };
 
 export function WalletMigrationSettings() {
   const [report, setReport] = useState<Report>();
@@ -55,15 +55,16 @@ export function WalletMigrationSettings() {
   const completed = report?.state.phase === "completed";
   const matched = report?.accounts.filter(row => (!filter || String(row.user_id).includes(filter) || row.reason?.includes(filter))) || [];
   const blockedRows = matched.filter(row => row.status === "blocked").sort((a, b) => a.user_id - b.user_id);
-  const otherRows = matched.filter(row => row.status !== "blocked").sort((a, b) => a.user_id - b.user_id);
-  const rows = [...blockedRows, ...otherRows.slice(0, 100)];
-  return <SettingsPanel title="统一钱包迁移与核对" description="只读检查不会改余额。迁移按历史订单和流水建立来源，不会重新充值，也不会把 Sandbox 资金转换为正式资金。">
+  const openingRows = matched.filter(row => row.status === "opening").sort((a, b) => a.user_id - b.user_id);
+  const otherRows = matched.filter(row => row.status !== "blocked" && row.status !== "opening").sort((a, b) => a.user_id - b.user_id);
+  const rows = [...blockedRows, ...openingRows, ...otherRows.slice(0, 100)];
+  return <SettingsPanel title="统一钱包迁移与核对" description="只读检查不会改余额。能追溯的账号按历史订单和流水建立来源。无法追溯且没有冻结的账号按当前余额迁移：正数记为无实付历史结余，负数记为欠费。不会重新充值，也不会把 Sandbox 资金转换为正式资金。">
     <div className="space-y-4">
       <Button type="button" disabled={busy} onClick={() => void run()}>刷新只读核对报告</Button>
       <p>迁移期间全站暂停写入，浏览与查询继续开放。支付回调返回可重试状态；在途任务必须全部结算，排队任务请在任务页取消。失败后保持维护，请复核后重试或取消。</p>
       {error && <p role="alert" className="text-red-600">{error}</p>}
       {report && <>
-        <p>当前：{paused ? "维护中" : "正常服务"} · 待迁移 {report.ready} · 异常 {report.blocked} · 已核对 {report.already_migrated} · 在途任务：{report.active_tasks ? "有（暂不能迁移）" : "无"}</p>
+        <p>当前：{paused ? "维护中" : "正常服务"} · 待迁移 {report.ready} · 按当前余额 {report.opening ?? 0} · 异常 {report.blocked} · 已核对 {report.already_migrated} · 在途任务：{report.active_tasks ? "有（暂不能迁移）" : "无"}</p>
         {report.missing_schema.length > 0 && <p role="alert">数据库结构未就绪：{report.missing_schema.join("、")}</p>}
         <label className="block">操作理由<input className="block w-full" value={reason} maxLength={500} onChange={e => setReason(e.target.value)} placeholder="填写维护、迁移或恢复的原因" /></label>
         <div className="flex flex-wrap gap-3">
@@ -75,8 +76,8 @@ export function WalletMigrationSettings() {
         {report.state.job_id && <p className="break-all">迁移编号：{report.state.job_id} · 备份 SHA256：{report.state.backup_sha256 || "尚未完成"}</p>}
         {completed && <p>已迁移 {report.state.migrated_count} 个账户。统一钱包已启用；恢复后请重新加载本页再编辑其他支付配置。</p>}
         <label className="block">按用户 ID 或异常原因过滤<input className="block w-full" value={filter} onChange={e => setFilter(e.target.value)} /></label>
-        <div className="overflow-x-auto"><table className="w-full text-left"><thead><tr><th>用户 ID</th><th>状态</th><th>原积分</th><th>迁移后积分</th><th>异常原因</th></tr></thead><tbody>{rows.slice(0, 100).map(row => <tr key={row.user_id}><td>{row.user_id}</td><td>{statusNames[row.status] || row.status}</td><td>{row.balance_fen ?? "—"}</td><td>{row.merged_balance_fen ?? "—"}</td><td>{row.reason || "—"}</td></tr>)}</tbody></table></div>
-        <p>符合条件 {matched.length} 条。需人工核对的 {blockedRows.length} 条全部列出，其余最多显示 100 条；可输入用户 ID 或异常原因定位。</p>
+        <div className="overflow-x-auto"><table className="w-full text-left"><thead><tr><th>用户 ID</th><th>状态</th><th>原积分</th><th>迁移后积分</th><th>异常原因</th></tr></thead><tbody>{rows.map(row => <tr key={row.user_id}><td>{row.user_id}</td><td>{statusNames[row.status] || row.status}</td><td>{row.balance_fen ?? "—"}</td><td>{row.merged_balance_fen ?? "—"}</td><td>{row.reason || "—"}</td></tr>)}</tbody></table></div>
+        <p>符合条件 {matched.length} 条。需人工核对的 {blockedRows.length} 条和按当前余额迁移的 {openingRows.length} 条全部列出，其余最多显示 100 条。</p>
         <details><summary>操作审计</summary>{report.state.history?.map((item, i) => <div key={i}><p>{item.at} · {item.action} · 操作人 {item.operator_id} · {item.reason} · {item.job_id}</p>{item.report != null && <details><summary>查看该次迁移核对报告快照</summary><pre className="overflow-x-auto">{JSON.stringify(item.report, null, 2)}</pre></details>}</div>)}</details>
       </>}
     </div>

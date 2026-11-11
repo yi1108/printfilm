@@ -96,15 +96,15 @@ async def report(db, environment=None):
         active = True
     return {"state": value, "missing_schema": [], "accounts": rows, "active_tasks": active,
             **{key: sum(r["status"] == key for r in rows)
-               for key in ("ready", "blocked", "already_migrated")}}
+               for key in ("ready", "blocked", "already_migrated", "opening")}}
 
 
 async def validate_activation(db, environment):
     """A settings switch never substitutes for historical source reconciliation."""
     value = await report(db, environment)
-    if value["missing_schema"] or value["ready"] or value["blocked"] or value["active_tasks"]:
-        raise ValueError("统一钱包尚未完成核对：待迁移 %s 个，异常 %s 个，在途任务 %s。请先使用资金迁移入口。"
-                         % (value["ready"], value["blocked"], "有" if value["active_tasks"] else "无"))
+    if value["missing_schema"] or value["ready"] or value.get("opening") or value["blocked"] or value["active_tasks"]:
+        raise ValueError("统一钱包尚未完成核对：待迁移 %s 个，按当前余额 %s 个，异常 %s 个，在途任务 %s。请先使用资金迁移入口。"
+                         % (value["ready"], value.get("opening", 0), value["blocked"], "有" if value["active_tasks"] else "无"))
 
 
 async def validate_settings_activation(db, environment):
