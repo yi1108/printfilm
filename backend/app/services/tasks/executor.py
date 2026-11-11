@@ -51,7 +51,7 @@ async def execute_task_run(task_id: int) -> None:
         step = task.steps[0] if task.steps else None
 
         try:
-            if task.team_id is not None and not task.provider_task_id:
+            if (task.team_id is not None or (task.domain == 'studio' and task.drama_project_id is not None)) and not task.provider_task_id:
                 from app.services.tasks.team_scope import ensure_task_may_submit
                 await ensure_task_may_submit(db, task)
                 from app.services.teams.edit_locks import validate_task_locks

@@ -23,7 +23,7 @@ class AgentSkill(Base):
     description: Mapped[str] = mapped_column(String(1024), default="")
     # body 完整 markdown 正文（不含 YAML 头）
     body: Mapped[str] = mapped_column(Text, default="")
-    # tasks 适用任务：shot_plan / video_prompt / all
+    # tasks 适用任务：asset_plan / shot_plan / video_prompt / all
     tasks: Mapped[list] = mapped_column(JSON, default=list)
     is_builtin: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

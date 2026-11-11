@@ -12,10 +12,10 @@ from app.services.model_routing_config import normalize_model_name
 PRESET_MODELS: dict[LogicalModelCapability, tuple[dict[str, str], ...]] = {
     "text": (
         {
-            "id": "kimi-k2.6",
-            "label": "Kimi K2.6",
-            "note": "默认剧本/分镜，中文长上下文表现稳定",
-            "pricing_hint": "适合长剧本",
+            "id": "gpt-6.1-sol",
+            "label": "GPT-6.1 Sol",
+            "note": "剧本创作、分镜提示词与日常改写",
+            "pricing_hint": "按平台文字任务计费",
         },
         {
             "id": "deepseek-v4-pro",
@@ -24,40 +24,19 @@ PRESET_MODELS: dict[LogicalModelCapability, tuple[dict[str, str], ...]] = {
             "pricing_hint": "通常更省",
         },
         {
-            "id": "gpt-5.5",
-            "label": "GPT 5.5",
-            "note": "综合能力强，复杂指令与英文场景更稳",
-            "pricing_hint": "相对更贵",
+            "id": "gpt-6-astra",
+            "label": "GPT-6 Astra",
+            "note": "复杂叙事、细节推敲与多重创作要求",
+            "pricing_hint": "按平台文字任务计费",
         },
     ),
     "image": (
-        {
-            "id": "seedream-5.0-pro",
-            "label": "Seedream 5.0 Pro",
-            "note": "成片定妆首选，角色一致性好；按清晰度计费",
-            "pricing_hint": "按模型与分辨率定价",
-            "eta_hint": "约 20–60 秒/张",
-        },
         {
             "id": "seedream-5.0",
             "label": "Seedream 5.0",
             "note": "标准静帧，质量与成本均衡",
             "pricing_hint": "按模型与分辨率定价",
             "eta_hint": "约 15–40 秒/张",
-        },
-        {
-            "id": "seedream-5.0-flash",
-            "label": "Seedream 5.0 Flash",
-            "note": "更快更省，适合草稿与批量试错",
-            "pricing_hint": "按模型与分辨率定价",
-            "eta_hint": "约 10–25 秒/张",
-        },
-        {
-            "id": "gpt-image-2",
-            "label": "GPT Image 2",
-            "note": "OpenAI 生图，光影与文字表现好，适合海报与精细静帧",
-            "pricing_hint": "按模型与分辨率定价",
-            "eta_hint": "约 30–90 秒/张",
         },
         {
             "id": "gpt-image-2.5",
@@ -231,9 +210,24 @@ def is_preset_model(capability: LogicalModelCapability, model_id: str | None) ->
     return mid in {normalize_model_name(x) for x in preset_ids(capability)}
 
 
+def current_model_selection(capability: str, model_id: str | None, fallback: str | None = None) -> str:
+    """Replace retired choices only at submission/default selection, never in history."""
+    raw = (model_id or '').strip()
+    key = raw.lower()
+    if capability == 'text' and (key.startswith('kimi-') or key == 'gpt-5.5'):
+        candidate = current_model_selection('text', fallback) if fallback and fallback != model_id else ''
+        return candidate or 'gpt-6.1-sol'
+    if capability == 'image':
+        if resolve_preset_alias(raw) in {'seedream-5.0-pro', 'seedream-5.0-flash'}:
+            return 'seedream-5.0'
+        if key == 'gpt-image-2':
+            return 'gpt-image-2.5'
+    return raw
+
+
 def clamp_default_to_preset(capability: LogicalModelCapability, model_id: str | None) -> str:
     """非法或不空缺省时落到该能力第一项预设。"""
-    raw = resolve_preset_alias(model_id)
+    raw = resolve_preset_alias(current_model_selection(capability, model_id))
     if is_preset_model(capability, raw):
         # 返回预设表里的规范写法
         for mid in preset_ids(capability):

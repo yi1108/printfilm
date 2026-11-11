@@ -1,4 +1,3 @@
-import { workspaceScope } from '../../../features/teams/workspaceScope'
 /** 画布顶栏：返回、标题、保存状态、设置占位 */
 import { useState } from 'react'
 import { ChevronLeft, Maximize2, Settings } from 'lucide-react'
@@ -39,7 +38,7 @@ export function CanvasTopBar({ variant = 'fullscreen' }: Props) {
               title="返回"
               onClick={() => {
                 if (freeCanvasMode) {
-                  navigate(workspaceScope.teamId ? `/teams/${workspaceScope.teamId}?tab=projects` : '/canvas')
+                  navigate('/canvas')
                   return
                 }
                 if (window.history.length > 1) navigate(-1)

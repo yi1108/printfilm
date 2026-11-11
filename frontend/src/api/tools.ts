@@ -36,6 +36,29 @@ export type ToolTaskResult = {
   error?: string | null
 }
 
+export type StudioTaskQueryItem = {
+  can_cancel?: boolean
+  generation_stage?: string
+  asset_id?: number | null
+  id: string
+  status: string
+  result: { urls?: string[]; preview_url?: string | null } | null
+  error: string | null
+  user_id: string
+  node_id: string
+  created_at: number
+  spec: { prompt?: string; model?: string; size?: string; count?: number; references?: unknown[] }
+  kind: string
+}
+
+/** 按任务编号批量查询画布生成状态。 */
+export function queryStudioTasks(ids: string[], projectId?: number): Promise<{ data: StudioTaskQueryItem[]; missing_ids: string[] }> {
+  return requestToolJson(projectId ? `/api/printfilm-studio/projects/${projectId}/tasks/query` : '/api/tools/tasks/query', '查询失败', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  })
+}
+
 export type ToolRunRecord = {
   id: number
   source?: 'task' | 'tool'
@@ -84,6 +107,8 @@ export function resolveToolMediaUrl(url?: string | null): string {
 }
 
 export type ToolRunPayload = {
+  projectId?: number
+  editHeaders?: HeadersInit
   modelId?: string
   resolution?: string
   toolId: string
@@ -99,7 +124,9 @@ export type ToolRunPayload = {
   files?: File[]
   videoMode?: 'text_to_video' | 'first_last_frame' | 'omni_reference'
   references?: ToolReferenceInput[]
+  generateAudio?: boolean
   priceVersion?: number
+  nodeId?: string
 }
 
 /** 上传仅提交文件索引，资产仅提交 ID；媒体地址由服务端校验归属后读取。 */
@@ -116,6 +143,7 @@ export type StudioToolEstimatePayload = {
   resolution: string
   ratio: string
   duration: string
+  generate_audio?: boolean
   video_mode: NonNullable<ToolRunPayload['videoMode']>
   references: ToolReferenceInput[]
 }
@@ -157,13 +185,15 @@ export async function runStudioTool(payload: ToolRunPayload): Promise<ToolRunRes
   body.append('duration', payload.duration || '')
   body.append('motion', payload.motion || '')
   body.append('voice', payload.voice || 'narrator_calm')
+  if (payload.generateAudio !== undefined) body.append('generate_audio', String(payload.generateAudio))
+  if (payload.nodeId) body.append('node_id', payload.nodeId)
   if (payload.videoMode) body.append('video_mode', payload.videoMode)
   if (payload.references) body.append('references', JSON.stringify(payload.references))
   if (payload.priceVersion !== undefined) body.append('price_version', String(payload.priceVersion))
   for (const file of payload.files || []) {
     body.append('files', file)
   }
-  return requestToolJson('/api/tools/run', '生成失败', { method: 'POST', body }, true)
+  return requestToolJson(payload.projectId ? `/api/printfilm-studio/projects/${payload.projectId}/generations` : '/api/tools/run', '生成失败', { method: 'POST', body, headers: payload.editHeaders }, true)
 }
 
 // 查询视频任务状态
@@ -172,7 +202,7 @@ export async function pollStudioToolTask(taskId: string): Promise<ToolTaskResult
 }
 
 // 个人中心：分页拉取工具创作记录
-export type ToolRunFilters = { kind?: string; status?: string; task_id?: string; created_from?: string; created_to?: string }
+export type ToolRunFilters = { kind?: string; status?: string; task_id?: string; created_from?: string; created_to?: string; q?: string }
 
 export async function listToolRuns(page = 1, pageSize = 8, filters: ToolRunFilters = {}): Promise<ToolRunList> {
   const qs = new URLSearchParams({ page: String(page), page_size: String(pageSize) })

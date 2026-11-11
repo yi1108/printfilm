@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import hashlib
 import json
 import logging
@@ -77,6 +78,18 @@ from app.services.llm_client import chat_completions
 from app.services import seedance_segments as segplan
 
 logger = logging.getLogger(__name__)
+# 画布生图在本地媒体模拟开启时仍走真实上游；视频和配音继续模拟。
+_force_real_image: contextvars.ContextVar[bool] = contextvars.ContextVar("force_real_image", default=False)
+
+
+class force_real_image:
+    """在当前任务内让生图请求真正发到上游。"""
+
+    def __enter__(self) -> None:
+        self._token = _force_real_image.set(True)
+
+    def __exit__(self, *_args: object) -> None:
+        _force_real_image.reset(self._token)
 
 # TokenFree /v1/responses 同步等图；Kie sunburst 偶发超过 10 分钟才回
 IMAGE_GEN_READ_SEC = 1200.0
@@ -634,7 +647,7 @@ class ArkGateway:
         return result
 
     async def _request_media(self, client: Any, method: str, endpoint: str, **kwargs: Any) -> Any:
-        if getattr(self.settings, "local_media_mock", False):
+        if getattr(self.settings, "local_media_mock", False) and not _force_real_image.get():
             return await local_media_mock.simulate_http_request(method, endpoint, **kwargs)
         return await observed_request(client, method, endpoint, **kwargs)
 
@@ -1061,6 +1074,7 @@ class ArkGateway:
                 aspect_ratio=str(aspect_ratio or ""),
                 ref_urls=subject_refs,
                 style_ref_urls=style_refs,
+                structured_refs=True,
             )
 
         try:
@@ -1089,7 +1103,7 @@ class ArkGateway:
         except httpx.TimeoutException as exc:
             reraise_upstream_timeout(exc, kind="生图", read_sec=IMAGE_GEN_READ_SEC)
 
-        if getattr(self.settings, "local_media_mock", False):
+        if getattr(self.settings, "local_media_mock", False) and not _force_real_image.get():
             return ImageResult(local_url=local_media_mock.media_url("default.jpg"), raw_usage={"simulated": True}, upstream_cost_fen=0)
 
         raise_tokenfree_image_if_failed(data)

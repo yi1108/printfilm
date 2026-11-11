@@ -69,7 +69,7 @@ function DramaListInner({ workflow }: { workflow: DramaWorkflow }) {
   const [publishProjectId, setPublishProjectId] = useState<number | null>(null)
   const { t, m } = useI18n()
   const canvasMode = workflow === 'canvas'
-  const createLabel = canvasMode ? t('canvasList.newCanvas') : t('dramaList.newProject')
+  const createLabel = canvasMode ? '新建项目' : t('dramaList.newProject')
   const filterOptions = useMemo<PillOption<DramaProjectFilter>[]>(
     () =>
       FILTER_KEYS.filter((value) => !canvasMode || value !== 'done').map((value) => ({
@@ -81,11 +81,12 @@ function DramaListInner({ workflow }: { workflow: DramaWorkflow }) {
   const [items, setItems] = useState<DramaProjectListItem[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState<number>(PAGE_SIZE_DEFAULT)
+  const [pageSize, setPageSize] = useState<number>(canvasMode ? 8 : PAGE_SIZE_DEFAULT)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [deleting, setDeleting] = useState(false)
+  const [relation, setRelation] = useState<'all' | 'owned' | 'joined'>('all')
   const [filter, setFilter] = useState<DramaProjectFilter>('all')
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
@@ -106,6 +107,7 @@ function DramaListInner({ workflow }: { workflow: DramaWorkflow }) {
     try {
       const res = await dramaApi.listProjects({
         workflow,
+        relation: canvasMode ? relation : undefined,
         status: filter,
         q: debouncedQuery || undefined,
         page,
@@ -123,7 +125,7 @@ function DramaListInner({ workflow }: { workflow: DramaWorkflow }) {
     } finally {
       if (seq === loadSeq.current) setLoading(false)
     }
-  }, [workflow, filter, debouncedQuery, page, pageSize])
+  }, [workflow, canvasMode, relation, filter, debouncedQuery, page, pageSize])
 
   useEffect(() => {
     setLoading(true)
@@ -146,13 +148,13 @@ function DramaListInner({ workflow }: { workflow: DramaWorkflow }) {
       workflow,
     })
     setShowCreate(false)
-    if (canvasMode) navigate(`/drama/projects/${project.id}/canvas`)
+    if (canvasMode) navigate(`/drama/projects/${project.id}/printfilm-studio`)
     else navigate(`/drama/projects/${project.id}`, { state: { activeStep: 'outline' } })
   }
 
   const selectionMode = selected.size > 0
   // 未加任何筛选且结果为空时才展示「还没有项目」大空态
-  const pristineEmpty = total === 0 && filter === 'all' && !debouncedQuery
+  const pristineEmpty = total === 0 && filter === 'all' && relation === 'all' && !debouncedQuery
 
   // 切换选中
   const toggleSelect = useCallback((id: number) => {
@@ -166,7 +168,7 @@ function DramaListInner({ workflow }: { workflow: DramaWorkflow }) {
 
   // 打开项目：自由画布进画布，普通项目进工作台
   function openProject(item: DramaProjectListItem) {
-    if (selectionMode) {
+    if (selectionMode && item.is_owner !== false) {
       toggleSelect(item.id)
       return
     }
@@ -257,16 +259,17 @@ function DramaListInner({ workflow }: { workflow: DramaWorkflow }) {
           </Button>
         </header>
 
-        <section className="pf-project-list-panel" aria-label={canvasMode ? '我的画布' : '我的项目'}>
+        <section className="pf-project-list-panel" aria-label={'我的项目'}>
           <div className="pf-project-list-heading">
             <div>
-              <h2>{canvasMode ? '我的画布' : '我的项目'}{!loading && <span>{total}</span>}</h2>
-              <p>{canvasMode ? '收集灵感，自由连接每一个创作节点。' : '让每一个好故事，稳步成为作品。'}</p>
+              <h2>{'我的项目'}{!loading && <span>{total}</span>}</h2>
+              <p>{canvasMode ? '自己创建和参与的项目都在这里，按项目与伙伴协作。' : '让每一个好故事，稳步成为作品。'}</p>
             </div>
             <Button variant="lime" onClick={() => setShowCreate(true)}>
               <Plus size={19} strokeWidth={1.8} aria-hidden />{createLabel}
             </Button>
           </div>
+          {canvasMode && <PillFilter options={[{ value: 'all', label: '全部项目' }, { value: 'owned', label: '我创建的' }, { value: 'joined', label: '我参与的' }]} value={relation} onChange={(next) => { setRelation(next); setPage(1); setSelected(new Set()) }} ariaLabel="项目分类" />}
           <div className="pf-project-list-toolbar">
             <PillFilter<DramaProjectFilter>
               options={filterOptions}
@@ -281,7 +284,7 @@ function DramaListInner({ workflow }: { workflow: DramaWorkflow }) {
                 type="search"
                 value={query}
                 onChange={(e) => { setQuery(e.target.value); setPage(1) }}
-                placeholder={t(canvasMode ? 'canvasList.searchPlaceholder' : 'dramaList.searchPlaceholder')}
+                placeholder={canvasMode ? '搜索项目名称' : t('dramaList.searchPlaceholder')}
               />
             </label>
           </div>
@@ -301,7 +304,7 @@ function DramaListInner({ workflow }: { workflow: DramaWorkflow }) {
           ) : items.length === 0 ? (
             <div className="pf-empty-state is-compact">
               <p className="pf-muted">没有符合筛选的项目</p>
-              <Button variant="ghost" size="sm" onClick={() => { setFilter('all'); setQuery('') }}>清除筛选</Button>
+              <Button variant="ghost" size="sm" onClick={() => { setFilter('all'); setRelation('all'); setQuery('') }}>清除筛选</Button>
             </div>
           ) : (
             <>
@@ -323,15 +326,15 @@ function DramaListInner({ workflow }: { workflow: DramaWorkflow }) {
                     <span title={canvasMode ? t('canvasList.usageTitle') : '本剧累计费用与生成次数'}>{formatDramaUsageBrief(item.usage)}</span>
                   </>}
                   footer={<>
-                    <span><UserRound size={13} aria-hidden />个人项目</span>
+                    <span><UserRound size={13} aria-hidden />{item.is_owner === false ? '我参与的' : '我创建的'}</span>
                     <time dateTime={item.updated_at || item.created_at}>{formatUpdatedAt(item.updated_at || item.created_at)}</time>
                   </>}
-                  menu={<DramaProjectCardMenu
+                  menu={item.is_owner === false ? undefined : <DramaProjectCardMenu
                     onRename={() => void handleRename(item)}
                     onDelete={() => void handleDeleteOne(item)}
                     onPublish={capabilities?.enabled ? () => setPublishProjectId(item.id) : undefined}
                   />}
-                  selection={{ checked: selected.has(item.id), visible: selectionMode, onChange: () => toggleSelect(item.id), label: `选择 ${item.title}` }}
+                  selection={item.is_owner === false ? undefined : { checked: selected.has(item.id), visible: selectionMode, onChange: () => toggleSelect(item.id), label: `选择 ${item.title}` }}
                   onOpen={() => openProject(item)}
                   openLabel={selectionMode ? `切换选择 ${item.title}` : `打开 ${item.title}`}
                 />
@@ -343,7 +346,7 @@ function DramaListInner({ workflow }: { workflow: DramaWorkflow }) {
               total={total}
               pageSize={pageSize}
               pageSizeOptions={PAGE_SIZE_OPTIONS}
-              onPageSizeChange={(size) => {
+              onPageSizeChange={canvasMode ? undefined : (size) => {
                 setPageSize(size)
                 setPage(1)
               }}

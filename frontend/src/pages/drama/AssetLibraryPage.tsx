@@ -19,7 +19,7 @@ import { subscribeWorkspace, workspaceScope } from '../../features/teams/workspa
 import RequireAuth from './RequireAuth'
 import './drama.css'
 
-const PAGE_SIZE_OPTIONS = [12, 24, 36] as const
+const PAGE_SIZE = 8
 type LibraryProject = { id: number; title: string; kind: 'drama' | 'short_video' }
 
 /** 漫剧与短视频使用独立项目编号空间，不能只传数字筛选。 */
@@ -43,14 +43,14 @@ function previewAudio(asset: MediaLibraryItem): string {
 }
 
 function AssetLibraryInner() {
-  const [listing, setListing] = useState<MediaLibraryPage>({ items: [], meta: { total: 0, total_all: 0, page: 1, page_size: 12 } })
+  const [listing, setListing] = useState<MediaLibraryPage>({ items: [], meta: { total: 0, total_all: 0, page: 1, page_size: PAGE_SIZE } })
   const [projects, setProjects] = useState<LibraryProject[]>([])
   const [projectId, setProjectId] = useState('')
   const [mediaFilter, setMediaFilter] = useState<MediaLibraryFilter>({ kind: 'image', imageType: 'all', generationStatus: 'all' })
   const [query, setQuery] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(12)
+  const pageSize = PAGE_SIZE
   const [playingKey, setPlayingKey] = useState<string | null>(null)
   const [selectedAsset, setSelectedAsset] = useState<MediaLibraryItem | null>(null)
   const [error, setError] = useState('')
@@ -75,7 +75,7 @@ function AssetLibraryInner() {
       }
       return rows
     }
-    const kinds: LibraryProject['kind'][] = workspaceScope.teamId === null ? ['drama', 'short_video'] : ['drama']
+    const kinds: LibraryProject['kind'][] = ['drama', 'short_video']
     void Promise.allSettled(kinds.map(loadProjects)).then((results) => {
       if (active) setProjects(results.flatMap((result) => result.status === 'fulfilled' ? result.value : []))
     })
@@ -130,7 +130,7 @@ function AssetLibraryInner() {
   }
 
   return <AppShell active="assets">
-    <div className="drama-page pf-library-panel">
+    <div className="drama-page pf-library-panel pf-digital-library">
       <header className="pf-library-page-head">
         <div className="pf-library-heading"><div><h1>数字资产库</h1><p className="pf-muted" style={{ margin: '0.35rem 0 0' }}>按图片、视频、音频浏览，可筛选已生成与未生成资产；图片可进一步筛选角色、场景与道具</p></div>
           <span className="pf-library-count"><Image size={14} />{listing.meta.total} 项资产</span>
@@ -153,7 +153,7 @@ function AssetLibraryInner() {
           const preview = previewAudio(asset)
           const playing = playingKey === asset.key
           const sourceLabel = asset.source_kind === 'drama_fragment' ? '分镜视频' : asset.source_kind === 'short_video' ? 'AI短视频' : asset.source_kind === 'task' ? '生成结果' : asset.source_kind === 'tool' && !asset.project_id ? '独立生成' : '项目素材'
-          const workspaceLabel = workspaceScope.teamId === null ? '个人资产' : '团队资产'
+          const workspaceLabel = asset.project_id ? '项目资产' : '个人资产'
           return <AssetCard key={asset.key} asset={asset} subtitle={asset.project_title || (asset.project_id ? '项目素材' : '未关联项目')} footer={`${sourceLabel} · ${workspaceLabel}`} updatedAt={asset.updated_at} onOpen={() => setSelectedAsset(asset)}
             status={audio ? playing ? '正在试听' : preview ? '可试听' : '待合成' : undefined}
             actions={<>
@@ -162,7 +162,7 @@ function AssetLibraryInner() {
               {asset.project_url ? <Button to={asset.project_url} variant="ghost" size="sm">打开项目</Button> : <Button size="sm" onClick={() => setSelectedAsset(asset)}>查看素材</Button>}
             </>} />
         })}</AssetGrid>
-        <Pagination page={listing.meta.page} pageCount={pageCount} total={listing.meta.total} pageSize={pageSize} pageSizeOptions={PAGE_SIZE_OPTIONS} onPageSizeChange={(size) => { setPageSize(size); setPage(1) }} onChange={setPage} ariaLabel="数字资产库分页" />
+        <Pagination page={listing.meta.page} pageCount={pageCount} total={listing.meta.total} pageSize={pageSize} onChange={setPage} ariaLabel="数字资产库分页" />
       </>}
       {selectedAsset && <AssetDetailDialog asset={selectedAsset} audioUrl={selectedAsset.media_kind !== 'audio' ? previewAudio(selectedAsset) : undefined} onClose={() => setSelectedAsset(null)} actions={selectedAsset.project_url ? <Button to={selectedAsset.project_url} variant="dark">打开来源项目</Button> : undefined} />}
     </div>

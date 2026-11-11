@@ -22,6 +22,15 @@ VIDEO_TOOLS = {"t2v", "v2v"}
 VOICES = {"narrator_calm", "warm_storyteller", "teacher_clear"}
 
 
+def video_audio_enabled(model_id: str | None, requested: bool | None = None) -> bool:
+    from app.services.media_models.prices import resolve_strategy
+    strategy = resolve_strategy(model_id or get_settings().model_video)
+    enabled = strategy.supports_generate_audio if requested is None else requested
+    if enabled and not strategy.supports_generate_audio:
+        raise ValueError('所选视频模型不支持生成声音')
+    return enabled
+
+
 def validate_generation(tool_id: str, prompt: str, params: dict, file_count: int, *, quote: bool = False) -> str:
     if tool_id not in IMAGE_TOOLS | VIDEO_TOOLS | {"audio"}:
         raise ValueError("未知生成类型")
@@ -51,16 +60,18 @@ def validate_generation(tool_id: str, prompt: str, params: dict, file_count: int
             references = reference_params(params)
         else:
             references = {"reference_images": [f"pending://upload/{i}" for i in range(file_count or (1 if kind == "video" else 0))]}
+        if kind == 'video':
+            params['generate_audio'] = video_audio_enabled(model, params.get('generate_audio'))
         strategy.normalize_and_validate({"aspect_ratio": params.get("ratio") or ("1:1" if kind == "image" else "9:16"),
             "resolution": params.get("resolution") or ("2K" if kind == "image" else "480p"),
             **references,
-            **({"duration": str(params.get("duration") or "5").removesuffix("s")} if kind == "video" else {})})
+            **({"generate_audio": params["generate_audio"], "duration": str(params.get("duration") or "5").removesuffix("s")} if kind == "video" else {})})
     if kind == "audio" and params.get("voice", "narrator_calm") not in VOICES:
         raise ValueError("不支持的音色")
     return kind
 
 
-async def enqueue_generation(db, user, *, tool_id: str, prompt: str, params: dict, files: list[Path]) -> dict:
+async def enqueue_generation(db, user, *, tool_id: str, prompt: str, params: dict, files: list[Path], drama_project_id: int | None = None) -> dict:
     kind = validate_generation(tool_id, prompt, params, len(files))
     row = ToolRun(user_id=user.id, tool_id=tool_id, kind=kind, status="queued", prompt=prompt.strip(),
                   params={**params, "file_paths": [str(p) for p in files]})
@@ -68,11 +79,11 @@ async def enqueue_generation(db, user, *, tool_id: str, prompt: str, params: dic
     await db.flush()
     payload = {**params, "run_id": row.id, "tool_id": tool_id,
                "duration": int(str(params.get("duration") or "5").removesuffix("s")),
-               "resolution": params.get("resolution") or ("480p" if kind == "video" else "2K"), "generate_audio": False}
+               "resolution": params.get("resolution") or ("480p" if kind == "video" else "2K"), "generate_audio": params.get("generate_audio", False)}
     if not params.get("video_mode"):
         payload["reference_images"] = [str(path) for path in files]
     task = await create_task(db, user, TaskCreateRequest(
-        domain="studio", task_type=f"tool_{kind}", cancelable=False, payload=payload,
+        domain="studio", task_type=f"tool_{kind}", cancelable=False, payload=payload, drama_project_id=drama_project_id,
     ), commit=False)
     row.task_id = f"task-{task.id}"
     row.params = {**row.params, "platform_task_id": task.id, "billing_task_id": task.id}
@@ -104,7 +115,7 @@ async def execute_generation(task: TaskRun) -> dict:
                     ratio=params.get("ratio"), duration_raw=params.get("duration"),
                     motion=params.get("motion"), files=files, output_no=row.id,
                     model_id=params.get("model_id"), resolution=params.get("resolution"),
-                    video_mode=params.get("video_mode"), references=stored_task.payload)
+                    video_mode=params.get("video_mode"), references=stored_task.payload, generate_audio=stored_task.payload.get("generate_audio", False))
                 provider_id = data["task_id"]
                 row.preview_url = data.get("preview_url")
             stored_task.provider_task_id = provider_id
@@ -130,7 +141,8 @@ async def execute_generation(task: TaskRun) -> dict:
             data = await run_image_tool(db, user, tool_id=row.tool_id, prompt=row.prompt,
                 negative=str(params.get("negative") or ""), ratio=params.get("ratio"),
                 strength=params.get("strength"), mode=params.get("mode"), pack=params.get("pack"),
-                files=files, output_no=row.id)
+                files=files, output_no=row.id, model_id=params.get("model_id"),
+                resolution=params.get("resolution"))
         urls = ensure_public_urls(data.get("urls"))
         if not urls or not all(urls):
             raise RuntimeError("上游未返回生成结果")
@@ -168,13 +180,16 @@ async def poll_generation_video(task_id: int) -> None:
             return
         user = await db.get(User, task.requested_by)
         async with billing_scope(task.id, snapshot=task.billing_snapshot), upstream_event_session(db):
-            data = await poll_video_task(user, task.provider_task_id)
+            async def stage_changed(stage):
+                task.provider_status = stage
+                await db.commit()
+            data = await poll_video_task(user, task.provider_task_id, on_stage=stage_changed)
             task.provider_status = data["status"]
             if data["status"] == "succeeded":
                 usage = data.get("usage") or {}
                 result = TaskResult(status="succeeded", total_tokens=usage.get("total_tokens", 0),
                                     completion_tokens=usage.get("completion_tokens", 0), raw_usage=data.get("raw_usage"))
-                await record_seedance_video_usage(db, user_id=user.id, billing_key=seedance_billing_key(generate_audio=False),
+                await record_seedance_video_usage(db, user_id=user.id, billing_key=seedance_billing_key(generate_audio=bool((task.payload or {}).get("generate_audio", False))),
                     model=(task.payload or {}).get("model_id") or get_settings().model_video, domain="studio", task_result=result,
                     fallback_duration_sec=(task.payload or {}).get("duration"), resolution=(task.payload or {}).get("resolution") or "480p",
                     provider_task_id=task.provider_task_id)

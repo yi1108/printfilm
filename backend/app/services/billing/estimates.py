@@ -159,8 +159,8 @@ def estimate_phase_fen(project: Project, phase: str, settings: Settings | None =
     raw = normalize_kepu_pipeline_phase(phase, project)
 
     if raw == "script":
-        charge = charge_fen_official_llm(s.billing_est_llm_tokens, s)
-        return _buffered_fen(charge, s)
+        from app.services.billing.text_price import TEXT_PRICE_FEN
+        return TEXT_PRICE_FEN
 
     if raw == "assets":
         return _estimate_assets_fen(project, s)
@@ -176,6 +176,9 @@ def estimate_phase_fen(project: Project, phase: str, settings: Settings | None =
 
 async def estimate_task_fen(db: AsyncSession, task: TaskRun, settings: Settings | None = None) -> int:
     """按 domain + task_type 估算单任务预扣（分）。"""
+    from app.services.billing.text_price import is_text_task, TEXT_PRICE_FEN
+    if is_text_task(task):
+        return TEXT_PRICE_FEN
     s = settings or get_settings()
     domain = (task.domain or "").strip()
     task_type = (task.task_type or "").strip()

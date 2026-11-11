@@ -83,6 +83,19 @@ async def compose_task_skills(
     return render_skill_block(matched)
 
 
+async def compose_selected_task_skills(
+    db: AsyncSession | None,
+    user_id: int | None,
+    task: str,
+    skill_ids: list[int],
+) -> str:
+    """按显式选择加载 Skill，再过滤当前阶段，防止跨阶段规则叠加。"""
+    if db is None or not skill_ids:
+        return ""
+    rows = await list_skills_by_ids(db, user_id, skill_ids)
+    return render_skill_block([row for row in rows if skill_matches_task(row, task)])
+
+
 def with_skill_system(base_system: str, skill_block: str) -> str:
     # 基础系统提示 + skill 附录
     extra = (skill_block or "").strip()

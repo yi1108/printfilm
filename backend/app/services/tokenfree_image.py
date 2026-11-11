@@ -137,6 +137,7 @@ def build_tokenfree_image_body(
     aspect_ratio: str = "",
     ref_urls: list[str] | None = None,
     style_ref_urls: list[str] | None = None,
+    structured_refs: bool = False,
 ) -> dict[str, Any]:
     """线上成功体只要 model + 自然语言 input，不要 size: 这种协议字段。
 
@@ -166,6 +167,12 @@ def build_tokenfree_image_body(
     if refs:
         text = f"{text}。构图与主体参考：{' '.join(refs)}"
     mid = tokenfree_working_image_model(model)
+    if structured_refs and (refs or style_refs):
+        # URLs in plain text are not image inputs. Responses-compatible channels
+        # must receive input_image blocks to actually inspect the references.
+        content = [{'type': 'input_text', 'text': text}]
+        content.extend({'type': 'input_image', 'image_url': url} for url in [*refs, *style_refs])
+        return {'model': mid, 'input': [{'role': 'user', 'content': content}]}
     return {"model": mid, "input": text}
 
 

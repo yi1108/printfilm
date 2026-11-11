@@ -1,0 +1,23 @@
+.pf-workspace-tour{position:fixed;inset:0;z-index:12000;pointer-events:none;font:14px/1.6 'Segoe UI','Microsoft YaHei',sans-serif;color:#303440}
+.pf-tour-mask{position:absolute;inset:0;fill:#141c2d80}
+.pf-tour-focus{position:fixed;box-sizing:border-box;border:2px solid #8ba8ff;border-radius:12px;box-shadow:0 0 0 4px #a8bcff26;pointer-events:none}
+.pf-tour-card{position:fixed;box-sizing:border-box;max-height:calc(100dvh - 24px);overflow:auto;pointer-events:auto;background:#fff;border:1px solid #e5e8f0;border-radius:18px;padding:18px 20px;box-shadow:0 18px 60px #101a3440;animation:pf-tour-enter .16s ease-out}
+.pf-tour-card header{display:flex;align-items:center;justify-content:space-between;color:#7a8295;font-size:12px}
+.pf-tour-card header b{font-weight:500;margin-left:8px;color:#465674;font-variant-numeric:tabular-nums}
+.pf-tour-card button{font:inherit;cursor:pointer;border:0;background:transparent;color:inherit;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:7px}
+.pf-tour-card button:hover{background:#f0f3f9}
+.pf-tour-card button:disabled{opacity:.35;cursor:default}
+.pf-tour-card button:focus-visible{outline:2px solid #5f82d4;outline-offset:3px}
+.pf-tour-progress{display:flex;gap:4px;margin:12px 0 18px}
+.pf-tour-progress i{height:3px;flex:1;border-radius:4px;background:#e9edf4}
+.pf-tour-progress i.is-done{background:#617bb5}
+.pf-tour-card h2{font-size:19px;line-height:1.4;letter-spacing:-.3px;margin:0 0 10px;outline:none}
+.pf-tour-card p{margin:0 0 14px;line-height:1.8;color:#525d70}
+.pf-tour-card small{display:block;font-size:11px;color:#8a92a1}
+.pf-tour-card footer{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:20px;font-size:12px}
+.pf-tour-card footer>div{display:flex;gap:5px}
+.pf-tour-card .pf-tour-skip{color:#8a92a1;padding-left:0}
+.pf-tour-card .pf-tour-next{background:#30394d;color:#fff;padding:8px 12px}
+.pf-tour-card .pf-tour-next:hover{background:#445675}
+@keyframes pf-tour-enter{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){.pf-tour-card{animation:none}}

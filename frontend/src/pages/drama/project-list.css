@@ -46,3 +46,7 @@
   .pf-project-list-heading p { max-width: 14em; }
   .pf-project-list-toolbar .pf-pill { padding: 8px 11px; }
 }
+.pf-shared-project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+.pf-shared-project-grid a { display: flex; flex-direction: column; gap: 12px; padding: 22px; border: 1px solid var(--border, #e5e1ed); border-radius: 14px; color: inherit; text-decoration: none; }
+.pf-shared-project-grid a:hover { background: #f7f5fb; }
+.pf-shared-project-grid span { font-size: 13px; color: #756782; }

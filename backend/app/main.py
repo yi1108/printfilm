@@ -9,9 +9,14 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.api import auth, billing, capabilities, creation, projects, tasks, templates, tools
-from app.api import teams, team_billing, team_content, team_edit_locks
+from app.api import team_content
 from app.api.admin import router as admin_router
 from app.api.drama import router as drama_router
+from app.printfilm_studio.canvas.routes import router as printfilm_studio_canvas_router
+from app.printfilm_studio.agent.routes import router as printfilm_studio_agent_router
+from app.printfilm_studio.recipes import router as printfilm_studio_recipes_router
+from app.printfilm_studio.integration.generation_routes import router as printfilm_studio_generation_router
+from app.printfilm_studio.integration.media_edit import router as printfilm_studio_media_edit_router
 from app.config import get_settings
 from app.database import AsyncSessionLocal, engine, init_db
 from app.logging_setup import configure_logging
@@ -132,12 +137,20 @@ app.include_router(tasks.router, prefix="/api")
 app.include_router(billing.router, prefix="/api")
 app.include_router(tools.router, prefix="/api")
 app.include_router(drama_router, prefix="/api")
-app.include_router(teams.router, prefix="/api")
-app.include_router(teams.invitation_router, prefix="/api")
-app.include_router(team_billing.router, prefix="/api")
-app.include_router(team_content.router, prefix="/api")
+app.include_router(printfilm_studio_canvas_router, prefix="/api")
+from app.printfilm_studio.sharing import router as canvas_sharing_router
+app.include_router(canvas_sharing_router, prefix="/api")
+from app.printfilm_studio.presence import router as canvas_presence_router
+app.include_router(canvas_presence_router, prefix="/api")
+app.include_router(printfilm_studio_agent_router, prefix="/api")
+app.include_router(printfilm_studio_recipes_router, prefix="/api")
+app.include_router(printfilm_studio_generation_router, prefix="/api")
+from app.printfilm_studio.workflow import router as printfilm_workflow_router
+app.include_router(printfilm_workflow_router, prefix="/api")
+app.include_router(printfilm_studio_media_edit_router, prefix="/api")
+from app.api.retired_teams import router as retired_teams_router
+app.include_router(retired_teams_router, prefix="/api")
 app.include_router(team_content.personal_router, prefix="/api")
-app.include_router(team_edit_locks.router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 
 # 下游扩展仅注册独立路由和初始化，不改变原发布、生成及存储逻辑。
@@ -205,6 +218,10 @@ async def on_shutdown() -> None:
     from app.marketplace.runtime import stop_marketplace_runtime
     from app.marketplace.app_bootstrap import stop_app_services
     await stop_app_services()
+    from app.printfilm_studio.agent.runs import shutdown_runs
+    await shutdown_runs()
+    from app.printfilm_studio.workflow import shutdown_workflows
+    await shutdown_workflows()
     await stop_marketplace_runtime()
     await stop_task_runtime()
     await dispose_engine()
@@ -238,6 +255,8 @@ async def _apply_schema_patches(engine_override: AsyncEngine | None = None) -> N
         await apply_media_schema_patches(conn)
         from app.payment_schema import apply_payment_schema_patches
         await apply_payment_schema_patches(conn)
+        from app.printfilm_studio.schema import apply_printfilm_studio_schema_patches
+        await apply_printfilm_studio_schema_patches(conn)
         scols = await _pg_columns(conn, "shots")
         if "segment_script" not in scols:
             await conn.execute(text("ALTER TABLE shots ADD COLUMN segment_script TEXT DEFAULT ''"))

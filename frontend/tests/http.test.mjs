@@ -132,3 +132,20 @@ test('价格冲突通知目录刷新，但不自动重发生成请求', async (t
   assert.equal(refreshes, 1)
   assert.equal(requests, 1)
 })
+
+test('画布和工作流冲突保留错误，但不触发价格刷新或重复请求', async (t) => {
+  const previous = globalThis.window
+  const window = new EventTarget()
+  globalThis.window = window
+  t.after(() => { if (previous === undefined) delete globalThis.window; else globalThis.window = previous })
+  let refreshes = 0
+  let requests = 0
+  window.addEventListener('media-prices-changed', () => { refreshes += 1 })
+  t.mock.method(globalThis, 'fetch', async () => {
+    requests += 1
+    return Response.json({ detail: { message: '画布版本已变化，请刷新后重试' } }, { status: 409 })
+  })
+  await assert.rejects(() => testTransport().json('/api/printfilm-studio/projects/431/workflow'), /画布版本已变化/)
+  assert.equal(refreshes, 0)
+  assert.equal(requests, 1)
+})

@@ -39,6 +39,13 @@ async def prepare_background_task(db, project_id: int, fallback_user):
 
 
 async def ensure_task_may_submit(db, task: TaskRun) -> None:
+    if task.domain == 'studio' and task.drama_project_id is not None:
+        from app.models_drama import DramaProject
+        from app.printfilm_studio.sharing import require_canvas_access
+        project = await db.get(DramaProject, task.drama_project_id)
+        if not project:
+            raise ValueError('画布不存在')
+        await require_canvas_access(db, project, task.requested_by)
     if task.team_id is None:
         return
     from app.services.teams.access import get_team

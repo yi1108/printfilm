@@ -62,6 +62,10 @@ async def derived_task_resource(db: AsyncSession, task: TaskRun) -> tuple[str, i
         return "episode", int(number)
     if task.task_type in {"asset_image", "asset_video"}:
         return "asset", 0
+    if task.task_type in {"tool_image", "tool_video", "tool_audio"}:
+        # Printfilm Studio tasks write their result back to the workspace
+        # canvas/asset stream and are admitted by the canvas edit lease.
+        return "canvas", 0
     return "structure", 0
 
 

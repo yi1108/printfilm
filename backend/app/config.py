@@ -190,6 +190,8 @@ class Settings(BaseSettings):
     marketplace_share_android_sha256_fingerprints: str = ""
     # 完整视频最长秒数。环境变量 MARKETPLACE_MAX_DURATION_SECONDS；管理端保存后以数据库为准。
     marketplace_max_duration_seconds: int = 1800
+    # Printfilm Studio 新工作台；默认关闭，便于灰度发布。
+    printfilm_studio_enabled: bool = False
 
     tos_endpoint: str = ""
     tos_bucket: str = ""

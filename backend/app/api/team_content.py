@@ -150,4 +150,6 @@ async def copy_owned_asset(asset_id: int, body: TeamAssetCopy, request: Request,
     target = await db.get(DramaProject, body.project_id)
     if not target:
         raise HTTPException(404, "目标项目不存在")
-    return await copy_asset(target.team_id, asset_id, body, request, db=db, user=user)
+    if target.user_id != user.id or target.team_id is not None:
+        raise HTTPException(404, "目标项目不存在")
+    return await copy_asset(None, asset_id, body, request, db=db, user=user)

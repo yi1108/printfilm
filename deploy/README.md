@@ -97,6 +97,8 @@ npm run dev          # 开发
 
 ## 运维
 
+旧画布升级到新画布使用保留的 `backend/scripts/migrate_legacy_canvas.py`。支持只读预览、显式历史修复、逐项目备份、重复执行保护和迁移后校验；已有新画布内容始终跳过。发布所需文件、Linux 命令与回退流程见 [旧画布迁移操作说明](../docs/legacy-canvas-migration-2026-11-11.md)。数据迁移需独立执行，不加入 API 启动钩子。
+
 ```bash
 # 看中间件日志
 docker compose -f deploy/docker-compose.yml --env-file deploy/.env.prod logs -f
