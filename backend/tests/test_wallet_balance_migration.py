@@ -110,6 +110,30 @@ def test_missing_real_payment_is_not_relabelled_as_free_gift():
         balance.prepare(NS(**data["user"]), [], [paid], data)
 
 
+@pytest.mark.parametrize("value", [2448, -1124])
+def test_broken_balance_chain_preserves_paid_evidence_as_pending(value):
+    data = snapshot(value)
+    paid = NS(id=7, out_trade_no="WEB-7", status="paid", team_id=None, user_id=1,
+        amount_fen=100, credit_fen=120, payment_environment="Production", pay_type="alipay")
+    entries = [NS(id=1, kind="topup", ref_type="order", ref_id="WEB-7", delta_fen=120, balance_after=120),
+               NS(id=2, kind="consume", ref_type="task", ref_id="old", delta_fen=-1, balance_after=value)]
+    before = deepcopy(entries)
+    preview, sources, allocations = balance.prepare(NS(**data["user"]), entries, [paid], data)
+    assert preview["merged_balance_fen"] == max(0, value)
+    assert preview["remaining_debt_fen"] == max(0, -value)
+    assert preview["pending_order_ids"] == [7] and preview["preserved_order_ids"] == []
+    assert preview["platform_grant_fen"] == 0 and preview["pending_units"] == max(0, value)
+    assert all(source.valuation_pending and source.source_type == "legacy_opening" for source in sources)
+    assert not allocations and vars(entries[0]) == vars(before[0])
+    entries[0].delta_fen = 121
+    with pytest.raises(ValueError, match="不一致"):
+        balance.prepare(NS(**data["user"]), entries, [paid], data)
+    entries[0].delta_fen = 120
+    entries.insert(1, NS(**vars(entries[0])))
+    with pytest.raises(ValueError, match="重复入账"):
+        balance.prepare(NS(**data["user"]), entries, [paid], data)
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("value,environment", [(9500, "Sandbox"), (2448, None), (-1124, None)])
 async def test_apply_appends_baseline_and_gift_without_double_balance(value, environment):
@@ -291,3 +315,38 @@ async def test_real_orm_failed_baseline_rolls_back_every_write(sqlite_wallet):
     assert ctx.session.scalar(select(User.balance_fen).where(User.id == user_id)) == 86
     assert ctx.session.scalar(select(WalletMigrationResolution.id)) is None
     assert ctx.session.scalar(select(WalletFundingLot.id)) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("value", [2448, -1124])
+async def test_paid_pending_baseline_roundtrip(sqlite_wallet, value):
+    from sqlalchemy import select
+    from app.models import User, Order
+    from app.services.billing.wallet_migration import build_report, apply_plans
+    ctx = sqlite_wallet
+    user = User(email="paid-pending@test.invalid", hashed_password="unused", balance_fen=value, frozen_fen=0)
+    ctx.session.add(user)
+    ctx.session.flush()
+    order = Order(user_id=user.id, out_trade_no="OLD-PAID", sku_id="old", pay_type="alipay",
+        amount_fen=100, credit_fen=120, status="paid", payment_environment="Production")
+    ctx.session.add(order)
+    ctx.session.add_all([
+        WalletLedger(user_id=user.id, kind="topup", ref_type="order", ref_id="OLD-PAID", delta_fen=120, balance_after=120),
+        WalletLedger(user_id=user.id, kind="consume", ref_type="task", ref_id="old", delta_fen=-1, balance_after=value)])
+    ctx.session.commit()
+    reports, _ = await build_report(ctx.db, "Production")
+    preview = reports[0]["balance_migration"]
+    assert preview["eligible"] and preview["pending_order_ids"] == [order.id]
+    approval = {str(user.id): dict(mode="original_balance", fingerprint=preview["fingerprint"],
+        environment="Production", operator_id=9, reason="保留原积分，成本待核算", accept_platform_grant=False)}
+    _, plans = await build_report(ctx.db, "Production", approval)
+    await apply_plans(ctx.db, plans, "Production", "pending-backup")
+    ctx.session.commit()
+    reports, plans = await build_report(ctx.db, "Production", approval)
+    assert reports[0]["status"] == "already_migrated" and not plans
+    assert user.balance_fen == max(0, value) and order.status == "paid" and order.amount_fen == 100
+    assert ctx.session.scalar(select(WalletLedger.delta_fen).where(WalletLedger.ref_id == "OLD-PAID")) == 120
+    if value > 0:
+        lot = ctx.session.scalar(select(WalletFundingLot))
+        assert lot.source_type == "legacy_opening" and lot.settlement_status == "pending_fx"
+        assert lot.available_ranges == [[0, value]]

@@ -12,7 +12,7 @@ type CutoverState = {
 type BalancePreview = {
   eligible: boolean; reason?: string; fingerprint?: string; original_balance_fen?: number;
   merged_balance_fen?: number; remaining_debt_fen?: number; platform_grant_fen?: number;
-  pending_units?: number; preserved_units?: number;
+  pending_units?: number; preserved_units?: number; pending_order_ids?: number[]; pending_payment_reason?: string;
 };
 type Report = {
   state: CutoverState; missing_schema: string[];   ready: number; blocked: number; opening?: number;
@@ -133,7 +133,7 @@ export function WalletMigrationSettings() {
         <label className="block">按用户 ID 或异常原因过滤<input className="block w-full" value={filter} onChange={e => setFilter(e.target.value)} /></label>
         <div className="space-y-2 rounded border p-3">
           <p>按原积分确认迁移：当前选择 {chosen.length} 个账户，迁移后可用 {balanceTotal} 积分，欠费 {debtTotal} 积分，平台补赠 {giftTotal} 积分，待核算 {pendingTotal} 积分。</p>
-          <p>确认只保存本次迁移决策，不会立即改积分。补赠包含在原积分中，不重复加款。真实付款来源损坏及冻结未结算的账户不能选择。</p>
+          <p>确认只保存本次迁移决策，不会立即改积分。补赠包含在原积分中，不重复加款。有真实付款但历史余额链不连续时，原订单和入账凭证保留，消费分摊与成本待核算，相关收益核清前不得结算。真实付款来源损坏及冻结未结算的账户不能选择。</p>
           <div className="flex flex-wrap gap-3">
             <Button type="button" disabled={busy || !paused || completed} onClick={() => setSelected(eligible.slice(0, 500).map(row => row.user_id))}>选择筛选下可迁移账户（最多500个）</Button>
             <Button type="button" disabled={busy || !selected.length} onClick={() => setSelected([])}>清空选择</Button>
@@ -146,7 +146,7 @@ export function WalletMigrationSettings() {
           <td>{row.user_id} / {row.environment ?? "未计算"}</td><td>{statusNames[row.status] || row.status}{row.approval_status === "approved" && "（本次已确认）"}</td>
           <td>{row.balance_fen ?? "未计算"}</td><td>{row.frozen_fen ?? "未计算"}</td><td>{row.merged_balance_fen ?? "未计算"}</td>
           <td>{row.legacy_debt_fen ?? "未计算"}</td><td>{row.remaining_debt_fen ?? "未计算"}</td><td>{row.pending_source_count ?? "未计算"}{!!row.pending_sources?.length && <details><summary>来源明细</summary>{row.pending_sources.map(item => <p key={`${item.source_type}:${item.source_ref}`}>{item.source_type} / {item.source_ref} · {item.units} 积分 · 实付待核算</p>)}</details>}</td>
-          <td>{row.reason || "无"}{row.balance_resolution && <details><summary>已按原积分迁移 · 查看依据</summary><p>操作人 {row.balance_resolution.operator_id} · {row.balance_resolution.reason} · 平台补赠 {row.balance_resolution.platform_grant_fen} 积分 · 原积分 {row.balance_resolution.original_balance_fen}</p><Button type="button" disabled={busy} onClick={() => void downloadResolution(row.user_id)}>下载原始快照及处理记录</Button></details>}{row.balance_migration && <details><summary>按原积分迁移预览</summary>{row.balance_migration.eligible ? <p>原积分 {row.balance_migration.original_balance_fen} → 可用 {row.balance_migration.merged_balance_fen}，欠费 {row.balance_migration.remaining_debt_fen}；平台补赠 {row.balance_migration.platform_grant_fen}，待核算 {row.balance_migration.pending_units}。</p> : <p>暂不可执行：{row.balance_migration.reason}</p>}</details>}{row.approval_status === "required" && <Button type="button" disabled={busy || !paused || completed} onClick={() => void approve(row)}>逐户确认历史期初</Button>}</td>
+          <td>{row.reason || "无"}{row.balance_resolution && <details><summary>已按原积分迁移 · 查看依据</summary><p>操作人 {row.balance_resolution.operator_id} · {row.balance_resolution.reason} · 平台补赠 {row.balance_resolution.platform_grant_fen} 积分 · 原积分 {row.balance_resolution.original_balance_fen}</p><Button type="button" disabled={busy} onClick={() => void downloadResolution(row.user_id)}>下载原始快照及处理记录</Button></details>}{row.balance_migration && <details><summary>按原积分迁移预览</summary>{row.balance_migration.eligible ? <p>原积分 {row.balance_migration.original_balance_fen} → 可用 {row.balance_migration.merged_balance_fen}，欠费 {row.balance_migration.remaining_debt_fen}；平台补赠 {row.balance_migration.platform_grant_fen}，待核算 {row.balance_migration.pending_units}。{row.balance_migration.pending_payment_reason && <span className="block text-amber-700">{row.balance_migration.pending_payment_reason}；关联 {row.balance_migration.pending_order_ids?.length ?? 0} 笔付款订单。确认不代表相关成本已核清。</span>}</p> : <p>暂不可执行：{row.balance_migration.reason}</p>}</details>}{row.approval_status === "required" && <Button type="button" disabled={busy || !paused || completed} onClick={() => void approve(row)}>逐户确认历史期初</Button>}</td>
         </tr>)}</tbody></table></div>
         <p>符合条件 {matched.length} 条。异常 {blockedRows.length} 条及历史期初 {openingRows.length} 条全部列出，其余最多显示 100 条。数据变化将使原确认失效。</p>
         <details><summary>历史备份与执行结果</summary>{report.backups?.map(item => <div key={item.job_id} className="break-all">

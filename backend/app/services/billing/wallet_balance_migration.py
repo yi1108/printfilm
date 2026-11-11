@@ -109,12 +109,36 @@ def prepare(user, entries, orders, snapshot):
     retired = [lot for lot in lots if lot.id not in preserved_ids]
     # Valid personal payment evidence must survive as its original funding lot.
     sources, new_allocations = [], []
+    pending_order_ids = []
     if not lots and real_orders:
         try:
             opening = historical_opening(entries, balance)
-            sources, new_allocations, debt = replay_ledger(entries, orders, balance, 0, opening_balance=opening)
-            if debt != max(0, -balance):
-                raise ValueError("欠费不一致")
+        except RuntimeError as error:
+            # Only a broken balance chain is eligible. Payment evidence is
+            # independently checked below, never bypassed by this decision.
+            if "前后余额不连续" not in str(error) and "末笔流水与当前余额不一致" not in str(error):
+                raise
+            from .wallet_migration import payment_evidence_problems
+            problems = payment_evidence_problems(entries, orders)
+            if any(entry.kind == "topup" and entry.ref_type != "order" for entry in entries):
+                problems.append("充值流水引用类型不是订单，不能确认成本待核算")
+            if problems:
+                raise ValueError("；".join(problems)) from error
+            for order in real_orders:
+                matching = [entry for entry in entries if entry.kind == "topup"
+                            and entry.ref_type == "order"
+                            and str(entry.ref_id) in (str(order.id), order.out_trade_no)]
+                if (getattr(order, "user_id", None) != user.id
+                        or getattr(order, "pay_type", None) not in ("alipay", "wxpay", "stripe")
+                        or len(matching) != 1):
+                    raise ValueError("真实付款缺少唯一且有效的原入账凭证，请先核对") from error
+            pending_order_ids = [order.id for order in real_orders]
+            opening = None
+        try:
+            if opening is not None:
+                sources, new_allocations, debt = replay_ledger(entries, orders, balance, 0, opening_balance=opening)
+                if debt != max(0, -balance):
+                    raise ValueError("欠费不一致")
         except (RuntimeError, ValueError, TypeError) as error:
             raise ValueError("存在真实付款但无法确定剩余来源，请先核对，不能将真实充值改成零成本") from error
         kept = sum(ranges.units(source.available_ranges) for source in sources)
@@ -134,6 +158,8 @@ def prepare(user, entries, orders, snapshot):
            for t in snapshot["apple_transactions"]):
         raise ValueError("真实Apple交易缺少原资金来源，请先核对，不能按余额忽略付款事实")
     for order in real_orders:
+        if order.id in pending_order_ids:
+            continue
         if getattr(order, "pay_type", None) == "apple_iap":
             matches = [t for t in linked_transactions(order)
                        if t["environment"] == "Production" and t["status"] == "paid"
@@ -156,7 +182,7 @@ def prepare(user, entries, orders, snapshot):
             except (TypeError, ValueError):
                 # Unprovable residual remains pending, never certified free cash.
                 continue
-    gift = residual if sandbox_account else min(residual, sandbox_units)
+    gift = 0 if pending_order_ids else residual if sandbox_account else min(residual, sandbox_units)
     pending = residual - gift
     if gift:
         sources.append(Source("admin_grant", "balance-sandbox-replacement", gift, 0, [[0, gift]]))
@@ -168,7 +194,9 @@ def prepare(user, entries, orders, snapshot):
         "original_balance_fen": balance, "merged_balance_fen": target, "remaining_debt_fen": max(0, -balance),
         "platform_grant_fen": gift, "pending_units": sum(ranges.units(s.available_ranges) for s in sources if s.valuation_pending),
         "preserved_units": known_preserved, "archived_lot_ids": [lot.id for lot in retired],
-        "preserved_order_ids": [order.id for order in real_orders]}
+        "preserved_order_ids": [order.id for order in real_orders if order.id not in pending_order_ids],
+        "pending_order_ids": pending_order_ids,
+        "pending_payment_reason": "历史余额链不连续，原付款及入账凭证保留，消费分摊与实付成本待核算" if pending_order_ids else None}
     return preview, sources, new_allocations
 
 
