@@ -89,14 +89,18 @@ async def allocations(db, user_id, business_type, business_ref):
     """同一用户已持资金锁，后续按编号顺序读取来源。"""
     return list((await db.execute(select(WalletAllocation).where(
         WalletAllocation.user_id == user_id, WalletAllocation.business_type == business_type,
-        WalletAllocation.business_ref == str(business_ref)).order_by(WalletAllocation.id))).scalars())
+        WalletAllocation.business_ref == str(business_ref)).join(WalletFundingLot, WalletFundingLot.id == WalletAllocation.lot_id)
+        .where(WalletFundingLot.environment == globals()["environment"](), WalletFundingLot.settlement_status != "migration_archived")
+        .order_by(WalletAllocation.id))).scalars())
 
 
 async def get_source(db, user_id, source_type, source_ref, environment=None):
     """来源编号由服务器订单或已验签交易决定。"""
     await lock_account(db, user_id, environment)
     return await db.scalar(select(WalletFundingLot).where(WalletFundingLot.user_id == user_id,
-        WalletFundingLot.source_type == source_type, WalletFundingLot.source_ref == str(source_ref))
+        WalletFundingLot.source_type == source_type, WalletFundingLot.source_ref == str(source_ref),
+        WalletFundingLot.environment == globals()["environment"](environment),
+        WalletFundingLot.settlement_status != "migration_archived")
         .with_for_update().execution_options(populate_existing=True))
 
 
@@ -118,7 +122,7 @@ async def debt_units(db, user_id):
 async def allocate(db, user, amount, business_type, business_ref, *, state="consumed", partial=False):
     """FIFO 来源分摊不依赖客户端余额，纯赠额实收成本为零。"""
     lots = list((await db.execute(select(WalletFundingLot).where(WalletFundingLot.user_id == user.id,
-        WalletFundingLot.active.is_(True)).order_by(WalletFundingLot.id).with_for_update()
+        WalletFundingLot.active.is_(True), WalletFundingLot.environment == environment()).order_by(WalletFundingLot.id).with_for_update()
         .execution_options(populate_existing=True))).scalars())
     available = sum(ranges.units(lot.available_ranges) for lot in lots)
     if available != int(user.balance_fen or 0):
@@ -147,6 +151,7 @@ async def ensure_can_spend(db, user):
         raise WalletError("WALLET_DEBT_OUTSTANDING", "账户有待补齐欠费，请先充值。")
     invalid = await db.scalar(select(WalletAllocation.id).join(WalletFundingLot,
         WalletFundingLot.id == WalletAllocation.lot_id).where(WalletAllocation.user_id == user.id,
-        WalletAllocation.state == "reserved", WalletFundingLot.active.is_(False)).limit(1))
+        WalletAllocation.state == "reserved", WalletFundingLot.active.is_(False),
+        WalletFundingLot.environment == environment(), WalletFundingLot.settlement_status != "migration_archived").limit(1))
     if invalid:
         raise WalletError("WALLET_REFUND_PENDING", "退款关联任务正在结算，请稍后重试。")

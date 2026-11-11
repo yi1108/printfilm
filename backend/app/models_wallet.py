@@ -116,3 +116,15 @@ class WalletTaskNotice(WalletRecord):
     lot_id: Mapped[int] = mapped_column(ForeignKey("wallet_funding_lots.id"))
     status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
     __table_args__ = (UniqueConstraint("task_id", "lot_id"),)
+
+
+class WalletMigrationResolution(WalletRecord):
+    """Immutable administrator-approved baseline; historical entries are never deleted."""
+    __tablename__ = "wallet_migration_resolutions"
+    user_id: Mapped[int] = mapped_column(Integer, unique=True, index=True)
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    backup_reference: Mapped[str] = mapped_column(String(200))
+    operator_id: Mapped[int] = mapped_column(Integer)
+    reason: Mapped[str] = mapped_column(String(500))
+    snapshot: Mapped[dict] = mapped_column(JSON)
+    result: Mapped[dict] = mapped_column(JSON)

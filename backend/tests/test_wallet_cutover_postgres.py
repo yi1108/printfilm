@@ -183,3 +183,78 @@ async def test_overlapping_funding_ranges_block_existing_account(wallet_ctx):
     result = await cutover.report(ctx.db)
     row = next(row for row in result["accounts"] if row["user_id"] == ctx.user.id)
     assert row["status"] == "blocked" and "区间" in row["reason"]
+
+
+@pytest.mark.asyncio
+async def test_original_balance_sandbox_gift_preserves_old_history_and_can_spend(wallet_ctx, monkeypatch):
+    from app.models_wallet import WalletAllocation, WalletMigrationResolution
+    from app.services.billing import wallet
+    ctx = wallet_ctx
+    await setup(ctx)
+    old_user = User(email="old-sandbox-baseline@test.invalid", hashed_password="unused", balance_fen=20, frozen_fen=0)
+    ctx.db.add(old_user)
+    await ctx.db.flush()
+    ctx.db.add(WalletAccount(user_id=old_user.id, environment="Sandbox", migration_reference="new-account"))
+    old_lot = WalletFundingLot(user_id=old_user.id, environment="Sandbox", source_type="signup_grant",
+        source_ref="old-signup", total_units=500, total_amount_fen=0, available_ranges=[[480, 500]],
+        void_ranges=[], active=True, revision=0, settlement_status="reconciled")
+    ctx.db.add(old_lot)
+    await ctx.db.flush()
+    ctx.db.add(WalletAllocation(user_id=old_user.id, lot_id=old_lot.id, business_type="ai_task", business_ref="999",
+        units=480, amount_fen=0, ranges=[[0, 480]], state="consumed"))
+    old_entry = WalletLedger(user_id=old_user.id, delta_fen=-480, balance_after=20,
+                            kind="consume", ref_type="unified_wallet", ref_id="old-task")
+    ctx.db.add(old_entry)
+    await ctx.db.commit()
+    entry_id, user_id = old_entry.id, old_user.id
+    monkeypatch.setattr(cutover, "backup", AsyncMock(return_value="a" * 64))
+    monkeypatch.setattr(cutover, "sync_runtime", AsyncMock())
+    state = await cutover.pause(ctx.db, 1, "保留原积分并替代测试额度")
+    row = next(row for row in (await cutover.report(ctx.db))["accounts"] if row["user_id"] == user_id)
+    assert row["balance_migration"]["platform_grant_fen"] == 20
+    await cutover.approve_balances(ctx.db, [{"user_id": user_id, "fingerprint": row["balance_migration"]["fingerprint"]}],
+        state["job_id"], 1, "核对后平台正式补赠", True)
+    await cutover.apply(ctx.db, state["job_id"], 1, "备份后按原积分迁移")
+    await cutover.apply(ctx.db, state["job_id"], 1, "重复请求")
+    assert await ctx.db.scalar(select(func.count()).select_from(WalletMigrationResolution).where(WalletMigrationResolution.user_id == user_id)) == 1
+    original = await ctx.db.get(WalletLedger, entry_id, populate_existing=True)
+    assert original.delta_fen == -480 and original.balance_after == 20
+    await ctx.db.refresh(old_lot)
+    assert old_lot.environment == "Sandbox" and old_lot.active and old_lot.available_ranges == [[480, 500]]
+    assert old_user.balance_fen == 20
+    assert all(row["status"] == "already_migrated" for row in (await cutover.report(ctx.db))["accounts"])
+    await cutover.resume(ctx.db, state["job_id"], 1, "复核恢复服务")
+    await wallet.consume(ctx.db, user_id, 5, business_type="admin_adjustment", business_ref="after-baseline")
+    assert old_user.balance_fen == 15 and old_lot.available_ranges == [[480, 500]]
+    grants = list((await ctx.db.execute(select(WalletLedger).where(WalletLedger.user_id == user_id, WalletLedger.kind == "grant"))).scalars())
+    assert len(grants) == 1 and grants[0].delta_fen == 20
+
+
+@pytest.mark.asyncio
+async def test_original_balance_failure_rolls_back_marker_and_platform_gift(wallet_ctx, monkeypatch):
+    from app.models_wallet import WalletMigrationResolution
+    ctx = wallet_ctx
+    await setup(ctx)
+    old_user = User(email="baseline-rollback@test.invalid", hashed_password="unused", balance_fen=86, frozen_fen=0)
+    ctx.db.add(old_user)
+    await ctx.db.flush()
+    user_id = old_user.id
+    ctx.db.add(WalletAccount(user_id=user_id, environment="Sandbox", migration_reference="old-sandbox"))
+    await ctx.db.commit()
+    monkeypatch.setattr(cutover, "backup", AsyncMock(return_value="b" * 64))
+    state = await cutover.pause(ctx.db, 1, "按原积分保留")
+    row = next(row for row in (await cutover.report(ctx.db))["accounts"] if row["user_id"] == user_id)
+    await cutover.approve_balances(ctx.db, [{"user_id": user_id, "fingerprint": row["balance_migration"]["fingerprint"]}],
+        state["job_id"], 1, "测试平台正式补赠", True)
+    original = cutover.apply_plans
+    async def fail(*args):
+        await original(*args)
+        raise RuntimeError("simulated baseline failure")
+    monkeypatch.setattr(cutover, "apply_plans", fail)
+    with pytest.raises(RuntimeError, match="simulated"):
+        await cutover.apply(ctx.db, state["job_id"], 1, "测试事务回滚")
+    await ctx.db.rollback()
+    assert await ctx.db.scalar(select(WalletAccount.environment).where(WalletAccount.user_id == user_id)) == "Sandbox"
+    assert await ctx.db.scalar(select(User.balance_fen).where(User.id == user_id)) == 86
+    assert await ctx.db.scalar(select(WalletMigrationResolution.id).where(WalletMigrationResolution.user_id == user_id)) is None
+    assert (await cutover.state(ctx.db))["paused"]

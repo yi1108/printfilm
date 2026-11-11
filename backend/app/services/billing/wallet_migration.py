@@ -6,7 +6,7 @@ import json
 from sqlalchemy import or_, select
 
 from app.models import Order, User, WalletLedger
-from app.models_wallet import WalletAccount, WalletAllocation, WalletDebt, WalletEvent, WalletFundingLot, WalletRepayment
+from app.models_wallet import WalletAccount, WalletAllocation, WalletDebt, WalletEvent, WalletFundingLot, WalletRepayment, WalletMigrationResolution
 from . import wallet_ranges as ranges
 from .wallet_valuation import order_cash
 
@@ -478,11 +478,19 @@ async def build_report(db, environment, approvals=None):
     tables = await connection.run_sync(lambda sync: set(inspect(sync).get_table_names(
         schema=(sync.get_execution_options().get("schema_translate_map") or {}).get(None))))
     existing_accounts = {row.user_id: row for row in (await db.execute(select(WalletAccount).execution_options(populate_existing=True))).scalars()} if "wallet_accounts" in tables else {}
+    resolutions = {row.user_id: row for row in (await db.execute(select(WalletMigrationResolution))).scalars()} if "wallet_migration_resolutions" in tables else {}
     reports, plans = [], []
     for user in (await db.execute(select(User).order_by(User.id).execution_options(populate_existing=True))).scalars():
         entries = list((await db.execute(select(WalletLedger).where(WalletLedger.user_id == user.id)
                       .order_by(WalletLedger.id).execution_options(populate_existing=True))).scalars())
         orders = list((await db.execute(select(Order).where(Order.user_id == user.id).order_by(Order.id).execution_options(populate_existing=True))).scalars())
+        resolution = resolutions.get(user.id)
+        if resolution:
+            prior = resolution.snapshot
+            entries = [entry for entry in entries if entry.id not in {e["id"] for e in prior["entries"]}]
+            kept_orders = set(resolution.result.get("preserved_order_ids", []))
+            archived_orders = {o["id"] for o in prior["orders"]} - kept_orders
+            orders = [order for order in orders if order.id not in archived_orders]
         if user.id in existing_accounts:
             marker = existing_accounts[user.id]
             lots = list((await db.execute(select(WalletFundingLot).where(WalletFundingLot.user_id == user.id).execution_options(populate_existing=True))).scalars())
@@ -490,6 +498,15 @@ async def build_report(db, environment, approvals=None):
             reserved = [item for item in all_allocations if item.state == "reserved"]
             debts = list((await db.execute(select(WalletDebt).where(WalletDebt.user_id == user.id).execution_options(populate_existing=True))).scalars())
             repayments = list((await db.execute(select(WalletRepayment).where(WalletRepayment.user_id == user.id).execution_options(populate_existing=True))).scalars())
+            if resolution:
+                archived_lots = set(resolution.result["archived_lot_ids"])
+                archived_allocations = {a["id"] for a in resolution.snapshot["allocations"] if a["lot_id"] in archived_lots}
+                lots = [lot for lot in lots if lot.id not in archived_lots]
+                all_allocations = [a for a in all_allocations if a.id not in archived_allocations]
+                reserved = [a for a in all_allocations if a.state == "reserved"]
+                old_debts = {debt["id"] for debt in resolution.snapshot["debts"]}
+                debts = [debt for debt in debts if debt.id not in old_debts]
+                repayments = [payment for payment in repayments if payment.debt_id not in old_debts]
             apple_transactions = []
             if "marketplace_apple_transactions" in tables:
                 from app.marketplace.app_models import AppleTransaction
@@ -499,6 +516,9 @@ async def build_report(db, environment, approvals=None):
             funded_refs = {lot.source_ref for lot in lots if lot.source_type == "apple_transaction"}
             funded_transactions = [txn for txn in apple_transactions if f"{environment}:{txn.transaction_id}" in funded_refs]
             row = existing_account_row(user, marker, lots, reserved, environment, entries, orders, funded_transactions)
+            if resolution:
+                row["balance_resolution"] = {"operator_id": resolution.operator_id, "reason": resolution.reason,
+                    "backup_reference": resolution.backup_reference, **resolution.result}
             row.update(frozen_fen=int(user.frozen_fen or 0), environment=environment,
                        legacy_debt_fen=sum(debt.units for debt in debts if debt.active),
                        pending_source_count=sum(lot.settlement_status == "pending_fx" for lot in lots),
@@ -527,7 +547,8 @@ async def build_report(db, environment, approvals=None):
             except RuntimeError as error:
                 row.update(status="blocked", reason=(row.get("reason", "") + str(error)))
             try:
-                await validate_retired_coin_mirror(db, user.id, environment, lots, all_allocations, tables)
+                if not resolution:
+                    await validate_retired_coin_mirror(db, user.id, environment, lots, all_allocations, tables)
             except (RuntimeError, ValueError, TypeError) as error:
                 row.update(status="blocked", reason=row.get("reason", "") + str(error))
             reports.append(row)
@@ -579,6 +600,24 @@ async def build_report(db, environment, approvals=None):
             reports.append(row)
         except (RuntimeError, ValueError, TypeError) as error:
             reports.append({**base, "status": "blocked", "reason": str(error)})
+    if environment == "Production" and "wallet_migration_resolutions" in tables:
+        from .wallet_balance_migration import candidate
+        for row in reports:
+            if row["status"] not in ("blocked", "opening") or row["user_id"] in resolutions:
+                continue
+            preview, plan = await candidate(db, row["user_id"], tables)
+            row["balance_migration"] = preview
+            approval = (approvals or {}).get(str(row["user_id"]), {})
+            if (plan is not None and approval.get("mode") == "original_balance"
+                    and approval.get("fingerprint") == preview["fingerprint"]
+                    and approval.get("environment") == environment
+                    and (not preview["platform_grant_fen"] or approval.get("accept_platform_grant"))):
+                plan.approval = approval
+                plans = [p for p in plans if (p.user.id if hasattr(p, "user") else p[0].id) != row["user_id"]]
+                plans.append(plan)
+                row.update(status="balance_approved", approval_status="approved",
+                    merged_balance_fen=preview["merged_balance_fen"], remaining_debt_fen=preview["remaining_debt_fen"],
+                    reason="已按原积分确认；沙箱替代部分由平台正式赠送，未知差额待核算。原异常：" + row.get("reason", ""))
     return reports, plans
 
 
@@ -674,7 +713,12 @@ def validate_coin_allocation(lot, allocation):
 
 async def apply_plans(db, plans, environment, backup_reference):
     """只执行已整体核对通过的快照，不重新履约任何历史充值。"""
-    for user, sources, allocations, debt, coin in plans:
+    from .wallet_balance_migration import BalancePlan, apply as apply_balance
+    for plan in plans:
+        if isinstance(plan, BalancePlan):
+            await apply_balance(db, plan, backup_reference)
+            continue
+        user, sources, allocations, debt, coin = plan
         original_balance = int(user.balance_fen or 0)
         db.add(WalletAccount(user_id=user.id, environment=environment, migration_reference=backup_reference))
         migrated = []

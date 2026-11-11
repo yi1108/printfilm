@@ -47,6 +47,38 @@ async def approve(user_id: int, body: Approval, admin: User = Depends(get_curren
         raise HTTPException(409, str(exc)) from exc
 
 
+class BalanceSelection(BaseModel):
+    user_id: int = Field(gt=0)
+    fingerprint: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
+class BalanceApprovals(Action):
+    selections: list[BalanceSelection] = Field(min_length=1, max_length=500)
+    accept_platform_grant: bool = False
+
+
+@router.post("/balance-approvals", summary="按原积分逐户或批量确认迁移，沙箱替代额度由平台赠送")
+async def approve_balances(body: BalanceApprovals, admin: User = Depends(get_current_admin), db: AsyncSession = Depends(get_db)):
+    try:
+        return await cutover.approve_balances(db, [item.model_dump() for item in body.selections],
+            body.job_id, admin.id, body.reason, body.accept_platform_grant)
+    except ValueError as exc:
+        await db.rollback()
+        raise HTTPException(409, str(exc)) from exc
+
+
+@router.get("/balance-resolutions/{user_id}", summary="查询按原积分迁移的原始快照与处理记录（仅管理员）")
+async def balance_resolution(user_id: int, _admin: User = Depends(get_current_admin), db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import select
+    from app.models_wallet import WalletMigrationResolution
+    row = await db.scalar(select(WalletMigrationResolution).where(WalletMigrationResolution.user_id == user_id))
+    if not row:
+        raise HTTPException(404, "该账户没有按原积分迁移记录")
+    return {"user_id": row.user_id, "operator_id": row.operator_id, "reason": row.reason,
+        "fingerprint": row.fingerprint, "backup_reference": row.backup_reference,
+        "created_at": row.created_at, "result": row.result, "original_snapshot": row.snapshot}
+
+
 @router.post("/{action}", summary="暂停资金写入、迁移或复核恢复")
 async def act(action: str, body: Action, admin: User = Depends(get_current_admin), db: AsyncSession = Depends(get_db)):
     if action not in ("pause", "apply", "resume"):

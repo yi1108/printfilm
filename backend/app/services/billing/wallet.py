@@ -82,7 +82,9 @@ async def snapshot(db, user_id, environment=None):
     pending = await pending_task_commitment_fen(db, user_id)
     invalid = await db.scalar(select(WalletAllocation.id).join(WalletFundingLot,
         WalletFundingLot.id == WalletAllocation.lot_id).where(WalletAllocation.user_id == user_id,
-        WalletAllocation.state == "reserved", WalletFundingLot.active.is_(False)).limit(1))
+        WalletAllocation.state == "reserved", WalletFundingLot.active.is_(False),
+        WalletFundingLot.environment == configured_environment(environment),
+        WalletFundingLot.settlement_status != "migration_archived").limit(1))
     return {"balance_fen": int(user.balance_fen or 0), "frozen_fen": int(user.frozen_fen or 0),
             "debt_fen": debt, "pending_commitment_fen": pending,
             "spendable_fen": 0 if debt or invalid else max(0, int(user.balance_fen or 0) - pending),

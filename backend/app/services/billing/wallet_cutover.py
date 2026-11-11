@@ -103,7 +103,7 @@ async def report(db, environment=None):
             "approval_required": sum(r.get("approval_status") == "required" for r in rows),
             "fingerprint": hashlib.sha256(json.dumps(rows, sort_keys=True, default=str).encode()).hexdigest(),
             **{key: sum(r["status"] == key for r in rows)
-               for key in ("ready", "blocked", "already_migrated", "opening")}}
+               for key in ("ready", "blocked", "already_migrated", "opening", "balance_approved")}}
 
 
 async def approve(db, user_id, fingerprint, environment, job_id, admin_id, reason):
@@ -127,10 +127,43 @@ async def approve(db, user_id, fingerprint, environment, job_id, admin_id, reaso
     return approvals[str(user_id)]
 
 
+async def approve_balances(db, selections, job_id, admin_id, reason, accept_platform_grant):
+    """Persist approvals only; actual funds change after backup in apply()."""
+    await exclusive(db)
+    value = await state(db)
+    if not value.get("paused") or value.get("phase") == "completed" or value.get("job_id") != job_id:
+        raise ValueError("请先暂停写入，并使用当前迁移任务确认")
+    if not selections or len(selections) > 500 or len({item["user_id"] for item in selections}) != len(selections):
+        raise ValueError("请选择1至500个不同账户")
+    current = await report(db)
+    if current["missing_schema"] or current["active_tasks"]:
+        raise ValueError("结构未就绪或仍有在途任务，请先排空并结算")
+    by_user = {row["user_id"]: row for row in current["accounts"]}
+    approvals = dict(value.get("approvals", {}))
+    snapshots = []
+    for item in selections:
+        row = by_user.get(item["user_id"], {})
+        preview = row.get("balance_migration", {})
+        if (row.get("status") not in ("blocked", "opening", "balance_approved")
+                or not preview.get("eligible") or item["fingerprint"] != preview.get("fingerprint")):
+            raise ValueError(f"账户 {item['user_id']} 的预览已变化或不支持按原积分迁移，请刷新")
+        if preview["platform_grant_fen"] and not accept_platform_grant:
+            raise ValueError("请明确确认沙箱替代额度由平台补发正式赠额")
+        approvals[str(item["user_id"])] = {"mode": "original_balance", "fingerprint": item["fingerprint"],
+            "environment": "Production", "operator_id": admin_id, "reason": reason,
+            "at": datetime.now(UTC).isoformat(), "accept_platform_grant": accept_platform_grant}
+        snapshots.append({"user_id": item["user_id"], **preview})
+    value["approvals"] = approvals
+    audit(value, "approve_original_balances", admin_id, reason, snapshots)
+    await save_state(db, value)
+    await db.commit()
+    return {"approved_count": len(snapshots)}
+
+
 async def validate_activation(db, environment):
     """A settings switch never substitutes for historical source reconciliation."""
     value = await report(db, environment)
-    if value["missing_schema"] or value["ready"] or value.get("opening") or value["blocked"] or value["active_tasks"]:
+    if value["missing_schema"] or value["ready"] or value.get("opening") or value.get("balance_approved") or value["blocked"] or value["active_tasks"]:
         raise ValueError("统一钱包尚未完成核对：待迁移 %s 个，历史期初待确认 %s 个，异常 %s 个，在途任务 %s。请先使用资金迁移入口。"
                          % (value["ready"], value.get("opening", 0), value["blocked"], "有" if value["active_tasks"] else "无"))
 
