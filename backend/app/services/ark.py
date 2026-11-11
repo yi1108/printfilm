@@ -74,7 +74,9 @@ from app.services.drama.seedance_i2v_role import resolve_seedance_i2v_image_role
 from app.services.ffmpeg_compose import is_near_silent_audio
 from app.services.drama.llm import _extract_json
 from app.services.llm_client import chat_completions
+from app.services.content_expansion import expansion_messages, fallback_expansion, expansion_language_matches, topic_language
 from app.services import seedance_segments as segplan
+from app.services.storyboard_language import storyboard_language_rule, validate_storyboard_language
 
 logger = logging.getLogger(__name__)
 
@@ -813,7 +815,7 @@ class ArkGateway:
             ratio = (output_ratio or "16:9").strip() or "16:9"
             orient = "竖屏" if ratio == "9:16" else ("方形" if ratio == "1:1" else "横屏")
             system = (
-                f"你是{orient}图文短视频编剧。所有字段必须使用简体中文。"
+                f"你是{orient}图文短视频编剧。输出语言由原始素材决定。"
                 f"{consistency}{llm_system_addon}"
                 f"每镜 duration 在 {duration_min}-{shot_cap} 秒。"
                 "这是「静图+叠字+配音」模式：不生成 AI 视频，但需要旁白配音；"
@@ -840,7 +842,7 @@ class ArkGateway:
                 else f"画风与人物必须全片一致；拆成 {shot_range} 镜，短镜快切。"
             )
             system = (
-                "你是短视频分镜编剧。所有字段必须使用简体中文"
+                "你是短视频分镜编剧。所有自然语言字段跟随原始素材语言"
                 "（包括 title、text、img_prompt、video_prompt、camera、bgm、segments）。"
                 f"{consistency}{llm_system_addon}"
                 f"每镜 duration 在 {duration_min}-{shot_cap} 秒，不要为凑满上限而注水。"
@@ -851,14 +853,15 @@ class ArkGateway:
                 "subtitle(可选，一句要点概括 8-22字)、"
                 "text(旁白台词，与 segments 中 narration 文案一致或为其摘要)、"
                 "segments(必填数组，精确到每一段：每项 duration、kind=visual|narration|action、text)、"
-                "img_prompt(与首段 visual 一致的中文首帧提示词，含具体景物与构图)、"
+                "img_prompt(与首段 visual 一致的首帧提示词，含具体景物与构图)、"
                 "video_prompt(可与 segments 画面摘要一致)、"
                 "camera(运镜，如：缓慢上摇/轻推/横移)、bgm(情绪，全片同一氛围)。"
                 "顶层另输出 bgm_lock(全片统一 BGM 氛围一句，与各镜 bgm 一致)。"
-                "img_prompt 与 video_prompt 禁止英文句子，专有名词可保留原文。"
+                "img_prompt 与 video_prompt 跟随原始素材语言，专有名词可保留原文。"
                 f"{segment_rules}"
                 f"{diversity_note}"
             )
+        system += storyboard_language_rule(source_text)
         user = (
             f"输入类型：{source_type}。请先理解内容与应用场景，再拆成精确到每一段的分镜"
             f"（{shot_range} 镜，短镜快切，禁止拖腔注水）：\n{source_text}"
@@ -909,6 +912,7 @@ class ArkGateway:
             duration_min,
             duration_max,
             max_shot_duration,
+            source_text=source_text,
         )
 
     async def gen_image(
@@ -2219,6 +2223,16 @@ class ArkGateway:
         pipeline_mode: str = "full",
         shot_range_override: tuple[int, int] | None = None,
     ) -> StoryboardResult:
+        if topic_language(source_text) == "en":
+            # 离线 mock 也遵守素材语言；不把中文模板拼回英文画面描述。
+            lo, _ = shot_range_override or segplan.suggested_kepu_shot_range(source_text, pipeline_mode=pipeline_mode)
+            chunks = [c.strip() for c in re.split(r"[.!?\n]+", source_text) if c.strip()] or ["An introduction"]
+            items = [{"shot": i + 1, "title": f"Key idea {i + 1}",
+                      "text": chunks[i % len(chunks)],
+                      "img_prompt": f"Wide shot illustrating {chunks[i % len(chunks)]}, no visible text",
+                      "camera": "Slow push in", "bgm": "Calm"} for i in range(lo)]
+            return self._parse_storyboard(json.dumps({"shots": items}), "", duration_min,
+                                          duration_max, duration_max, source_text=source_text)
         chunks = [c.strip() for c in re.split(r"[。！？\n\.\!\?]+", source_text) if c.strip()]
         if source_type == "theme" and len(chunks) <= 1:
             topic = source_text.strip()
@@ -2289,6 +2303,8 @@ class ArkGateway:
         duration_min: int,
         duration_max: int,
         max_shot_duration: int,
+        *,
+        source_text: str | None = None,
     ) -> StoryboardResult:
         raw = (content or "").strip()
         if not raw:
@@ -2297,6 +2313,10 @@ class ArkGateway:
             data = _extract_json(raw)
         except json.JSONDecodeError as exc:
             raise RuntimeError(f"分镜 JSON 解析失败：{exc}") from exc
+        if source_text is not None:
+            validate_storyboard_language(data, source_text)
+        language = topic_language(source_text) if source_text is not None else "zh"
+        english = language == "en"
         character_bible = ""
         bgm_lock = ""
         items = data
@@ -2315,18 +2335,18 @@ class ArkGateway:
         for i, item in enumerate(items, start=1):
             if not isinstance(item, dict):
                 continue
-            text = str(item.get("text") or item.get("audio_text") or f"镜头{i}")
+            text = str(item.get("text") or item.get("audio_text") or (f"Shot {i}" if english else f"镜头{i}"))
             title = str(item.get("title") or item.get("overlay_title") or "").strip()
             subtitle = str(item.get("subtitle") or item.get("overlay_subtitle") or "").strip()
-            title = _normalize_overlay_title(title, text, i)
-            subtitle = _normalize_overlay_subtitle(subtitle, text)
+            title = (title or f"Scene {i}") if english else _normalize_overlay_title(title, text, i)
+            subtitle = (subtitle or text) if english else _normalize_overlay_subtitle(subtitle, text)
             img = str(item.get("img_prompt") or f"{text}")
-            camera = str(item.get("camera", "缓慢横移"))
-            bgm = str(item.get("bgm") or item.get("bgm_mood") or bgm_lock or "平稳")
+            camera = str(item.get("camera") or ("Slow pan" if english else "缓慢横移"))
+            bgm = str(item.get("bgm") or item.get("bgm_mood") or bgm_lock or ("Calm" if english else "平稳"))
             if not bgm_lock:
                 bgm_lock = bgm
             beats = segplan.parse_beats_from_llm_shot(item, narration_fallback=text)
-            script = segplan.build_segment_script(beats, bgm_mood=bgm_lock or bgm, max_total=hi)
+            script = segplan.build_segment_script(beats, bgm_mood=bgm_lock or bgm, max_total=hi, language=language)
             narr = segplan.narration_from_script(script) or text
             visual = segplan.first_visual_prompt(script) or img
             dur = float(
@@ -2356,61 +2376,77 @@ class ArkGateway:
         return StoryboardResult(
             shots=plans,
             character_bible=character_bible,
-            bgm_lock=bgm_lock or segplan.infer_bgm_mood(style_prefix),
+            bgm_lock=bgm_lock or ("Calm" if english else segplan.infer_bgm_mood(style_prefix)),
         )
 
-    async def expand_content(self, topic: str, mode: str = "theme") -> dict[str, str]:
-        """Expand a short topic into title + theme brief or full narration script."""
+    async def expand_content(
+        self, topic: str, mode: str = "theme", *,
+        target_duration_sec: int | None = None, style: str | None = None,
+    ) -> dict[str, str]:
+        """按原始输入语言扩写；可选时长和风格兼容旧的两参数调用。"""
         topic = (topic or "").strip() or "人工智能如何改变日常生活"
         mode = "script" if mode == "script" else "theme"
         if self.mock:
             resolve_upstream_model("text", None)
-            return self._mock_expand_content(topic, mode)
-
-        if mode == "script":
-            system = (
-                "你是科普短视频文案作者。根据用户主题写一篇可直接用于旁白的完整口播文案。"
-                "只输出严格 JSON：{\"title\":\"作品名\",\"content\":\"完整文案\"}。"
-                "title：8-18 字，吸引人、无标点堆砌。"
-                "content：300-700 字，口语化，分 4-8 个自然段，有开场钩子、知识点、收尾；"
-                "不要 markdown、不要分镜编号、不要标题行。"
+            return self._mock_expand_content(
+                topic, mode, target_duration_sec=target_duration_sec, style=style,
             )
-        else:
-            system = (
-                "你是科普短视频选题策划。把用户输入扩写成一句清晰具体的创作主题。"
-                "只输出严格 JSON：{\"title\":\"作品名\",\"content\":\"主题句\"}。"
-                "title：8-18 字。"
-                "content：一句话主题，40-90 字，写清受众与要讲清的核心知识点；不要换行。"
-            )
+        system, user = expansion_messages(
+            topic, mode, target_duration_sec=target_duration_sec, style=style,
+        )
         content = await chat_completions(
-            system,
-            f"主题/素材：{topic}",
-            temperature=0.6,
-            max_tokens=4096,
+            system, user, temperature=0.6,
+            max_tokens=8192 if (target_duration_sec or 60) > 180 else 4096,
             timeout=90.0,
         )
-        return self._parse_expand_content(content or "{}", topic, mode)
+        result = self._parse_expand_content(
+            content or "{}", topic, mode,
+            target_duration_sec=target_duration_sec, style=style,
+        )
+        if expansion_language_matches(result, topic):
+            return result
+        language = "English" if topic_language(topic) == "en" else "Chinese"
+        logger.warning("文案输出语言错配，进行一次语言纠正 language=%s", language)
+        corrected = await chat_completions(
+            f"Rewrite the supplied JSON in {language}. Both title and content MUST be in {language}. "
+            "Preserve the original topic, story and meaning. Return only JSON with title and content keys.",
+            json.dumps({"original_topic": topic, "output_language": language, "draft": result}, ensure_ascii=False),
+            temperature=0.6, max_tokens=8192 if (target_duration_sec or 60) > 180 else 4096, timeout=90.0,
+        )
+        # 纠正失败必须报错，不得用离线示意稿冒充真实生成成功。
+        try:
+            corrected_data = json.loads(corrected)
+        except (ValueError, TypeError):
+            raise ValueError("AI 输出语言校验失败，请重试") from None
+        if not isinstance(corrected_data, dict) or not all(
+            isinstance(corrected_data.get(key), str) and corrected_data[key].strip() for key in ("title", "content")
+        ):
+            raise ValueError("AI 输出语言校验失败，请重试")
+        result = self._parse_expand_content(corrected, topic, mode)
+        if not expansion_language_matches(result, topic):
+            raise ValueError("AI 未按输入语言生成文案，请重试")
+        return result
 
-    def _mock_expand_content(self, topic: str, mode: str) -> dict[str, str]:
-        short = topic[:18].rstrip("？?。.!！") or "科普短片"
-        title = short if len(short) >= 4 else f"{short}的科普"
-        if mode == "script":
-            content = (
-                f"你有没有想过：{topic.rstrip('？?')}？\n\n"
-                f"今天我们用三分钟，把这件事讲清楚。"
-                f"先从生活里最常见的现象说起，再拆开背后的原理，最后给你一个好记的结论。\n\n"
-                f"很多人第一反应会想当然，但真正关键在于因果链条，而不是表象。"
-                f"弄懂这一点，你就能解释身边更多类似的问题。\n\n"
-                f"记住：观察现象、追问机制、再用例子验证。"
-                f"下一次再遇到{short}相关话题，你也能自信地讲给别人听。"
+    def _mock_expand_content(
+        self, topic: str, mode: str, *,
+        target_duration_sec: int | None = None, style: str | None = None,
+    ) -> dict[str, str]:
+        """mock 与解析回退共用按语言生成的离线文案。"""
+        return fallback_expansion(
+            topic, mode, target_duration_sec=target_duration_sec, style=style,
+        )
+
+    def _parse_expand_content(
+        self, raw: str, topic: str, mode: str, *,
+        target_duration_sec: int | None = None, style: str | None = None,
+    ) -> dict[str, str]:
+        """容错解析模型 JSON，不对英文主题施加汉字长度截断。"""
+        def fallback() -> dict[str, str]:
+            """保留请求时长与语言选择。"""
+            return self._mock_expand_content(
+                topic, mode, target_duration_sec=target_duration_sec, style=style,
             )
-        else:
-            content = (
-                f"{topic.rstrip('？?')}：面向普通观众，用生活例子讲清核心原理与常见误区。"
-            )[:100]
-        return {"title": title[:24], "content": content}
 
-    def _parse_expand_content(self, raw: str, topic: str, mode: str) -> dict[str, str]:
         text = (raw or "").strip()
         if text.startswith("```"):
             text = re.sub(r"^```(?:json)?\s*", "", text)
@@ -2420,20 +2456,27 @@ class ArkGateway:
         except json.JSONDecodeError:
             m = re.search(r"\{[\s\S]*\}", text)
             if not m:
-                return self._mock_expand_content(topic, mode)
+                return fallback()
             try:
                 data = json.loads(m.group(0))
             except json.JSONDecodeError:
-                return self._mock_expand_content(topic, mode)
-        title = str(data.get("title") or "").strip() or topic[:18]
-        content = str(data.get("content") or "").strip()
-        if not content:
-            return self._mock_expand_content(topic, mode)
+                return fallback()
+        if not isinstance(data, dict):
+            return fallback()
+        content = data.get("content")
+        if not isinstance(content, str) or not content.strip():
+            return fallback()
+        title = data.get("title")
+        if not isinstance(title, str) or not title.strip():
+            title = fallback()["title"]
+        # 安全上限而非语言长度规则；允许十分钟旁白和自然英文标题。
+        title = title.strip()[:240]
+        content = content.strip()
         if mode == "theme":
-            content = content.replace("\n", " ").strip()[:100]
+            content = " ".join(content.splitlines()).strip()[:2000]
         else:
-            content = content[:8000]
-        return {"title": title[:24], "content": content}
+            content = content[:16000]
+        return {"title": title, "content": content}
 
 
 _gateway: ArkGateway | None = None

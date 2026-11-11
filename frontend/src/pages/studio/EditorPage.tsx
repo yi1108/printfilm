@@ -1,4 +1,4 @@
-import { marketText as mt } from '../../features/marketplace/translate'
+import { studioSecondaryText as mt } from '../../i18n/studioSecondaryText'
 import { useMarketplaceLocale } from '../../features/marketplace/useMarketplaceLocale'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -184,9 +184,7 @@ export default function EditorPage() {
   if (!project && !error) {
     return (
       <AppShell active="studio" flush>
-        <p className="pf-muted" style={{ padding: '2rem' }}>
-          加载中…
-        </p>
+        <p className="pf-muted" style={{ padding: '2rem' }}>{mt("加载中…")}</p>
       </AppShell>
     )
   }
@@ -194,7 +192,7 @@ export default function EditorPage() {
   if (!project) {
     return (
       <AppShell active="studio">
-        <BillingErrorNotice message={error} />
+        <BillingErrorNotice message={mt(error)} />
       </AppShell>
     )
   }
@@ -219,23 +217,18 @@ export default function EditorPage() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <button type="button" className="pf-link" onClick={() => nav(`/studio/${project.id}`)}>
-            ← 返回项目
-          </button>
+          <button type="button" className="pf-link" onClick={() => nav(`/studio/${project.id}`)}>{mt("← 返回项目")}</button>
           <strong>{project.title}</strong>
           <span className="pf-muted" style={{ fontSize: '0.8rem' }}>
             {STATUS_CN[project.status] || project.status}
           </span>
         </div>
         <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-          <button type="button" className="pf-btn pf-btn-ghost pf-btn-sm" disabled>
-            撤销 <ComingSoon />
+          <button type="button" className="pf-btn pf-btn-ghost pf-btn-sm" disabled>{mt("撤销")}<ComingSoon />
           </button>
-          <button type="button" className="pf-btn pf-btn-ghost pf-btn-sm" disabled>
-            重做 <ComingSoon />
+          <button type="button" className="pf-btn pf-btn-ghost pf-btn-sm" disabled>{mt("重做")}<ComingSoon />
           </button>
-          <button type="button" className="pf-btn pf-btn-ghost pf-btn-sm" disabled>
-            保存草稿 <ComingSoon />
+          <button type="button" className="pf-btn pf-btn-ghost pf-btn-sm" disabled>{mt("保存草稿")}<ComingSoon />
           </button>
           <button
             type="button"
@@ -251,17 +244,13 @@ export default function EditorPage() {
                 window.open(api.assetUrl(project.final_video_url, project.updated_at), '_blank')
               }
             }}
-          >
-            预览播放
-          </button>
+          >{mt("预览播放")}</button>
           <button
             type="button"
             className="pf-btn pf-btn-lime pf-btn-sm"
             disabled={busy || !project.final_video_url}
             onClick={() => void exportFilm()}
-          >
-            导出视频
-          </button>
+          >{mt("导出视频")}</button>
           <button
             type="button"
             className="pf-btn pf-btn-ghost pf-btn-sm"
@@ -274,16 +263,14 @@ export default function EditorPage() {
       </div>
 
       {error ? (
-        <BillingErrorNotice message={error} style={{ padding: '0.5rem 1.25rem' }} />
+        <BillingErrorNotice message={mt(error)} style={{ padding: '0.5rem 1.25rem' }} />
       ) : null}
 
       <div className="pf-editor">
         <aside>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-            <strong>场景列表</strong>
-            <button type="button" className="pf-link" disabled={busy} onClick={() => void addShot()}>
-              + 添加镜头
-            </button>
+            <strong>{mt("场景列表")}</strong>
+            <button type="button" className="pf-link" disabled={busy} onClick={() => void addShot()}>{mt("+ 添加镜头")}</button>
           </div>
           {orderedShots.map((s) => (
             <button
@@ -299,7 +286,7 @@ export default function EditorPage() {
               )}
               <div>
                 <strong style={{ fontSize: '0.82rem' }}>
-                  {String(s.shot_no).padStart(2, '0')} {s.overlay_title || '镜头'}
+                  {String(s.shot_no).padStart(2, '0')} {s.overlay_title || mt("镜头")}
                 </strong>
                 <div className="pf-muted" style={{ fontSize: '0.72rem' }}>
                   {(s.narration || '').slice(0, 28)}
@@ -308,7 +295,7 @@ export default function EditorPage() {
             </button>
           ))}
           <p className="pf-muted" style={{ fontSize: '0.8rem', marginTop: '0.75rem' }}>
-            总时长{' '}
+            {mt("总时长")}{' '}
             {Math.floor(totalDuration / 60)
               .toString()
               .padStart(2, '0')}
@@ -323,24 +310,20 @@ export default function EditorPage() {
               className="pf-btn pf-btn-ghost pf-btn-sm"
               disabled={busy || !shot || shotIndex <= 0}
               onClick={() => void moveShot(-1)}
-            >
-              上移
-            </button>
+            >{mt("上移")}</button>
             <button
               type="button"
               className="pf-btn pf-btn-ghost pf-btn-sm"
               disabled={busy || !shot || shotIndex < 0 || shotIndex >= orderedShots.length - 1}
               onClick={() => void moveShot(1)}
-            >
-              下移
-            </button>
+            >{mt("下移")}</button>
           </div>
         </aside>
 
         <section>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.65rem' }}>
             <strong>
-              {shot ? `镜头 ${shot.shot_no}` : '预览'} · {isPortrait ? '9:16' : '16:9'}
+              {shot ? mt("镜头 {0}", [shot.shot_no]) : mt("预览")} · {isPortrait ? '9:16' : '16:9'}
             </strong>
             <div style={{ display: 'flex', gap: 8 }}>
               <input
@@ -355,12 +338,8 @@ export default function EditorPage() {
                 className="pf-btn pf-btn-ghost pf-btn-sm"
                 disabled={busy || !shot}
                 onClick={() => shotFileRef.current?.click()}
-              >
-                上传画面
-              </button>
-              <button type="button" className="pf-btn pf-btn-ghost pf-btn-sm" disabled={busy} onClick={regenImage}>
-                AI 重绘
-              </button>
+              >{mt("上传画面")}</button>
+              <button type="button" className="pf-btn pf-btn-ghost pf-btn-sm" disabled={busy} onClick={regenImage}>{mt("AI 重绘")}</button>
             </div>
           </div>
           <div className={isPortrait ? 'pf-editor-preview portrait' : 'pf-editor-preview'}>
@@ -376,7 +355,7 @@ export default function EditorPage() {
             ) : shotImage ? (
               <img key={`i-${shot?.id}-${shot?.version}`} src={shotImage} alt="" />
             ) : (
-              <span className="empty">暂无画面</span>
+              <span className="empty">{mt("暂无画面")}</span>
             )}
           </div>
           {shot?.audio_url ? (
@@ -431,21 +410,17 @@ export default function EditorPage() {
               color: 'var(--pf-muted)',
               fontSize: '0.9rem',
             }}
-          >
-            可用「上传画面」替换本镜图，或「AI 重绘」按提示词重生。
-          </div>
+          >{mt("可用「上传画面」替换本镜图，或「AI 重绘」按提示词重生。")}</div>
 
           <div style={{ marginTop: '1rem' }}>
             <div className="pf-panel-tabs">
               {['素材库', '收藏素材', 'AI 生成素材', '我的上传'].map((t) => (
-                <button key={t} type="button" disabled>
-                  {t}
+                <button key={mt(t)} type="button" disabled>
+                  {mt(t)}
                 </button>
               ))}
             </div>
-            <p className="pf-muted" style={{ fontSize: '0.85rem' }}>
-              素材库即将推出。当前可用上方「上传画面」或「AI 重绘」替换本镜图。
-            </p>
+            <p className="pf-muted" style={{ fontSize: '0.85rem' }}>{mt("素材库即将推出。当前可用上方「上传画面」或「AI 重绘」替换本镜图。")}</p>
           </div>
         </section>
 
@@ -453,21 +428,19 @@ export default function EditorPage() {
           <div className="pf-panel-tabs">
             {PANEL_TABS.map((t) => (
               <button
-                key={t}
+                key={mt(t)}
                 type="button"
                 className={tab === t ? 'active' : ''}
                 onClick={() => setTab(t)}
               >
-                {t}
+                {mt(t)}
               </button>
             ))}
           </div>
 
           {tab === '文案' ? (
             <>
-              <label className="pf-muted" style={{ fontSize: '0.85rem', display: 'block' }}>
-                文案内容
-                <textarea
+              <label className="pf-muted" style={{ fontSize: '0.85rem', display: 'block' }}>{mt("文案内容")}<textarea
                   value={narration}
                   onChange={(e) => setNarration(e.target.value)}
                   rows={5}
@@ -485,16 +458,12 @@ export default function EditorPage() {
                 className="pf-btn pf-btn-ghost pf-btn-sm pf-btn-block"
                 style={{ marginTop: 8 }}
                 disabled
-              >
-                AI 帮我优化这一镜 <ComingSoon />
+              >{mt("AI 帮我优化这一镜")}<ComingSoon />
               </button>
               <div style={{ marginTop: '0.85rem' }}>
-                <strong style={{ fontSize: '0.88rem' }}>
-                  样式设置 <ComingSoon />
+                <strong style={{ fontSize: '0.88rem' }}>{mt("样式设置")}<ComingSoon />
                 </strong>
-                <p className="pf-muted" style={{ fontSize: '0.8rem' }}>
-                  字体 / 字号 / 颜色 / 对齐占位
-                </p>
+                <p className="pf-muted" style={{ fontSize: '0.8rem' }}>{mt("字体 / 字号 / 颜色 / 对齐占位")}</p>
               </div>
               <button
                 type="button"
@@ -502,48 +471,36 @@ export default function EditorPage() {
                 style={{ marginTop: '1rem' }}
                 disabled={busy}
                 onClick={saveNarration}
-              >
-                保存文案
-              </button>
+              >{mt("保存文案")}</button>
             </>
           ) : null}
 
           {tab === '画面' ? (
             <>
-              <p className="pf-muted" style={{ fontSize: '0.88rem' }}>
-                可用预览区「上传画面」替换本镜图，或「AI 重绘」按提示词重生。
-              </p>
+              <p className="pf-muted" style={{ fontSize: '0.88rem' }}>{mt("可用预览区「上传画面」替换本镜图，或「AI 重绘」按提示词重生。")}</p>
               <button
                 type="button"
                 className="pf-btn pf-btn-lime pf-btn-block"
                 disabled={busy}
                 onClick={regenImage}
-              >
-                重新生成当前镜头
-              </button>
+              >{mt("重新生成当前镜头")}</button>
             </>
           ) : null}
 
           {tab === '配音' ? (
             <>
-              <p className="pf-muted" style={{ fontSize: '0.88rem' }}>
-                替换当前镜头配音（沿用项目音色）。
-              </p>
+              <p className="pf-muted" style={{ fontSize: '0.88rem' }}>{mt("替换当前镜头配音（沿用项目音色）。")}</p>
               <button
                 type="button"
                 className="pf-btn pf-btn-lime pf-btn-block"
                 disabled={busy}
                 onClick={regenAudio}
-              >
-                替换配音
-              </button>
+              >{mt("替换配音")}</button>
             </>
           ) : null}
 
           {tab === '转场' ? (
-            <div className="pf-hint">
-              转场效果（淡入淡出、闪白、运镜衔接等）即将推出。
-            </div>
+            <div className="pf-hint">{mt("转场效果（淡入淡出、闪白、运镜衔接等）即将推出。")}</div>
           ) : null}
 
           <button
@@ -551,8 +508,7 @@ export default function EditorPage() {
             className="pf-btn pf-btn-ghost pf-btn-block"
             style={{ marginTop: '1rem' }}
             disabled
-          >
-            应用到全部同类镜头 <ComingSoon />
+          >{mt("应用到全部同类镜头")}<ComingSoon />
           </button>
         </aside>
       </div>

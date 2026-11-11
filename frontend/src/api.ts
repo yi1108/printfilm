@@ -540,10 +540,11 @@ export const api = {
   compose(projectId: number) {
     return request<Project>(`/api/projects/${projectId}/compose`, { method: 'POST' })
   },
-  expandContent(topic: string, mode: 'theme' | 'script' = 'theme') {
+  /** 扩写原始内容；创作参数单独传递，输出语言由内容而非界面语言决定。 */
+  expandContent(topic: string, mode: 'theme' | 'script' = 'theme', options?: { target_duration_sec?: number; style?: string }) {
     return request<{ title: string; content: string }>('/api/content/expand', {
       method: 'POST',
-      body: JSON.stringify({ topic, mode }),
+      body: JSON.stringify({ topic, mode, ...options }),
     })
   },
   publish(projectId: number) {
