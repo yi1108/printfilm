@@ -53,7 +53,10 @@ export function WalletMigrationSettings() {
   }
   const paused = !!report?.state.paused;
   const completed = report?.state.phase === "completed";
-  const rows = report?.accounts.filter(row => (!filter || String(row.user_id).includes(filter) || row.reason?.includes(filter))) || [];
+  const matched = report?.accounts.filter(row => (!filter || String(row.user_id).includes(filter) || row.reason?.includes(filter))) || [];
+  const blockedRows = matched.filter(row => row.status === "blocked").sort((a, b) => a.user_id - b.user_id);
+  const otherRows = matched.filter(row => row.status !== "blocked").sort((a, b) => a.user_id - b.user_id);
+  const rows = [...blockedRows, ...otherRows.slice(0, 100)];
   return <SettingsPanel title="统一钱包迁移与核对" description="只读检查不会改余额。迁移按历史订单和流水建立来源，不会重新充值，也不会把 Sandbox 资金转换为正式资金。">
     <div className="space-y-4">
       <Button type="button" disabled={busy} onClick={() => void run()}>刷新只读核对报告</Button>
@@ -73,7 +76,7 @@ export function WalletMigrationSettings() {
         {completed && <p>已迁移 {report.state.migrated_count} 个账户。统一钱包已启用；恢复后请重新加载本页再编辑其他支付配置。</p>}
         <label className="block">按用户 ID 或异常原因过滤<input className="block w-full" value={filter} onChange={e => setFilter(e.target.value)} /></label>
         <div className="overflow-x-auto"><table className="w-full text-left"><thead><tr><th>用户 ID</th><th>状态</th><th>原积分</th><th>迁移后积分</th><th>异常原因</th></tr></thead><tbody>{rows.slice(0, 100).map(row => <tr key={row.user_id}><td>{row.user_id}</td><td>{statusNames[row.status] || row.status}</td><td>{row.balance_fen ?? "—"}</td><td>{row.merged_balance_fen ?? "—"}</td><td>{row.reason || "—"}</td></tr>)}</tbody></table></div>
-        <p>符合条件 {rows.length} 条，最多显示前 100 条；可输入用户 ID 定位。</p>
+        <p>符合条件 {matched.length} 条。需人工核对的 {blockedRows.length} 条全部列出，其余最多显示 100 条；可输入用户 ID 或异常原因定位。</p>
         <details><summary>操作审计</summary>{report.state.history?.map((item, i) => <div key={i}><p>{item.at} · {item.action} · 操作人 {item.operator_id} · {item.reason} · {item.job_id}</p>{item.report != null && <details><summary>查看该次迁移核对报告快照</summary><pre className="overflow-x-auto">{JSON.stringify(item.report, null, 2)}</pre></details>}</div>)}</details>
       </>}
     </div>
