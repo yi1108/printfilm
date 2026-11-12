@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, type Ref } from 'react'
 import { promptCaret, readPromptDom, splitPrompt, type PromptReference } from './promptMentions'
 
 type Props = { readOnly?: boolean; value: string; onChange: (value: string, caret: number) => void; references: PromptReference[]; placeholder?: string; label: string; className?: string; inputRef?: Ref<HTMLDivElement>; onCaret?: (value: string, caret: number) => void; onFocus?: () => void; onBlur?: () => void }
-function restoreCaret(root: HTMLElement, offset: number) {
+export function restorePromptCaret(root: HTMLElement, offset: number) {
   const range = document.createRange(), selection = window.getSelection()
   let remaining = offset, placed = false
   for (const node of Array.from(root.childNodes)) {
@@ -39,7 +39,7 @@ export function PromptInput({ value, onChange, references, placeholder, label, c
       chip.append(document.createTextNode(ref.label)); el.append(chip)
     }
     el.dataset.rendered = value; el.dataset.references = referenceVersion
-    if (focused) restoreCaret(el, Math.min(caret, value.length))
+    if (focused) restorePromptCaret(el, Math.min(caret, value.length))
   }, [value, references])
   const publish = (el: HTMLDivElement) => { if (readOnly) return; const text = readPromptDom(el); el.dataset.rendered = text; onChange(text, promptCaret(el)) }
   return <div ref={(el) => { localRef.current = el; if (typeof inputRef === 'function') inputRef(el); else if (inputRef) inputRef.current = el }} contentEditable={!readOnly} aria-readonly={readOnly} suppressContentEditableWarning role="textbox" aria-multiline="true" aria-label={label} data-placeholder={placeholder} className={`pf-prompt-editable nodrag nopan nowheel ${className}`} onInput={(event) => { if (!composing.current) publish(event.currentTarget) }} onCompositionStart={() => { composing.current = true }} onCompositionEnd={(event) => { composing.current = false; publish(event.currentTarget) }} onFocus={onFocus} onBlur={onBlur} onClick={(event) => onCaret?.(readPromptDom(event.currentTarget), promptCaret(event.currentTarget))} onKeyUp={(event) => { if (!composing.current) onCaret?.(readPromptDom(event.currentTarget), promptCaret(event.currentTarget)) }} onPaste={(event) => { event.preventDefault(); if (readOnly) return; const text = event.clipboardData.getData('text/plain'), selection = window.getSelection(); if (!selection?.rangeCount) return; const range = selection.getRangeAt(0); range.deleteContents(); const node = document.createTextNode(text); range.insertNode(node); range.setStartAfter(node); range.collapse(true); selection.removeAllRanges(); selection.addRange(range); publish(event.currentTarget) }} />
