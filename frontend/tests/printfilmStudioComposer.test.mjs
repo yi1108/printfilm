@@ -162,6 +162,13 @@ test('composer menus apply parameters; writing sends configured instructions and
       writingInput.dispatchEvent(new KeyboardEvent('keyup',{key:'@',bubbles:true}))
     })
     assert.match(document.querySelector('.pf-mention').textContent,/已接入/)
+    await act(async()=>{
+      writingInput.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))
+      writingInput.dispatchEvent(new KeyboardEvent('keyup',{key:'Escape',bubbles:true}))
+    })
+    assert.equal(Boolean(document.querySelector('.pf-mention')),false,'Escape must keep the mention menu closed after keyup')
+    await act(async()=>writingInput.dispatchEvent(new KeyboardEvent('keyup',{key:'@',bubbles:true})))
+
     await click([...document.querySelectorAll('.pf-mention button')].find(item=>item.textContent.includes('角色')))
     assert.match(readPromptDom(writingInput),/在飞机上跳舞@\[.*\]\(node:role\) 后续正文/)
     assert.deepEqual(linkedByMention,[],'mentioning an existing reference must not disconnect it')
