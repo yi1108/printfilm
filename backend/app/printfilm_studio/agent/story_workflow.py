@@ -117,7 +117,7 @@ def build_story_plan(document, name, payload):
             earlier = sum(1 for shot in existing_shots if (shot['data'].get('episodeNumber') or shot['data'].get('episodeId')) == episode_identity and shot['data'].get('sceneNodeId') == scene_id and (shot['data'].get('sceneNumber') or scene_number) == scene_number and int(shot['data'].get('shotIndex') or 0) < order)
             scene_counts[scene_key] = max(scene_counts.get(scene_key, 0), earlier) + 1
             scene_index = scene_counts[scene_key]
-            label = f'镜头{scene_index}'
+            label = f'场{scene_number} · 镜头{scene_index}'
             sources = []
             extra = {'sceneNumber': scene_number, 'sceneNodeId': scene_id, 'sceneShotIndex': scene_index, 'shotIndex': order, 'referenceNodeIds': list(dict.fromkeys(ids)), 'shotDescription': _required(item.get('description'), '分镜描述')}
         node_id = _id(script_id, kind, identity)

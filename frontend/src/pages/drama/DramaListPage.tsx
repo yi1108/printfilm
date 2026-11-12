@@ -50,9 +50,7 @@ function formatUpdatedAt(raw?: string) {
 
 const FILTER_KEYS: DramaProjectFilter[] = ['all', 'running', 'done', 'draft']
 
-// 每页条数选项：卡片网格一行 3 个，6 / 9 恰好整行；默认 9
-const PAGE_SIZE_OPTIONS = [6, 9] as const
-const PAGE_SIZE_DEFAULT = 9
+const PAGE_SIZE_DEFAULT = 8
 
 export default function DramaListPage({ workflow = 'script' }: { workflow?: DramaWorkflow }) {
   return (
@@ -81,7 +79,7 @@ function DramaListInner({ workflow }: { workflow: DramaWorkflow }) {
   const [items, setItems] = useState<DramaProjectListItem[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState<number>(canvasMode ? 8 : PAGE_SIZE_DEFAULT)
+  const pageSize = PAGE_SIZE_DEFAULT
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selected, setSelected] = useState<Set<number>>(new Set())
@@ -344,12 +342,6 @@ function DramaListInner({ workflow }: { workflow: DramaWorkflow }) {
               page={page}
               pageCount={pageCount}
               total={total}
-              pageSize={pageSize}
-              pageSizeOptions={PAGE_SIZE_OPTIONS}
-              onPageSizeChange={canvasMode ? undefined : (size) => {
-                setPageSize(size)
-                setPage(1)
-              }}
               onChange={setPage}
             />
             </>

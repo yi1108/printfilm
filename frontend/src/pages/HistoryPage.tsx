@@ -45,8 +45,7 @@ type HistoryItem = Omit<Project, 'shots'> & {
 
 type HistoryTab = 'all' | 'draft' | 'running' | 'done' | 'published'
 
-const PAGE_SIZE_DEFAULT = 9
-const PAGE_SIZE_OPTIONS = [6, 9, 18] as const
+const PAGE_SIZE_DEFAULT = 8
 
 const TAB_STATUS: Record<HistoryTab, 'all' | 'draft' | 'running' | 'done' | 'published'> = {
   all: 'all',
@@ -101,7 +100,7 @@ export default function HistoryPage() {
   const [q, setQ] = useState('')
   const [debouncedQ, setDebouncedQ] = useState('')
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(PAGE_SIZE_DEFAULT)
+  const pageSize = PAGE_SIZE_DEFAULT
   const [preview, setPreview] = useState<{
     url: string
     title: string
@@ -381,7 +380,7 @@ export default function HistoryPage() {
             </ProjectGrid>
           )}
           {total > 0 ? (
-            <Pagination page={page} pageCount={pageCount} total={total} pageSize={pageSize} pageSizeOptions={PAGE_SIZE_OPTIONS} onPageSizeChange={(size) => { setPageSize(size); setPage(1) }} onChange={setPage} ariaLabel={t('history.pagination')} />
+            <Pagination page={page} pageCount={pageCount} total={total} onChange={setPage} ariaLabel={t('history.pagination')} />
           ) : null}
         </section>
       </div>

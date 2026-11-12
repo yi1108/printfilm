@@ -23,8 +23,9 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { dramaApi } from '../../api/drama'
 import { points, pointUnitRate } from '../../lib/points'
 import { decodeCanvasDocument, encodeCanvasDocument } from './canvas/canvasCodec'
+import { CanvasMergeConflict, canvasValuesEqual, mergeCanvasDocuments, persistedCanvas } from './canvas/canvasMerge'
 import { printfilmStudioApi } from './api'
-import type { AgentOptions, MediaOperation, ProjectAsset, FrameAnalysisReport } from './types'
+import type { CanvasResponse, AgentOptions, MediaOperation, ProjectAsset, FrameAnalysisReport } from './types'
 import { AgentPanel, type AgentEvent } from './agent/AgentPanel'
 import { eventFromWire, sessionEvents } from './agent/conversation'
 import type { AgentReference } from './agent/references'
@@ -263,7 +264,36 @@ function PrintfilmStudioWorkspace() {
   const document = useMemo(() => encodeCanvasDocument({ ...documentExtrasRef.current, toonflowCanvas: true, version: 1, nodes: nodes.map((node) => Object.fromEntries(Object.entries(node).filter(([key]) => !['selected', 'measured', 'dragging', 'resizing'].includes(key)))) as never[], edges: edges.map((edge) => Object.fromEntries(Object.entries(edge).filter(([key]) => key !== 'selected'))) as never[], viewport }), [nodes, edges, viewport])
   const documentRef = useRef(document)
   documentRef.current = document
-  versionRef.current = version
+  const baseDocumentRef = useRef(document)
+
+  const adoptRemoteCanvas = useCallback((result: CanvasResponse, base = baseDocumentRef.current) => {
+    const remote = persistedCanvas(result.document)
+    const merged = mergeCanvasDocuments(base, documentRef.current, remote)
+    const currentNodes = new globalThis.Map(nodesRef.current.map(node => [node.id, node]))
+    const currentEdges = new globalThis.Map(edgesRef.current.map(edge => [edge.id, edge]))
+    const nextNodes = merged.nodes.map(node => {
+      const current = currentNodes.get(node.id)
+      return { ...node, ...Object.fromEntries(['selected', 'measured', 'dragging', 'resizing'].filter(key => current && key in current).map(key => [key, (current as Record<string, unknown>)[key]])) } as Node<Data>
+    })
+    const nextEdges = merged.edges.map(edge => ({ ...edge, selected: currentEdges.get(edge.id)?.selected })) as Edge[]
+    baseDocumentRef.current = remote
+    documentExtrasRef.current = merged; documentRef.current = merged
+    nodesRef.current = nextNodes; edgesRef.current = nextEdges
+    dirtyRef.current = !canvasValuesEqual(merged, remote)
+    saveBlockedRef.current = false
+    versionRef.current = result.version; setVersion(result.version)
+    setNodes(nextNodes); setEdges(nextEdges)
+  }, [setNodes, setEdges])
+
+  const receiveRemoteCanvas = useCallback((result: CanvasResponse) => {
+    // Recheck after the request: a poll begun before a save can arrive after it.
+    if (!mountedRef.current || savingRef.current || result.version <= versionRef.current || saveBlockedRef.current) return
+    try { adoptRemoteCanvas(result) }
+    catch (error) {
+      if (error instanceof CanvasMergeConflict) saveBlockedRef.current = true
+      setStatus(error instanceof Error ? error.message : '画布同步失败')
+    }
+  }, [adoptRemoteCanvas])
 
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; agentAbort.current?.abort() } }, [])
 
@@ -288,7 +318,8 @@ function PrintfilmStudioWorkspace() {
         // Retrying a connection/space lookup must never discard local edits.
         if (dirtyRef.current) { setCanvasReady(true); setStatus('已恢复连接，保留未保存修改'); return }
         const doc = decodeCanvasDocument(result.document)
-        documentExtrasRef.current = doc
+        baseDocumentRef.current = persistedCanvas(doc); versionRef.current = result.version
+        documentExtrasRef.current = doc; documentRef.current = doc
         setNodes(doc.nodes as Node<Data>[])
         setEdges(doc.edges as Edge[])
         setViewport(doc.viewport)
@@ -326,14 +357,7 @@ function PrintfilmStudioWorkspace() {
           setStatus(running ? `后台运行中 · ${result.run.completed} / ${result.run.count}，可继续编辑` : result.run.error || '节点运行完成')
           if (!running) void api.wallet().then(setWallet).catch(() => undefined)
         }
-        if (!dirtyRef.current && result.version > versionRef.current) {
-          const doc = decodeCanvasDocument(result.document)
-          documentExtrasRef.current = doc; documentRef.current = doc
-          nodesRef.current = doc.nodes as Node<Data>[]; edgesRef.current = doc.edges as Edge[]
-          setNodes(doc.nodes as Node<Data>[]); setEdges(doc.edges as Edge[])
-          versionRef.current = result.version; setVersion(result.version)
-          setStatus(running && result.run ? `后台运行中 · ${result.run.completed} / ${result.run.count}，可继续编辑` : result.run?.error || '已同步项目画布')
-        }
+        receiveRemoteCanvas(result)
       } catch (error) {
         if (active && [403, 404].includes(Number((error as { status?: number }).status))) setLoadIssue(workspaceIssue(error))
       }
@@ -341,7 +365,7 @@ function PrintfilmStudioWorkspace() {
     }
     void refresh(); const timer = window.setInterval(() => { void refresh() }, 2000)
     return () => { active = false; window.clearInterval(timer) }
-  }, [canvasReady, validProjectId, projectId, setNodes, setEdges])
+  }, [canvasReady, validProjectId, projectId, receiveRemoteCanvas])
   useEffect(() => () => { agentAbort.current?.abort() }, [])
   useEffect(() => {
     if (!sessionId || agentAbort.current) return
@@ -651,31 +675,42 @@ function PrintfilmStudioWorkspace() {
     savingRef.current = true
     let finishSave!: () => void
     saveCompletionRef.current = new Promise<void>((resolve) => { finishSave = resolve })
-    const snapshot = documentRef.current
-    const payload = JSON.stringify(snapshot)
     setStatus('保存中…')
     try {
-      const result = await printfilmStudioApi.saveCanvas(projectId, snapshot, versionRef.current, editLockRequestHeaders(canvasTarget))
-      if (!mountedRef.current) return false
-      storeSnapshot(projectId, snapshot, result.version)
-      versionRef.current = result.version
-      setVersion(result.version)
-      dirtyRef.current = JSON.stringify(documentRef.current) !== payload
-      setStatus(dirtyRef.current ? '有未保存修改' : '已保存')
-      presence.update({action:'saved',positions:[]})
-      return !dirtyRef.current
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const snapshot = documentRef.current
+        let result: CanvasResponse
+        try {
+          result = await printfilmStudioApi.saveCanvas(projectId, snapshot, versionRef.current, editLockRequestHeaders(canvasTarget))
+        } catch (error) {
+          if ((error as { status?: number }).status !== 409) throw error
+          const latest = await printfilmStudioApi.getCanvas(projectId)
+          if (!mountedRef.current) return false
+          adoptRemoteCanvas(latest)
+          if (attempt === 2) throw new Error('画布仍在更新，已保留修改，稍后自动重试保存')
+          continue
+        }
+        if (!mountedRef.current) return false
+        // Edits made while PUT was in flight are compared against what we sent.
+        adoptRemoteCanvas(result, snapshot)
+        storeSnapshot(projectId, result.document, result.version)
+        setStatus(dirtyRef.current ? '有未保存修改' : '已保存')
+        presence.update({action:'saved',positions:[]})
+        return !dirtyRef.current
+      }
+      return false
     } catch (error) {
       if (!mountedRef.current) return false
-      if ((error as { status?: number }).status === 409) {
+      if (error instanceof CanvasMergeConflict) {
         saveBlockedRef.current = true
-        setStatus('画布版本冲突，已保留本地修改。请先导出画布，再刷新核对服务端内容')
+        setStatus(error.message)
       } else {
         if ([403, 404].includes(Number((error as { status?: number }).status))) setLoadIssue(workspaceIssue(error))
         setStatus(error instanceof Error ? error.message : '保存失败')
       }
       return false
     } finally { savingRef.current = false; saveCompletionRef.current = null; finishSave() }
-  }, [canEdit, canvasTarget, projectId, validProjectId])
+  }, [canEdit, canvasTarget, projectId, validProjectId, adoptRemoteCanvas])
   useEffect(() => {
     if (!validProjectId || !dirtyRef.current || saveBlockedRef.current) return
     const timer = window.setTimeout(() => { void save() }, 1200)
@@ -688,10 +723,7 @@ function PrintfilmStudioWorkspace() {
     if (type === 'message_delta') { agentAnswerRef.current += String(event.content || ''); setAnswer(agentAnswerRef.current) }
     if (['thinking', 'model_progress', 'tool_start', 'tool_result', 'canvas_patch', 'task_created', 'error', 'reconnecting', 'proposal'].includes(type)) setAgentEvents((events) => [...events, eventFromWire(event)])
     if (type === 'canvas_updated' && Number(event.version) > versionRef.current) void printfilmStudioApi.getCanvas(projectId).then((result) => {
-      if (!mountedRef.current || result.version <= versionRef.current) return
-      if (dirtyRef.current || savingRef.current) { saveBlockedRef.current = true; setStatus('Agent 更新与本地编辑冲突，已保留本地修改，请导出后刷新核对'); return }
-      const doc = decodeCanvasDocument(result.document)
-      documentExtrasRef.current = doc; setNodes(doc.nodes as Node<Data>[]); setEdges(doc.edges as Edge[]); setViewport(doc.viewport); setFlowKey((key) => key + 1); versionRef.current = result.version; setVersion(result.version)
+      receiveRemoteCanvas(result)
     }).catch(() => setStatus('画布更新读取失败，请刷新核对'))
     if (type === 'done') {
       const content = agentAnswerRef.current
@@ -725,13 +757,10 @@ function PrintfilmStudioWorkspace() {
     if (dirtyRef.current && !(await save())) throw new Error('请先保存当前画布并处理冲突')
     const result = await printfilmStudioApi.repairStory(projectId, scriptId, versionRef.current, editLockRequestHeaders(canvasTarget))
     if (!mountedRef.current) return
-    if (dirtyRef.current || savingRef.current) { saveBlockedRef.current = true; throw new Error('修复已保存，但与本地编辑冲突，请刷新核对') }
-    const doc = decodeCanvasDocument(result.document)
     pastRef.current = [...pastRef.current, { nodes: nodesRef.current, edges: edgesRef.current }].slice(-40)
     futureRef.current = []
-    documentExtrasRef.current = doc; nodesRef.current = doc.nodes as Node<Data>[]; edgesRef.current = doc.edges as Edge[]
-    setNodes(nodesRef.current); setEdges(edgesRef.current); setViewport(doc.viewport); setFlowKey((key) => key + 1)
-    versionRef.current = result.version; setVersion(result.version); setStatus('已补齐场景、分镜提示词和视频节点连线')
+    receiveRemoteCanvas(result)
+    if (!saveBlockedRef.current) setStatus('已补齐场景、分镜提示词和视频节点连线')
   }
   const changeAgentProposal = async (proposal: AgentProposal, action: ProposalAction) => {
     if (!canEditRef.current || agentRunning || proposalBusyRef.current) throw new Error('请等待当前操作完成，并确认画布可编辑')
@@ -741,13 +770,9 @@ function PrintfilmStudioWorkspace() {
       const candidate = applyProposal(documentRef.current, proposal, action)
       const result = await printfilmStudioApi.saveCanvas(projectId, candidate, versionRef.current, editLockRequestHeaders(canvasTarget))
       if (!mountedRef.current) return
-      if (dirtyRef.current || savingRef.current) { saveBlockedRef.current = true; throw new Error('改动已保存，但与本地编辑冲突，请刷新核对') }
-      const doc = decodeCanvasDocument(result.document)
       pastRef.current = [...pastRef.current, { nodes: nodesRef.current, edges: edgesRef.current }].slice(-40); futureRef.current = []
-      documentExtrasRef.current = doc; documentRef.current = doc
-      nodesRef.current = doc.nodes as Node<Data>[]; edgesRef.current = doc.edges as Edge[]
-      setNodes(nodesRef.current); setEdges(edgesRef.current)
-      versionRef.current = result.version; setVersion(result.version)
+      receiveRemoteCanvas(result)
+      if (saveBlockedRef.current) throw new Error('本地修改已保留，请核对同时修改的内容')
       const ids = proposal.nodes.filter((change) => !change.before && change.after?.type !== 'group').map((change) => change.id)
       if (action === 'apply' && ids.length) { setSelectedNodeIds(ids); setSelectedNodeId(ids[0]); requestAnimationFrame(() => { void flow?.fitView({ nodes: ids.map((id) => ({ id })), padding: .15, duration: 400 }) }) }
       setStatus(action === 'apply' ? '已应用这批节点与分组' : action === 'undo' ? '已撤销这批改动' : '已忽略这批改动')
@@ -815,6 +840,8 @@ function PrintfilmStudioWorkspace() {
       const result = await printfilmStudioApi.resetCanvas(projectId, editLockRequestHeaders(canvasTarget))
       saveBlockedRef.current = false
       const doc = decodeCanvasDocument(result.document)
+      baseDocumentRef.current = persistedCanvas(doc); versionRef.current = result.version
+      documentExtrasRef.current = doc; documentRef.current = doc
       setNodes(doc.nodes as Node<Data>[]); setEdges(doc.edges as Edge[]); setViewport(doc.viewport); setFlowKey((key) => key + 1); setVersion(result.version); setSelectedNodeId(null); dirtyRef.current = false; setStatus('画布已重置')
     } catch (error) { setStatus(error instanceof Error ? error.message : '重置失败') }
   }

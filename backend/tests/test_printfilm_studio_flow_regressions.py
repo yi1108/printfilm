@@ -40,6 +40,8 @@ def test_returning_to_same_place_can_create_a_separate_scene_group():
     groups = [n for n in doc['nodes'] if n['data'].get('storyKind') == 'shot_video_group']
     assert sorted(n['data']['sceneNumber'] for n in groups) == [1, 2, 3]
     assert all(f"场{n['data']['sceneNumber']} · " in n['data']['label'] for n in groups)
+    videos = sorted((n for n in doc['nodes'] if n['data'].get('storyKind') == 'shot_video'), key=lambda n: n['data']['shotIndex'])
+    assert [n['data']['label'] for n in videos] == [f'场{number} · 镜头1 · 视频' for number in (1, 2, 3)]
     invalid = shot(4, scenes['城门'])
     invalid['reference_node_ids'].append(scenes['大殿'])
     with pytest.raises(ValueError, match='只能属于一个场景'):

@@ -75,7 +75,7 @@ def _group_story_episode(document, script_id, episode, offset, *, shots_only=Fal
         if kind == 'shot_video':
             media.sort(key=lambda node: int(node['data'].get('shotIndex') or 0))
         members = []
-        for item in media:
+        for shot_number, item in enumerate(media, 1):
             data = item['data']
             prompt_id = data.get('promptNodeId') or _id(script_id, kind + '_prompt', item['id'])
             prompt = by_id.get(prompt_id)
@@ -91,6 +91,10 @@ def _group_story_episode(document, script_id, episode, offset, *, shots_only=Fal
                 by_id[prompt_id] = prompt
             if prompt is None:
                 continue
+            if kind == 'shot_video':
+                label = f'场{scene_number} · 镜头{shot_number}'
+                data.update(label=label + ' · 视频', sceneShotIndex=shot_number)
+                prompt['data'].update(label=label + ' · 写作', sceneShotIndex=shot_number)
             data['promptNodeId'] = prompt_id
             if (prompt_id, item['id']) not in pairs:
                 edges.append({'id': f'{prompt_id}->{item["id"]}', 'source': prompt_id, 'target': item['id'], 'data': {'relation': 'prompt'}})

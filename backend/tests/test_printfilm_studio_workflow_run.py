@@ -158,7 +158,7 @@ def test_shot_planning_preserves_assets_and_groups_each_scene():
     assert len(groups) == 2
     for group in groups:
         videos = [n for n in doc['nodes'] if n.get('parentId') == group['id'] and n['type'] == 'videoGeneration']
-        assert [n['data']['label'] for n in videos] == ['镜头1 · 视频', '镜头2 · 视频']
+        assert [n['data']['label'] for n in videos] == [f"场{group['data']['sceneNumber']} · 镜头{number} · 视频" for number in (1, 2)]
 
 
 @pytest.mark.asyncio
