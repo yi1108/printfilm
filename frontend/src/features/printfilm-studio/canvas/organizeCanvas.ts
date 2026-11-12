@@ -117,24 +117,38 @@ export function organizeCanvas(nodes: StudioNodeRecord[], edges: Edge[]): Canvas
   working.filter((node) => node.type === 'group').forEach((node) => arrangeGroup(node.id))
   const roots = working.filter((node) => !node.parentId || !byId.has(node.parentId)).map((node) => node.id).sort()
   const links = siblingEdges(roots, byId, edges), unseen = new Set(roots)
-  const blocks: { ids: string[]; label: string; story?: boolean; owner?: string; episodeKey?: string; episodeLabel?: string; episodeNumber?: number; section?: string; sceneId?: string; frame?: StudioNodeRecord }[] = []
+  const blocks: { ids: string[]; label: string; story?: boolean; owner?: string; episodeKey?: string; episodeLabel?: string; episodeNumber?: number; section?: string; sceneId?: string; sceneNumber?: number; frame?: StudioNodeRecord }[] = []
+  const sceneNumbers = new Map<string, Map<string, number>>()
+  const validNumber = (value: unknown) => Number.isInteger(Number(value)) && Number(value) > 0 ? Number(value) : undefined
+  for (const node of [...working].sort((a, b) => Number(a.data.shotIndex || 0) - Number(b.data.shotIndex || 0))) {
+    if (storySection(node) !== '分镜') continue
+    const key = JSON.stringify([node.data.sourceScriptId || '', episodes.get(node.id)?.key || ''])
+    if (!sceneNumbers.has(key)) sceneNumbers.set(key, new Map())
+    const scene = String(node.data.sceneNodeId || ''), number = validNumber(node.data.sceneNumber)
+    if (scene && number && !sceneNumbers.get(key)!.has(scene)) sceneNumbers.get(key)!.set(scene, number)
+  }
   // Story categories and episodes define columns, never cross-reference edges.
   const buckets = new Map<string, typeof blocks[number]>()
-  for (const id of roots) {
+  for (const id of [...roots].sort((a, b) => Number(byId.get(a)!.data.shotIndex || 0) - Number(byId.get(b)!.data.shotIndex || 0) || a.localeCompare(b))) {
     const node = byId.get(id)!, episode = episodes.get(id)!
     const section = storySection(node) || (node.type !== 'group' && (node.data.sourceScriptId || episode.key) ? category(node) : undefined)
     if (!section) continue
     const owner = String(node.data.sourceScriptId || (node.type === 'script' ? node.id : ''))
     const sceneId = section === '分镜' ? String(node.data.sceneNodeId || (node.data.referenceNodeIds as string[] | undefined)?.find(ref => originalById.get(ref)?.data.storyKind === 'scene') || '') : ''
     const sceneLabel = sceneId ? String(originalById.get(sceneId)?.data.label || '场景') : ''
-    if (sceneId) node.data = { ...node.data, sceneNodeId: sceneId }
-    const key = JSON.stringify([owner, episode.key, section, sceneId])
+    const scope = JSON.stringify([owner, episode.key])
+    const numbers = sceneNumbers.get(scope) || new Map<string, number>()
+    let sceneNumber = section === '分镜' ? validNumber(node.data.sceneNumber) : undefined
+    if (sceneId && !sceneNumber) sceneNumber = numbers.get(sceneId) || Math.max(0, ...numbers.values()) + 1
+    if (sceneId && sceneNumber) { if (!numbers.has(sceneId)) numbers.set(sceneId, sceneNumber); sceneNumbers.set(scope, numbers) }
+    if (sceneId || sceneNumber) node.data = { ...node.data, ...(sceneId ? { sceneNodeId: sceneId } : {}), ...(sceneNumber ? { sceneNumber } : {}) }
+    const key = JSON.stringify([owner, episode.key, section, sceneId, sceneNumber])
     const script = byId.get(owner), title = String(script?.data.label || '').trim()
-    if (!buckets.has(key)) buckets.set(key, { ids: [], label: [episode.label, sceneLabel || section, title && (!episode.label || !title.includes(episode.label)) ? title : ''].filter(Boolean).join(' · '), story: true, owner, episodeKey: episode.key, episodeLabel: episode.label, episodeNumber: episode.number, section, sceneId })
+    if (!buckets.has(key)) buckets.set(key, { ids: [], label: [episode.label, sceneNumber ? `场${sceneNumber}` : '', sceneLabel || section, title && (!episode.label || !title.includes(episode.label)) ? title : ''].filter(Boolean).join(' · '), story: true, owner, episodeKey: episode.key, episodeLabel: episode.label, episodeNumber: episode.number, section, sceneId, sceneNumber })
     buckets.get(key)!.ids.push(id); unseen.delete(id)
   }
   const sectionOrder = (label: string) => { const index = ['剧本', '人物', '场景', '分镜'].indexOf(label); return index < 0 ? 10 : index }
-  blocks.push(...[...buckets.values()].sort((a, b) => (a.episodeNumber || 0) - (b.episodeNumber || 0) || String(a.episodeKey).localeCompare(String(b.episodeKey), undefined, { numeric: true }) || String(a.owner).localeCompare(String(b.owner)) || sectionOrder(a.section!) - sectionOrder(b.section!) || a.section!.localeCompare(b.section!)))
+  blocks.push(...[...buckets.values()].sort((a, b) => (a.episodeNumber || 0) - (b.episodeNumber || 0) || String(a.episodeKey).localeCompare(String(b.episodeKey), undefined, { numeric: true }) || String(a.owner).localeCompare(String(b.owner)) || sectionOrder(a.section!) - sectionOrder(b.section!) || a.section!.localeCompare(b.section!) || (a.sceneNumber || 0) - (b.sceneNumber || 0)))
   const loose = new Map<string, string[]>()
   for (const start of roots) {
     if (!unseen.delete(start)) continue
@@ -158,22 +172,23 @@ export function organizeCanvas(nodes: StudioNodeRecord[], edges: Edge[]): Canvas
     children(id).sort((a, b) => byId.get(a)!.position.x - byId.get(b)!.position.x || byId.get(a)!.position.y - byId.get(b)!.position.y).forEach(visitLeaves)
   }
   for (const block of blocks) {
-    if (block.sceneId) {
+    if (block.sceneId || block.sceneNumber) {
       const videos = block.ids.map(id => byId.get(id)!).filter(node => node.data.storyKind === 'shot_video').sort((a, b) => Number(a.data.shotIndex || 0) - Number(b.data.shotIndex || 0) || a.id.localeCompare(b.id))
       videos.forEach((node, index) => {
-        node.data = { ...node.data, label: `镜头${index + 1} · 视频`, sceneShotIndex: index + 1 }
+        const label = `${block.sceneNumber ? `场${block.sceneNumber} · ` : ''}镜头${index + 1}`
+        node.data = { ...node.data, label: `${label} · 视频`, sceneShotIndex: index + 1 }
         const writer = byId.get(String(node.data.promptNodeId))
-        if (writer && block.ids.includes(writer.id)) writer.data = { ...writer.data, label: `镜头${index + 1} · 写作`, sceneShotIndex: index + 1 }
+        if (writer && block.ids.includes(writer.id)) writer.data = { ...writer.data, label: `${label} · 写作`, sceneShotIndex: index + 1 }
       })
     }
     const start = order.length
     if (!block.frame) {
       const layout = block.story ? layoutStoryPairs(block.ids, byId, edges, organizationNodeSize) : layoutItems(block.ids, byId, edges)
-      const reusable = block.story ? [...previousFrames.values()].find((frame) => frame.data.sourceScriptId === block.owner && (sectionKind[block.section!] ? frame.data.storyKind === sectionKind[block.section!] : frame.data.storySection === block.section) && (episodes.get(frame.id)?.key || '') === block.episodeKey && String(frame.data.sceneNodeId || '') === (block.sceneId || '')) : undefined
+      const reusable = block.story ? [...previousFrames.values()].find((frame) => !frames.some(used => used.id === frame.id) && frame.data.sourceScriptId === block.owner && (sectionKind[block.section!] ? frame.data.storyKind === sectionKind[block.section!] : frame.data.storySection === block.section) && (episodes.get(frame.id)?.key || '') === block.episodeKey && String(frame.data.sceneNodeId || '') === (block.sceneId || '') && (!block.sceneNumber || !frame.data.sceneNumber || frame.data.sceneNumber === block.sceneNumber)) : undefined
       let id = reusable?.id || groupKey(block.ids)
       while (byId.has(id)) id += '-frame'
       const previous = previousFrames.get(id)
-      block.frame = { ...previous, id, type: 'group', position: { x: 0, y: 0 }, width: layout.width, height: layout.height, style: { ...previous?.style, width: layout.width, height: layout.height }, data: { ...previous?.data, label: block.story ? block.label : previous?.data.label || block.label, autoLayoutGroup: true, ...(block.story ? { storySection: block.section, sceneNodeId: block.sceneId || undefined, sourceScriptId: block.owner, storyKind: sectionKind[block.section!], ...(block.episodeNumber ? { episodeNumber: block.episodeNumber } : {}), episodeKey: block.episodeKey, episodeLabel: block.episodeLabel } : {}), children: block.ids }, selected: false }
+      block.frame = { ...previous, id, type: 'group', position: { x: 0, y: 0 }, width: layout.width, height: layout.height, style: { ...previous?.style, width: layout.width, height: layout.height }, data: { ...previous?.data, label: block.story ? block.label : previous?.data.label || block.label, autoLayoutGroup: true, ...(block.story ? { storySection: block.section, sceneNodeId: block.sceneId || undefined, sceneNumber: block.sceneNumber, sourceScriptId: block.owner, storyKind: sectionKind[block.section!], ...(block.episodeNumber ? { episodeNumber: block.episodeNumber } : {}), episodeKey: block.episodeKey, episodeLabel: block.episodeLabel } : {}), children: block.ids }, selected: false }
       frames.push(block.frame)
       block.ids.forEach((child) => { const node = byId.get(child)!; node.parentId = id; node.extent = 'parent'; node.position = layout.positions.get(child)! })
       layout.order.forEach(visitLeaves)

@@ -41,6 +41,7 @@ test('workspace creates, drags and autosaves nodes while a workflow is running',
   dom.window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} })
   localStorage.setItem('token', 'unit-test-token')
   const saves = [], workflowQuotes = []
+  let forceSaveConflict = true, saveConflicts = 0
   let taskListRequests=0
   let writingStream, writingSignal, writingStops = 0
   let holdNextSave = false, finishHeldSave, generationRequests = 0, activeWorkflow = true, membershipAllowed = true
@@ -51,7 +52,16 @@ test('workspace creates, drags and autosaves nodes while a workflow is running',
     let data
     if (path === '/api/drama/projects/361') data = { id: 361, user_id: 1, team_id: null, title: '测试项目', script: '' }
     else if (path === '/api/printfilm-studio/projects/361/info') data = { id: 361, title: '测试项目', is_owner: true }
-    else if (path.endsWith('/canvas') && init?.method === 'PUT') { if (holdNextSave) { holdNextSave = false; await new Promise(resolve => { finishHeldSave = resolve }) }; saves.push(JSON.parse(init.body)); stored = { document: saves.at(-1).document, version: stored.version + 1 }; data = stored }
+    else if (path.endsWith('/canvas') && init?.method === 'PUT') {
+      if (holdNextSave) { holdNextSave = false; await new Promise(resolve => { finishHeldSave = resolve }) }
+      const body = JSON.parse(init.body)
+      if (forceSaveConflict) {
+        forceSaveConflict = false
+        stored = { version: stored.version + 1, document: { ...stored.document, backgroundUpdate: 'preserved' } }
+      }
+      if (body.expected_version !== stored.version) { saveConflicts++; return Response.json({ detail: '画布版本冲突' }, { status: 409 }) }
+      saves.push(body); stored = { document: body.document, version: stored.version + 1 }; data = stored
+    }
     else if (path.endsWith('/canvas')) data = stored
     else if (path.endsWith('/workflow/quote')) { const body = JSON.parse(init.body); workflowQuotes.push(body); data = {runId:'mock-quote',total:0,settings:body.settings,items:body.target_ids.map(id=>({input:{id,label:id,kind:'text'},yuan:0}))} }
     else if (path.endsWith('/workflow')) { if (!membershipAllowed) return Response.json({ detail: '项目成员已移除' }, { status: 404 }); data = { ...stored, run: activeWorkflow ? { id: 'active-workflow', status: 'running', completed: 0, count: 1 } : null } }
@@ -117,6 +127,8 @@ test('workspace creates, drags and autosaves nodes while a workflow is running',
     assert.ok(last.classList.contains('selected'))
     await settle(1350)
     assert.equal(saves.at(-1)?.document.nodes.length, 8)
+    assert.equal(saveConflicts, 1, 'stale save retries automatically')
+    assert.equal(stored.document.backgroundUpdate, 'preserved', 'retry retains remote changes')
     assert.ok(saves.at(-1).document.nodes.every(node => Number.isFinite(node.position.x) && Number.isFinite(node.position.y)))
     stored = { ...stored, document: { ...stored.document, edges: [{ id: 'test-reference', source: stored.document.nodes[0].id, target: stored.document.nodes[1].id }] } }
     stored.document.nodes[4].data.prompt = '自动保存期间提交生成测试'
@@ -415,9 +427,13 @@ test('workspace creates, drags and autosaves nodes while a workflow is running',
     assert.equal(generationRequests, 0, 'generation waits for an in-flight autosave')
     assert.equal(document.querySelectorAll('.pf-node-generating').length, 1, 'only the submitting node displays its full-card loading state')
     assert.ok(!document.body.textContent.includes('请先完成画布保存并处理冲突'))
+    stored = { version: stored.version + 1, document: { ...stored.document, nodes: stored.document.nodes.map((node, index) => index === 0 ? { ...node, data: { ...node.data, backgroundResult: '/generated.png' } } : node) } }
     await act(async () => finishHeldSave())
     await settle(120)
     assert.equal(generationRequests, 1, 'submission continues automatically after save completes')
+    assert.equal(saveConflicts, 2, 'generation completing during PUT causes a safely retried conflict')
+    assert.equal(stored.document.nodes[0].data.backgroundResult, '/generated.png')
+    assert.ok(!document.body.textContent.includes('保存冲突'))
     assert.equal(document.querySelectorAll('.pf-node-generating').length, 1, 'queued node keeps loading state while other nodes remain usable')
     assert.equal(document.querySelector('.pf-studio-footer').hidden, true, 'generation never opens the task/debug drawer')
     assert.equal(taskListRequests,0,'closed task drawer never polls the global studio task list')
@@ -493,10 +509,10 @@ test('workspace creates, drags and autosaves nodes while a workflow is running',
     stored = { version: stored.version + 1, document: { ...stored.document, nodes: stored.document.nodes.map((node, index) => index === 0 ? { ...node, data: { ...node.data, label: '其他项目成员的修改' } } : node) } }
     await settle(2200)
     assert.ok(document.body.textContent.includes('其他项目成员的修改'), 'shared edits sync even without a background workflow')
-    const saveCount = saves.length
     membershipAllowed = false
     await settle(2200)
     assert.equal(document.querySelector('[aria-label="整理画布"]').disabled, true, 'removed project members become read-only on the next access check')
+    const saveCount = saves.length
     await act(async () => window.dispatchEvent(new Event('pf-studio-session-expired')))
     await settle()
     assert.equal(document.querySelector('[aria-label="整理画布"]').disabled, true, 'read-only sessions cannot organize')

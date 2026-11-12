@@ -137,3 +137,28 @@ test('ordinary media with episode metadata is separated by episode and type',()=
   assert.equal(new Set(first.nodes.filter(n=>n.type!=='group').map(n=>n.parentId)).size,3)
   assert.deepEqual(organizeCanvas(first.nodes,[]),first)
 })
+
+test('scene numbers survive organization and returning to a location starts a separate scene',()=>{
+  const nodes=[node('s','script'),node('gate','scene',{data:{label:'城门',storyKind:'scene',sourceScriptId:'s'}}),node('hall','scene',{data:{label:'大殿',storyKind:'scene',sourceScriptId:'s'}})]
+  const edges=[]
+  for(const [index,sceneNumber,sceneNodeId] of [[4,3,'gate'],[2,1,'gate'],[3,2,'hall'],[1,1,'gate']]) {
+    const common={sourceScriptId:'s',sceneNumber,sceneNodeId,shotIndex:index,sceneShotIndex:99}
+    nodes.push(node(`p${index}`,'text',{data:{...common,storyKind:'shot_prompt',outputNodeId:`v${index}`,text:'保留写作正文'}}),node(`v${index}`,'videoGeneration',{data:{...common,storyKind:'shot_video',promptNodeId:`p${index}`,mediaUrl:'/keep.mp4'}}))
+    edges.push({id:`p${index}-v${index}`,source:`p${index}`,target:`v${index}`})
+  }
+  const before=structuredClone(nodes),first=organizeCanvas(nodes,edges),byId=new Map(first.nodes.map(n=>[n.id,n]))
+  const groups=first.nodes.filter(n=>n.data.storyKind==='shot_video_group').sort((a,b)=>a.position.x-b.position.x)
+  assert.deepEqual(groups.map(n=>n.data.label),['场1 · 城门 · s','场2 · 大殿 · s','场3 · 城门 · s'])
+  assert.deepEqual(groups.map(n=>n.data.sceneNumber),[1,2,3])
+  assert.deepEqual([1,2,3,4].map(i=>byId.get(`v${i}`).data.label),['场1 · 镜头1 · 视频','场1 · 镜头2 · 视频','场2 · 镜头1 · 视频','场3 · 镜头1 · 视频'])
+  assert.notEqual(byId.get('v1').parentId,byId.get('v4').parentId)
+  for(let i=1;i<=4;i++) {
+    assert.equal(byId.get(`p${i}`).parentId,byId.get(`v${i}`).parentId)
+    assert.equal(byId.get(`p${i}`).data.label,byId.get(`v${i}`).data.label.replace('视频','写作'))
+    assert.equal(byId.get(`p${i}`).data.text,'保留写作正文')
+    assert.equal(byId.get(`v${i}`).data.mediaUrl,'/keep.mp4')
+  }
+  assert.deepEqual(nodes,before)
+  assert.deepEqual(organizeCanvas(first.nodes,edges),first)
+  noOverlap(groups)
+})

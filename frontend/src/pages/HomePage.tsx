@@ -106,7 +106,7 @@ export default function HomePage() {
             <ArrowRight size={16} strokeWidth={2} />
           </span>
         </button>
-        <button type="button" className="pf-land-product is-api" onClick={() => goAuthOr('/drama')}>
+        <button type="button" className="pf-land-product is-api" onClick={() => goAuthOr('/canvas')}>
           <span className="pf-land-product-icon" aria-hidden>
             <Cloud size={26} strokeWidth={1.6} />
           </span>
