@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import User
@@ -22,6 +22,10 @@ def _clip(value: object, limit: int = 180) -> str:
 
 async def load_project_view(db: AsyncSession, project: DramaProject, user: User) -> dict[str, Any]:
     """汇总助手可读的项目、分集、资产和最近任务。"""
+    # Legacy workflow detection reads script.source. Load it explicitly rather
+    # than triggering synchronous lazy I/O inside the async Agent worker.
+    if "script" in inspect(project).unloaded:
+        await db.refresh(project, attribute_names=["script"])
     episodes = list((await db.scalars(select(DramaEpisode).where(DramaEpisode.project_id == project.id).order_by(DramaEpisode.id).limit(8))).all())
     episode_ids = [episode.id for episode in episodes]
     fragments = list((await db.scalars(select(DramaEpisodeFragment).where(DramaEpisodeFragment.episode_id.in_(episode_ids)).order_by(DramaEpisodeFragment.sort_order, DramaEpisodeFragment.id))).all()) if episode_ids else []
