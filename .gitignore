@@ -22,6 +22,9 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+pip-metadata-*/
+pip-unpack-*/
+pytest-of-*/
 .coverage
 htmlcov/
 backend/.venv/
@@ -59,6 +62,7 @@ id_rsa
 id_ed25519
 *.id_rsa
 *.id_ed25519
+/buy-cert.der
 !**/example*.pem
 .netrc
 .npmrc
@@ -76,9 +80,11 @@ backend/frontend/
 # Frontend build
 frontend/node_modules/
 frontend/dist/
+frontend/dist-*/
 
 # 本地 Agent / IDE（不上库）
 .claude/
 .cursor/
 .work/
+.learnings/
 printfilm/
