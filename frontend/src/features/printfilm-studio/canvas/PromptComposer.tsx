@@ -80,7 +80,7 @@ export function MentionMenu({ query, mentions, onPick, onLibrary }: {
   query: string
   mentions: { connected: ComposerMention[]; canvas: ComposerMention[]; assets: ComposerMention[] }
   onPick: (item: ComposerMention) => void
-  onLibrary: () => void
+  onLibrary?: () => void
 }) {
   const match = (item: ComposerMention) => !query || `${item.label} ${item.hint || ''}`.toLowerCase().includes(query.toLowerCase())
   const groups = [
@@ -98,7 +98,7 @@ export function MentionMenu({ query, mentions, onPick, onLibrary }: {
         <small>{item.hint || (item.source === 'asset' ? '素材' : '图片')}</small>
       </button>)}
     </section>)}
-    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={onLibrary}>从素材库选择</button>
+    {onLibrary && <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={onLibrary}>从素材库选择</button>}
   </div>
 }
 

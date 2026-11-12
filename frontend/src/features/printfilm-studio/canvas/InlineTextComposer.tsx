@@ -2,7 +2,10 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import { ArrowUp, LoaderCircle, Plus, Square, X } from 'lucide-react'
 import { ComposerMenu, ComposerSelect } from './ComposerMenu'
 import { WRITING_SKILLS, WRITING_TYPES, textWritingPrompt } from './textWriting'
-import { PromptInput } from './PromptInput'
+import { PromptInput, restorePromptCaret } from './PromptInput'
+import { MentionMenu } from './PromptComposer'
+import { mentionQuery, mentionToken } from './promptMentions'
+import type { ComposerMention } from './studioNodeContext'
 import { StudioModelSelect } from '../StudioModelSelect'
 import { editableWritingRequirements, imageWritingRequirements } from './textWriting'
 import { linkedWritingPrompt, linkedWritingResult, writingRequest, writingOutputSignature, writingParametersChanged, type WritingOutput, type WritingReference } from './writingContext'
@@ -41,6 +44,27 @@ export function InlineTextComposer({ projectId, nodeId, title, text, settings, r
   const prompt = (imageOutput ? imageWritingRequirements : editableWritingRequirements)(String(settings.writingPrompt || '')), type = imageOutput && (!settings.writingType || settings.writingType==='镜头提示词') ? '图片提示词' : String(settings.writingType || (outputs.some(output=>output.kind==='video') ? '镜头提示词' : '故事脚本')), skill = String(settings.writingSkill || 'none')
   const boundReferences: WritingReference[] = references.map(item => ({...item,source:'node',mediaKind:item.mediaKind || (item.url ? 'image' : 'text')}))
   const linkedPrompt = linkedWritingPrompt(prompt,boundReferences,outputs)
+  const promptInput = useRef<HTMLDivElement | null>(null)
+  const [mention, setMention] = useState<{ value: string; start: number; end: number; query: string } | null>(null)
+  const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const cancelBlur = () => { if (blurTimer.current !== null) { clearTimeout(blurTimer.current); blurTimer.current = null } }
+  useEffect(() => () => cancelBlur(), [])
+  const syncMention = (value: string, caret: number) => {
+    const query = mentionQuery(value, caret)
+    setMention(query === null || query.startsWith('[') ? null : { value, start: value.slice(0, caret).lastIndexOf('@'), end: caret, query })
+  }
+  const asMention = (item: TextReference): ComposerMention => ({ ...item, source: 'node', mediaKind: item.mediaKind || (item.url ? 'image' : 'text') })
+  const pickMention = (item: ComposerMention) => {
+    if (!mention || busy || !writable) return
+    cancelBlur()
+    const token = mentionToken(item)
+    const next = `${mention.value.slice(0, mention.start)}${token} ${mention.value.slice(mention.end)}`
+    if (!references.some(ref => ref.id === item.id)) onReference(item.id)
+    onSetting('writingPrompt', next)
+    const caret = mention.start + token.length + 1
+    setMention(null)
+    window.requestAnimationFrame(() => { if (promptInput.current) { promptInput.current.focus(); restorePromptCaret(promptInput.current, caret) } })
+  }
   const latestOutputs = useRef(outputs); latestOutputs.current = outputs
   const model = models.find(item=>item.id===settings.writingModel)?.id || models.find(item=>item.id===defaultModel)?.id || models[0]?.id || ''
   const requestVersion = useRef('')
@@ -79,7 +103,10 @@ export function InlineTextComposer({ projectId, nodeId, title, text, settings, r
   }
   return <div className="pf-composer-card is-attached pf-inline-writing" onMouseDown={(event) => event.stopPropagation()}>
     <div className="pf-composer-tags"><ComposerMenu label="引用故事素材" value={<><Plus size={16} />参考素材</>}>{(close) => <>{candidates.length ? candidates.map((item) => <button key={item.id} disabled={busy || !writable} onClick={() => { onReference(item.id); close() }}>{item.url && <img className="pf-writing-reference-thumb" src={item.url} alt=""/>}{item.label}</button>) : <p>暂无其他文本或图片节点</p>}</>}</ComposerMenu>{references.map((item) => <span className="pf-chip is-ref" key={item.id}><button type="button" className="pf-ref-jump" aria-label={`定位关联节点 ${item.label}`} onClick={()=>onFocusReference?.(item.id)}>{item.url && <img className="pf-writing-reference-thumb" src={item.url} alt=""/>}{item.label}</button><button aria-label={`移除参考 ${item.label}`} disabled={busy || !writable} onClick={() => onReference(item.id)}><X size={12}/></button></span>)}</div>
-    <div className="pf-writing-prompt"><PromptInput label="AI 写作要求" value={linkedPrompt} references={boundReferences} readOnly={busy || !writable} onChange={value => onSetting('writingPrompt', value)} placeholder="输入写作要求，参考图片会显示为关联素材" /></div>
+    <div className="pf-writing-prompt" onKeyDown={event => { if (event.key === 'Escape') { setMention(null); event.stopPropagation() } }}>
+      <PromptInput inputRef={promptInput} label="AI 写作要求" value={linkedPrompt} references={boundReferences} readOnly={busy || !writable} onChange={(value, caret) => { onSetting('writingPrompt', value); syncMention(value, caret) }} onCaret={syncMention} onFocus={cancelBlur} onBlur={() => { cancelBlur(); blurTimer.current = setTimeout(() => setMention(null), 120) }} placeholder="输入写作要求，输入 @ 引用文本或图片" />
+      {mention && writable && !busy && <MentionMenu query={mention.query} mentions={{ connected: references.map(asMention), canvas: candidates.filter(item => !references.some(ref => ref.id === item.id)).map(asMention), assets: [] }} onPick={pickMention} />}
+    </div>
     {!!outputs.length && <div className="pf-writing-outputs" aria-label="下游生成参数">{outputs.map(output => <span key={output.id}><b>{output.label}</b> · {output.model || '平台默认模型'} · {output.ratio || '未设置比例'}{output.kind === 'video' ? ` · ${output.duration ? `${output.duration} 秒` : '未设置时长'}` : ''}</span>)}<small>{imageOutput ? '按动漫风格生成图片提示词，保留角色与场景特征，比例跟随下游图片节点。' : '按图片名称与已有描述写作，图片会用于下游视频生成。时长、比例跟随下游节点。'}</small></div>}
     {text.trim() && writingParametersChanged({id:nodeId,data:settings},outputs) && <p className="pf-composer-validation">下游参数已变化，请重新生成提示词，避免使用旧时长或比例。</p>}
     <fieldset disabled={busy || !writable} className="pf-writing-director"><ComposerSelect label="导演写作技能" value={directorId ? String(directorId) : ''} options={[{id:'',label:'不使用导演技能'},...studioSkillsForTask(directorSkills,writingTask).map(skill=>({id:String(skill.id),label:imageOutput && skill.is_builtin && skill.slug==='short-drama-assets' ? '图片提示词导演' : studioSkillName(skill)}))]} onChange={value=>onSetting('writingDirectorSkillIds',value ? [Number(value)] : [])}/></fieldset>

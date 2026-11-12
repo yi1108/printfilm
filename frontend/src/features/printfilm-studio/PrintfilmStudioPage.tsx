@@ -10,6 +10,7 @@ import { setStorySequence } from './storyboard/storyboardState'
 import { DefaultModelPanel, WalletPanel, WorkspaceUtilityPanel } from './WorkspacePanels'
 import { defaultNodeData, storeSnapshot } from './workspacePreferences'
 import { writingContext, writingInputSignature, createWritingReferenceResolver, linkedWritingResult, toggleWritingReference, assertWritingParameters } from './canvas/writingContext'
+import { connectedGenerationPrompt } from './canvas/generationPrompt'
 import { WritingRunStore } from './canvas/WritingRunStore'
 import { nodeDraft } from './canvas/nodeDraft'
 import { plainPrompt, type PromptReference } from './canvas/promptMentions'
@@ -1092,7 +1093,7 @@ function PrintfilmStudioWorkspace() {
     const submittingId = selectedNodeId || 'new'
     const reportError = (message: string) => { setStatus(message); setSubmissionError({nodeId:submittingId,message}) }
     if (referenceValidation) {reportError(referenceValidation);return}
-    if (generationRunningRef.current.has(submittingId) || (action !== 'compose' && !genPrompt.trim() && !selectedNode?.data.promptNodeId && selectedNode?.data.storyKind !== 'shot_video')) return
+    if (generationRunningRef.current.has(submittingId) || (action !== 'compose' && !liveComposerPrompt.trim())) return
     const setGenerationRunning = (value: boolean) => {
       if (value) generationRunningRef.current.add(submittingId)
       else generationRunningRef.current.delete(submittingId)
@@ -1120,8 +1121,8 @@ function PrintfilmStudioWorkspace() {
     let assetPrompt: string | undefined
     try { storyInputs = storyVideoInputs(source, nodesRef.current, edgesRef.current); assetPrompt = storyAssetPrompt(source, nodesRef.current, edgesRef.current) }
     catch (error) { setGenerationRunning(false); reportError(error instanceof Error ? error.message : '分镜参考不完整'); return }
-    const userPrompt = storyInputs?.prompt || assetPrompt || genPrompt.trim()
-    const referenceText = storyInputs || assetPrompt ? '' : linkedRefs.filter((node) => nodeMediaKind(node) === 'text' && !hiddenRefIds.includes(node.id)).map((node) => `${node.data.label || '参考文本'}：${node.data.text || ''}`).join('\n').slice(0, 6000)
+    const userPrompt = storyInputs?.prompt || assetPrompt || liveComposerPrompt.trim()
+    const referenceText = storyInputs || assetPrompt || linkedPromptNode || !genPrompt.trim() ? '' : linkedRefs.filter((node) => nodeMediaKind(node) === 'text' && !hiddenRefIds.includes(node.id)).map((node) => `${node.data.label || '参考文本'}：${node.data.text || ''}`).join('\n').slice(0, 6000)
     const rawMessage = storyInputs?.providerPrompt || (referenceText ? `${plainPrompt(userPrompt)}\n\n参考脚本：\n${referenceText}` : plainPrompt(userPrompt))
     const message = action === 'video' || action === 'reference' ? videoPromptAudio(rawMessage,genModel) : rawMessage
     if (!userPrompt) { setGenerationRunning(false); return }
@@ -1657,7 +1658,7 @@ function PrintfilmStudioWorkspace() {
   const rememberParameter = (key: string, value: string | boolean) => { if (!canEdit || !selectedNodeId) return; setNodes((current) => updateStudioNode(current, selectedNodeId, { [key]: value }) as Node<Data>[]); dirtyRef.current = true }
   const linkedPromptNode = nodes.find((node) => node.id === selectedNode?.data.promptNodeId && ['text', 'script'].includes(node.type || ''))
   const strictStoryPrompt = selectedNode?.data.storyKind === 'shot_video' || ['character','scene'].includes(String(selectedNode?.data.storyKind))
-  const rawComposerPrompt = linkedPromptNode && (strictStoryPrompt || String(linkedPromptNode.data.text || '').trim()) ? String(linkedPromptNode.data.text || '') : genPrompt
+  const rawComposerPrompt = linkedPromptNode && (strictStoryPrompt || String(linkedPromptNode.data.text || '').trim()) ? String(linkedPromptNode.data.text || '') : connectedGenerationPrompt(genPrompt, linkedRefs.filter(node => !hiddenRefIds.includes(node.id)))
   const liveComposerPrompt = linkedPromptNode && selectedNode?.data.storyKind === 'shot_video' ? linkedWritingResult(rawComposerPrompt,writingContext(linkedPromptNode,nodes,edges).references) : rawComposerPrompt
   const writeComposerPrompt = (value: string) => {
     setGenPrompt(value)

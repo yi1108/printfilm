@@ -5,10 +5,11 @@ const clamp = (value: number, min: number, max: number) => Math.max(min, Math.mi
 
 export function clampPanel(rect: PanelRect, viewport: PanelViewport, docked: boolean): PanelRect {
   const gap = docked ? 0 : Math.min(15, viewport.width / 2, viewport.height / 2)
+  const verticalGap = docked ? Math.min(20, viewport.height / 2) : gap
   const maxWidth = docked && viewport.width >= 720 ? viewport.width * .45 : viewport.width - gap * 2
   const width = clamp(rect.width, Math.min(320, maxWidth), maxWidth)
-  const height = docked ? viewport.height : clamp(rect.height, Math.min(240, viewport.height - gap * 2), viewport.height - gap * 2)
-  return { width, height, left: docked ? viewport.width - width : clamp(rect.left, gap, viewport.width - gap - width), top: docked ? 0 : clamp(rect.top, gap, viewport.height - gap - height) }
+  const height = docked ? viewport.height - verticalGap * 2 : clamp(rect.height, Math.min(240, viewport.height - gap * 2), viewport.height - gap * 2)
+  return { width, height, left: docked ? viewport.width - width : clamp(rect.left, gap, viewport.width - gap - width), top: docked ? verticalGap : clamp(rect.top, gap, viewport.height - gap - height) }
 }
 
 export function movePanel(rect: PanelRect, mode: PanelInteraction, dx: number, dy: number, viewport: PanelViewport, docked: boolean): PanelRect {

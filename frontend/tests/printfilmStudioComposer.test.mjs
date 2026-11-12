@@ -143,6 +143,46 @@ test('composer menus apply parameters; writing sends configured instructions and
     assert.equal(cancelledStreams,1,'done event ends writing without waiting for a persistent HTTP connection')
     assert.equal(button('停止写作'),null)
 
+    const linkedByMention = []
+    const extraReference = { id:'new-image',label:'新参考',text:'',url:'/new.png',mediaKind:'image' }
+    function WritingMentions() {
+      const [settings,setSettings] = useState({writingPrompt:'在飞机上跳舞@后续正文'})
+      const [references,setReferences] = useState(writingProps.references)
+      return h(InlineTextComposer,{...writingProps,nodeId:'mentions',outputs:[],settings,references,candidates:[...writingProps.references,extraReference],
+        onSetting:(key,value)=>setSettings(current=>({...current,[key]:value})),
+        onReference:id=>{linkedByMention.push(id);setReferences(current=>[...current,extraReference])},
+      })
+    }
+    await act(async()=>root.render(h(WritingMentions)))
+    const writingInput = document.querySelector('[aria-label="AI 写作要求"]')
+    await act(async()=>{
+      writingInput.focus()
+      const range=document.createRange();range.setStart(writingInput.firstChild,'在飞机上跳舞@'.length);range.collapse(true)
+      window.getSelection().removeAllRanges();window.getSelection().addRange(range)
+      writingInput.dispatchEvent(new KeyboardEvent('keyup',{key:'@',bubbles:true}))
+    })
+    assert.match(document.querySelector('.pf-mention').textContent,/已接入/)
+    await act(async()=>{
+      writingInput.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))
+      writingInput.dispatchEvent(new KeyboardEvent('keyup',{key:'Escape',bubbles:true}))
+    })
+    assert.equal(Boolean(document.querySelector('.pf-mention')),false,'Escape must keep the mention menu closed after keyup')
+    await act(async()=>writingInput.dispatchEvent(new KeyboardEvent('keyup',{key:'@',bubbles:true})))
+
+    await click([...document.querySelectorAll('.pf-mention button')].find(item=>item.textContent.includes('角色')))
+    assert.match(readPromptDom(writingInput),/在飞机上跳舞@\[.*\]\(node:role\) 后续正文/)
+    assert.deepEqual(linkedByMention,[],'mentioning an existing reference must not disconnect it')
+    await act(async()=>{
+      writingInput.textContent='继续@新'
+      const range=document.createRange();range.selectNodeContents(writingInput);range.collapse(false)
+      window.getSelection().removeAllRanges();window.getSelection().addRange(range)
+      writingInput.dispatchEvent(new Event('input',{bubbles:true}))
+    })
+    await click([...document.querySelectorAll('.pf-mention button')].find(item=>item.textContent.includes('新参考')))
+    assert.deepEqual(linkedByMention,['new-image'])
+    assert.match(readPromptDom(writingInput),/\(node:new-image\)/)
+    assert.equal(document.querySelector('.pf-mention'),null)
+
 
 
   } finally {

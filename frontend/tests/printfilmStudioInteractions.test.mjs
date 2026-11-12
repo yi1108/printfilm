@@ -74,7 +74,7 @@ test('panel move and resize remain inside viewport, left resize preserves opposi
 test('docked panel reserves right width and fits even a narrow viewport', () => {
   const rect = { left: 1000, top: 300, width: 900, height: 700 }
   const docked = clampPanel(rect, { width: 1000, height: 600 }, true)
-  assert.deepEqual(docked, { left: 550, top: 0, width: 450, height: 600 })
+  assert.deepEqual(docked, { left: 550, top: 20, width: 450, height: 560 })
   const narrow = clampPanel(rect, { width: 280, height: 200 }, false)
   assert.deepEqual(narrow, { left: 15, top: 15, width: 250, height: 170 })
 })
