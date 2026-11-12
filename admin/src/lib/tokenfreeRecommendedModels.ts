@@ -5,9 +5,9 @@ export type PresetModelOption = { id: string; label: string };
 /** 与后端 media_model_presets.PRESET_MODELS 对齐（TokenFree 点分 id） */
 export const PRESET_MODELS: Record<ModelCapability, PresetModelOption[]> = {
   text: [
-    { id: "kimi-k2.6", label: "Kimi K2.6" },
+    { id: "gpt-6.1-sol", label: "GPT-6.1 Sol" },
     { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro" },
-    { id: "gpt-5.5", label: "GPT 5.5" },
+    { id: "gpt-6-astra", label: "GPT-6 Astra" },
   ],
   image: [
     { id: "seedream-5.0-pro", label: "Seedream 5.0 Pro" },
