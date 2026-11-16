@@ -289,8 +289,14 @@ async def _run_kepu_shot_audio(task: TaskRun) -> dict[str, Any] | None:
 
 # 执行科普整片重配音任务。
 async def _run_kepu_project_audio(task: TaskRun) -> dict[str, Any] | None:
-    from app.services.pipeline import regen_project_audio_and_compose
+    from app.services.pipeline import clear_pipeline_cancellation, regen_project_audio_and_compose
 
+    if task.cancel_requested:
+        return {"cancelled": True, "project_id": task.project_id}
+    # Same stale-marker guard as the pipeline/compose handlers: a previous task
+    # cancelled before start leaves a process-local marker that would otherwise
+    # make this fresh re-voice task abort inside _set_status.
+    clear_pipeline_cancellation(_require_int(task.project_id, "project_id"))
     return await _await_kepu(
         task,
         regen_project_audio_and_compose(_require_int(task.project_id, "project_id")),

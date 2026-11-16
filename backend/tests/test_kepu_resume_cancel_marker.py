@@ -57,3 +57,32 @@ async def test_db_cancellation_still_blocks_when_snapshot_predates_current_reque
         assert project.status == ProjectStatus.CANCELLED
     finally:
         pipeline.clear_pipeline_cancellation(task.project_id)
+
+
+async def test_fresh_project_audio_task_clears_previous_marker(monkeypatch):
+    task = SimpleNamespace(project_id=97113, cancel_requested=False, payload={})
+    pipeline.cancel_pipeline(task.project_id)
+
+    async def stage(project_id, **_kwargs):
+        assert not pipeline.is_cancelled(project_id)
+
+    monkeypatch.setattr(pipeline, "regen_project_audio_and_compose", stage)
+    monkeypatch.setattr(handlers, "_kepu_output_snapshot", AsyncMock(return_value={}))
+    try:
+        result = await handlers._run_kepu_project_audio(task)
+        assert result["ok"]
+    finally:
+        pipeline.clear_pipeline_cancellation(task.project_id)
+
+
+async def test_current_cancellation_is_not_cleared_or_executed_for_project_audio(monkeypatch):
+    task = SimpleNamespace(project_id=97114, cancel_requested=True, payload={})
+    pipeline.cancel_pipeline(task.project_id)
+    stage = AsyncMock()
+    monkeypatch.setattr(pipeline, "regen_project_audio_and_compose", stage)
+    try:
+        result = await handlers._run_kepu_project_audio(task)
+        assert result["cancelled"] and pipeline.is_cancelled(task.project_id)
+        stage.assert_not_awaited()
+    finally:
+        pipeline.clear_pipeline_cancellation(task.project_id)
