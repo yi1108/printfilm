@@ -69,3 +69,8 @@ def test_format_seedance_model_not_found_2_5():
     msg = _format_seedance_create_error(503, body)
     assert "未开通" in msg
     assert "2.0" in msg
+
+
+def test_duplicate_first_frame_has_actionable_chinese_message():
+    msg = _format_seedance_create_error(400, 'expected at most one first frame image content but got 2 instead')
+    assert "首帧只能设置一张" in msg and "全能参考" in msg

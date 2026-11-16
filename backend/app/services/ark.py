@@ -457,6 +457,8 @@ def _format_seedance_create_error(
     content_labels: list[str] | None = None,
 ) -> str:
     text = (body or "")[:800]
+    if re.search(r"at most one first[ _]frame", text, re.I):
+        return "首帧只能设置一张图片。要指定结束画面请选择首尾帧；要参考多张图片请选择全能参考。"
     if any(
         k in text
         for k in ("PrivacyInformation", "InputImageSensitive", "SensitiveContentDetected", "real person")

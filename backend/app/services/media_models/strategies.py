@@ -156,6 +156,9 @@ class MediaModelStrategy:
             images = [x for x in content if isinstance(x, dict) and x.get("type") == "image_url"]
             audios = [x for x in content if isinstance(x, dict) and x.get("type") == "audio_url"]
             videos = [x for x in content if isinstance(x, dict) and x.get("type") == "video_url"]
+            for role, label in (("first_frame", "首帧"), ("last_frame", "尾帧")):
+                if sum(x.get("role") == role for x in images) + bool(params.get(role)) > 1:
+                    raise MediaValidationError("references", f"{label}只能设置一张图片；多张参考图请使用全能参考模式")
             self.validate_reference_counts(
                 images=len(images) + len(out["reference_images"]) + len(styles)
                        + bool(params.get("first_frame")) + bool(params.get("last_frame")),
