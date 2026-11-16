@@ -64,7 +64,8 @@ export function StudioContextMenu({ menu, actions, onSelect, onClose }: {
 }
 
 /** 节点检查器：改名称、正文、提示词和音视频裁剪点。 */
-export function StudioInspector({ draft, kind, writable, onChange, onSave, onClose, references }: {
+export function StudioInspector({ draft, kind, writable, onChange, onSave, onClose, references, nodeId }: {
+  nodeId?: string
   references?: PromptReference[]
   draft: InspectorDraft
   kind: 'image' | 'video' | 'audio' | 'text' | 'group'
@@ -73,7 +74,7 @@ export function StudioInspector({ draft, kind, writable, onChange, onSave, onClo
   onSave: () => void
   onClose: () => void
 }) {
-  if (kind === 'text') return <Suspense fallback={<div role="status" style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'grid', placeItems: 'center', background: '#0008', color: '#fff' }}>正在打开文本…</div>}><TextNodeEditor references={references} draft={draft} writable={writable} onChange={onChange} onSave={onSave} onClose={onClose} /></Suspense>
+  if (kind === 'text') return <Suspense fallback={<div role="status" style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'grid', placeItems: 'center', background: '#0008', color: '#fff' }}>正在打开文本…</div>}><TextNodeEditor nodeId={nodeId} key={nodeId} references={references} draft={draft} writable={writable} onChange={onChange} onSave={onSave} onClose={onClose} /></Suspense>
   const field = (key: keyof InspectorDraft, label: string, multiline = false) => (
     <label>{label}{multiline
       ? <textarea readOnly={!writable} value={draft[key]} onChange={(event) => onChange({ ...draft, [key]: event.target.value })} />

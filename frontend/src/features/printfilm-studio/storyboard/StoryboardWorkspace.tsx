@@ -97,7 +97,7 @@ export function StoryboardWorkspace({ nodes, selectedId, onSelect, onAdd, onLoca
           </div>}
           {kind === 'text' ? <>
             {busy && <div className="pf-board-progress" role="status">AI 正在写…<progress aria-label="AI 写作进行中"/></div>}
-            <Suspense fallback={<p>加载文本编辑器…</p>}><TextEditor references={actions.writingReferences?.(selected.id)} key={selected.id} embedded draft={{label:storyTitle(selected),text:nodeDraft(selected),prompt:String(selected.data.prompt||''),clipStart:'',clipEnd:''}} writable={writable && !busy} onChange={draft => actions.updateText(selected.id, draft.text)} onSave={onSave} onClose={() => {}}/></Suspense>
+            <Suspense fallback={<p>加载文本编辑器…</p>}><TextEditor nodeId={selected.id} references={actions.writingReferences?.(selected.id)} key={selected.id} embedded draft={{label:storyTitle(selected),text:nodeDraft(selected),prompt:String(selected.data.prompt||''),clipStart:'',clipEnd:''}} writable={writable && !busy} onChange={draft => actions.updateText(selected.id, draft.text)} onSave={onSave} onClose={() => {}}/></Suspense>
             <div className="pf-board-writing-tabs"><button aria-pressed={actions.textComposer?.nodeId !== selected.id} disabled={busy} onClick={() => actions.closeTextComposer?.()}>自己写</button><button aria-pressed={actions.textComposer?.nodeId === selected.id} onClick={() => actions.generateText(selected.id)}>AI 写</button></div>
             {actions.textComposer?.nodeId === selected.id && actions.textComposer.content}
           </> : <>

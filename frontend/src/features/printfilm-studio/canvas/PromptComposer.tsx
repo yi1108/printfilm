@@ -98,7 +98,8 @@ export function MentionMenu({ query, mentions, onPick, onLibrary, anchor, fromBu
         range.collapse(false)
         // Measure the @ glyph itself; a collapsed range may have no box at a line break.
         if (range.startContainer.nodeType === 3) {
-          const at = (range.startContainer.textContent || '').slice(0, range.startOffset).lastIndexOf('@')
+          const prefix = (range.startContainer.textContent || '').slice(0, range.startOffset)
+          const at = Math.max(prefix.lastIndexOf('@'), prefix.lastIndexOf('＠'))
           if (at >= 0) {
             range.setEnd(range.startContainer, at + 1)
             range.setStart(range.startContainer, at)

@@ -63,6 +63,8 @@ export type StudioNodeActions = {
   disconnectEdge?: (id:string)=>void
   composition?: (id:string)=>void
   compositionSummary?: (id:string)=>{count:number;pending:string}
+  writingMentionOptions?: (writerId: string) => StudioComposerState['mentions']
+  bindWritingMention?: (writerId: string, item: ComposerMention) => ComposerMention
   writingReferences?: (id: string) => WritingReference[]
   projectId?: number
   textComposer?: { nodeId: string; content: ReactNode }

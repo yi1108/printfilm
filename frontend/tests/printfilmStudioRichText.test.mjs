@@ -21,14 +21,15 @@ test('rich text dialog formats, copies, saves on close, and preserves read-only 
   try {
     server = await createServer({ configFile: false, root: fileURLToPath(new URL('..', import.meta.url)), plugins: [react()], server: { middlewareMode: true, hmr: false, ws: false, watch: null }, logLevel: 'error' })
     const { TextNodeEditor } = await server.ssrLoadModule('/src/features/printfilm-studio/canvas/TextNodeEditor.tsx')
+    const { StudioNodeActionsContext } = await server.ssrLoadModule('/src/features/printfilm-studio/canvas/studioNodeContext.ts')
     const { createElement: h, act, useState, StrictMode } = await import('react')
     const { createRoot } = await import('react-dom/client')
     root = createRoot(document.getElementById('root'))
     const initial = { label: '剧本', prompt: '保留提示词', text: '司马懿\n\n城中为何空无一人？', clipStart: '', clipEnd: '' }
     let saved, closed = 0, changes = 0
-    function Harness({ writable = true, text = initial.text, references = [] }) {
+    function Harness({ writable = true, text = initial.text, references = [], mentionActions, nodeId }) {
       const [draft, setDraft] = useState({ ...initial, text })
-      return h(TextNodeEditor, { draft, writable, references, onChange: value => { changes++; setDraft(value) }, onSave: () => { saved = draft }, onClose: () => { closed++ } })
+      return h(StudioNodeActionsContext.Provider, { value: mentionActions }, h(TextNodeEditor, { draft, writable, references, nodeId, onChange: value => { changes++; setDraft(value) }, onSave: () => { saved = draft }, onClose: () => { closed++ } }))
     }
     const settle = async () => { await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)) }) }
     const render = async props => { await act(async () => root.render(h(StrictMode, null, h(Harness, props)))); await settle() }
@@ -102,6 +103,34 @@ test('rich text dialog formats, copies, saves on close, and preserves read-only 
     const html = renderToStaticMarkup(h(MessageContent, {text: token, references:[ref]}))
     assert.ok(html.includes('/reference.png') && html.includes(ref.label))
     assert.ok(!html.includes('href="node:'))
+    const asset = { ...ref, id: '42', source: 'asset' }
+    const bindings = []
+    const mentionActions = {
+      writingMentionOptions: () => ({ connected: [], canvas: [], assets: [asset] }),
+      bindWritingMention: (id, item) => { bindings.push([id, item.id]); return ref },
+    }
+    for (const trigger of ['@', '＠']) {
+      await render({ key: trigger, text: '**前文**，后文。', nodeId: 'writer', mentionActions })
+      const editor = document.querySelector('.tiptap').editor
+      await act(async () => { editor.commands.focus(); editor.commands.setTextSelection(3) })
+      await settle()
+      await act(async () => { editor.commands.insertContent(trigger + '刘') })
+      await settle()
+      const choice = document.querySelector('[role="listbox"] button')
+      assert.ok(choice?.textContent.includes(ref.label))
+      await act(async () => choice.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+      await settle()
+      assert.equal(document.querySelector('[role="listbox"]'), null)
+      assert.equal(document.querySelector('.tiptap [data-canvas-reference] img').getAttribute('src'), ref.url)
+      assert.equal(editor.state.doc.textContent, '前文，后文。')
+      await click('关闭文本编辑器')
+      assert.ok(saved.text.includes(token))
+      await render({ key: 'saved' + trigger, text: saved.text, references: [ref], nodeId: 'writer', mentionActions })
+      assert.ok(document.querySelector('.tiptap strong').textContent.includes('前文'))
+      assert.ok(document.querySelector('.tiptap').textContent.endsWith('，后文。'))
+      assert.equal(document.querySelectorAll('.tiptap [data-canvas-reference]').length, 1)
+    }
+    assert.deepEqual(bindings, [['writer', '42'], ['writer', '42']])
   } finally {
     if (root) { const { act } = await import('react'); await act(async () => root.unmount()) }
     await server?.close()

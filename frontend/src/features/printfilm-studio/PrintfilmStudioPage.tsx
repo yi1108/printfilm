@@ -9,7 +9,7 @@ import { StoryboardWorkspace } from './storyboard/StoryboardWorkspace'
 import { setStorySequence } from './storyboard/storyboardState'
 import { DefaultModelPanel, WalletPanel, WorkspaceUtilityPanel } from './WorkspacePanels'
 import { defaultNodeData, storeSnapshot } from './workspacePreferences'
-import { writingContext, writingInputSignature, createWritingReferenceResolver, linkedWritingResult, toggleWritingReference, assertWritingParameters } from './canvas/writingContext'
+import { writingContext, writingDependents, writingInputSignature, createWritingReferenceResolver, linkedWritingResult, toggleWritingReference, assertWritingParameters } from './canvas/writingContext'
 import { connectedGenerationPrompt } from './canvas/generationPrompt'
 import { WritingRunStore } from './canvas/WritingRunStore'
 import { nodeDraft } from './canvas/nodeDraft'
@@ -387,11 +387,11 @@ function PrintfilmStudioWorkspace() {
     return () => { active = false; controller.abort() }
   }, [sessionId])
   useEffect(() => {
-    if ((!assetsOpen && !composerOpen && !agentOpen) || !validProjectId) return
+    if ((!assetsOpen && !composerOpen && !agentOpen && !inspectorOpen && viewMode !== 'storyboard') || !validProjectId) return
     let active = true
     printfilmStudioApi.getAssets(projectId).then((result) => active && setAssets(result.assets || [])).catch((error) => { if (active) setStatus(error instanceof Error ? error.message : '素材库加载失败') })
     return () => { active = false }
-  }, [assetsOpen, composerOpen, agentOpen, projectId, validProjectId])
+  }, [assetsOpen, composerOpen, agentOpen, inspectorOpen, viewMode, projectId, validProjectId])
   const taskListRefreshKey = nodes.filter(node=>node.data.taskId).map(node=>`${node.data.taskId}:${node.data.status || ''}`).sort().join('|')
   useEffect(() => {
     if (!bottomOpen || !validProjectId) return
@@ -1380,6 +1380,51 @@ function PrintfilmStudioWorkspace() {
     } finally {generationRunningRef.current.delete(id);if(mountedRef.current)setSubmittingNodeIds(ids=>{const next=new Set(ids);next.delete(id);return next})}
   }
   const nodeActions: StudioNodeActions = {
+    writingMentionOptions: id => {
+      const writer = nodes.find(node => node.id === id)
+      const connected = resolveWritingReferences(id, nodes, edges)
+      const existing = new Set(connected.map(ref => ref.id))
+      const downstream = writingDependents(id, edges)
+      const canvas = nodes.filter(node => !downstream.has(node.id) && !existing.has(node.id)
+        && node.type !== 'group' && node.type !== 'frameAnalysis'
+        && (!writer?.data.sourceScriptId || !node.data.sourceScriptId || writer.data.sourceScriptId === node.data.sourceScriptId))
+        .map(node => ({ id: node.id, label: String(node.data.label || '素材'), mediaKind: nodeMediaKind(node), source: 'node' as const, url: mediaOf(node) }))
+      return { connected, canvas, assets: assets.filter(asset => asset.url || asset.cover).map(asset => ({
+        id: String(asset.id), source: 'asset', label: asset.name || `素材 #${asset.id}`,
+        url: String(asset.cover || asset.url), mediaKind: assetMediaKind(asset), hint: '项目素材',
+      })) }
+    },
+    bindWritingMention: (id, item) => {
+      const writer = nodesRef.current.find(node => node.id === id)
+      if (!writer || !canEditRef.current) throw new Error('当前无法编辑该节点')
+      let nextNodes = nodesRef.current
+      const currentEdges = edgesRef.current
+      let source = nextNodes.find(node => item.source === 'node' && node.id === item.id)
+      if (item.source === 'asset') {
+        const asset = assets.find(entry => String(entry.id) === item.id)
+        if (!asset) throw new Error('该素材已不可用')
+        source = referenceAssetNode(nextNodes, asset, id, currentEdges)
+        if (!source) {
+          const kind = assetMediaKind(asset)
+          const origin = nodeWorldPositions(nextNodes).get(id)!
+          source = newNode(kind, nextNodes.length, { label: item.label, assetId: asset.id, mediaType: kind, mediaUrl: asset.url || asset.cover, status: 'completed' })
+          source.id = `node-${crypto.randomUUID()}`
+          source.position = { x: origin.x - 420, y: origin.y + currentEdges.filter(edge => edge.target === id).length * 260 }
+          nextNodes = [...nextNodes, source]
+        }
+      }
+      if (!source) throw new Error('该参考节点已移除')
+      if (writingDependents(id, currentEdges).has(source.id)) throw new Error('无法引用依赖当前写作节点的素材')
+      const graph = toggleWritingReference(writer, nextNodes, currentEdges, source.id)
+      if (!graph.removing) {
+        for (const edge of graph.edges.filter(edge => !currentEdges.some(old => old.id === edge.id))) {
+          const error = validateStudioConnection(edge, graph.nodes, currentEdges)
+          if (error) throw new Error(error)
+        }
+        commitGraph(graph.nodes, graph.edges, '已关联写作参考')
+      }
+      return { ...item, source: 'node', id: source.id, label: String(source.data.label || item.label) }
+    },
     writingReferences: (id) => resolveWritingReferences(id,nodesRef.current,edgesRef.current),
     projectId,
     focusNode: id=>focusNode(id),
@@ -1949,7 +1994,7 @@ function PrintfilmStudioWorkspace() {
     }} />}
     {contextMenu && <StudioContextMenu menu={contextMenu} actions={menuActions} onSelect={runMenuAction} onClose={() => setContextMenu(null)} />}
     {!!batchNodeIds.length && <BatchRunDialog nodes={nodes.filter(node => batchNodeIds.includes(node.id))} imageModels={catalogImageModels(mediaCatalog).filter((model) => model.available !== false)} videoModels={catalogVideoModels(mediaCatalog).filter((model) => model.available !== false)} balance={wallet?.balance_yuan} onQuote={quoteAgentBatch} onRun={runAgentBatch} onClose={() => setBatchNodeIds([])} />}
-    {inspectorOpen && inspectorDraft && <StudioInspector references={selectedNode ? writingContext(selectedNode,nodes,edges).references : []} draft={inspectorDraft} kind={selectedNode?.type === 'group' ? 'group' : nodeMediaKind(selectedNode)} writable={canEdit} onChange={setInspectorDraft} onSave={saveInspector} onClose={() => setInspectorOpen(false)} />}
+    {inspectorOpen && inspectorDraft && <StudioInspector nodeId={selectedNodeId || undefined} references={selectedNode ? writingContext(selectedNode,nodes,edges).references : []} draft={inspectorDraft} kind={selectedNode?.type === 'group' ? 'group' : nodeMediaKind(selectedNode)} writable={canEdit} onChange={setInspectorDraft} onSave={saveInspector} onClose={() => setInspectorOpen(false)} />}
   </div></StudioComposerContext.Provider></StudioNodeActionsContext.Provider>
 }
 
