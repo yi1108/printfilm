@@ -23,7 +23,7 @@ def test_pro_character_default_ratio() -> None:
     size = resolve_seedream_size(
         aspect_ratio="3:4",
         resolution="3K",
-        model_id="seedream-5.0",
+        model_id="doubao-seedream-5-0-pro-260628",
     )
     assert size == "1776x2368"
 

@@ -1,7 +1,7 @@
 """当前媒体来源与生成快照回归，上传与历史还原不能串用旧模型。"""
 from types import SimpleNamespace
 from io import BytesIO
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import UploadFile
@@ -68,6 +68,21 @@ def test_team_asset_details_include_media_provenance():
     assert asset_card(asset)["params"]["media_metadata"] == meta
 
 
+
+def db_returning_project(project):
+    """AsyncSession stand-in returning *project* from scalar_one_or_none().
+
+    On Python 3.12 the child mocks of an unspec'd AsyncMock are async too, so
+    a bare AsyncMock() makes `await db.execute(...)` yield a mock whose
+    scalar_one_or_none() is a coroutine instead of a row. Configure the
+    execute result explicitly so the access path receives a real object.
+    """
+    db = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = project
+    db.execute.return_value = result
+    return db
+
 def media_asset(**changes):
     values = dict(id=1, project_id=2, type="character", asset_type="image", name="portrait", cover="https://cdn/old.png", url="https://cdn/old.png", params={"media_metadata": {"source": "generated", "model_id": "old"}})
     return SimpleNamespace(**{**values, **changes})
@@ -84,7 +99,8 @@ async def test_upload_endpoint_replaces_metadata_and_archives_previous(monkeypat
     monkeypatch.setattr("app.services.oss.upload_fileobj", lambda *args, **kwargs: "https://cdn/upload.png")
     monkeypatch.setattr("app.services.drama.generation._snapshot_version_media_url", lambda url, label: url)
     file = UploadFile(BytesIO(b"image-data"), filename="upload.png", headers=Headers({"content-type": "image/png"}))
-    result = await upload_asset_media(1, file=file, db=AsyncMock(), user=SimpleNamespace(id=1))
+    project = SimpleNamespace(id=asset.project_id, team_id=None, user_id=1)
+    result = await upload_asset_media(1, file=file, db=db_returning_project(project), user=SimpleNamespace(id=1))
     assert result.params["media_metadata"]["source"] == "upload"
     assert result.params["media_metadata"]["file_size"] == 10
     assert "model_id" not in result.params["media_metadata"]
@@ -98,7 +114,8 @@ async def test_editing_next_generation_freezes_legacy_media_options(monkeypatch)
 
     asset = media_asset(params={"model_id": "old-model", "resolution": "2K"})
     monkeypatch.setattr("app.api.drama.assets.get_owned_asset", AsyncMock(return_value=asset))
-    result = await update_asset(1, DramaAssetUpdate(params={"model_id": "next-model", "resolution": "4K"}), db=AsyncMock(), user=SimpleNamespace(id=1))
+    project = SimpleNamespace(id=asset.project_id, team_id=None, user_id=1)
+    result = await update_asset(1, DramaAssetUpdate(params={"model_id": "next-model", "resolution": "4K"}), db=db_returning_project(project), user=SimpleNamespace(id=1))
     assert result.params["model_id"] == "next-model"
     assert result.params["media_metadata"]["model_id"] == "old-model"
     assert result.params["media_metadata"]["parameters"]["resolution"] == "2K"
@@ -114,7 +131,8 @@ async def test_media_replacement_cannot_keep_previous_model(monkeypatch, importe
     source = media_asset(id=3, url="https://cdn/new.png", params={"media_metadata": {"source": "upload"}})
     access = AsyncMock(side_effect=lambda db, ident, user: source if ident == 3 else target)
     monkeypatch.setattr("app.api.drama.assets.get_owned_asset", access)
-    result = await update_asset(1, DramaAssetUpdate(url=source.url, params={"importedFromAssetId": 3} if imported else {}), db=AsyncMock(), user=SimpleNamespace(id=1))
+    project = SimpleNamespace(id=target.project_id, team_id=None, user_id=1)
+    result = await update_asset(1, DramaAssetUpdate(url=source.url, params={"importedFromAssetId": 3} if imported else {}), db=db_returning_project(project), user=SimpleNamespace(id=1))
     assert result.params["media_metadata"] == {"source": "upload" if imported else "unknown"}
     assert access.await_count == (2 if imported else 1)
 
