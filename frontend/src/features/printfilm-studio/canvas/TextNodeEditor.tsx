@@ -1,21 +1,40 @@
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { Bold, Check, Copy, Heading1, Heading2, Heading3, Italic, List, ListOrdered, Minus, Pilcrow, X } from 'lucide-react'
 import { CanvasReference } from './referenceExtension'
 import { normalizeReferenceTokens, type PromptReference } from './promptMentions'
 import { studioTextExtensions } from './richTextExtensions'
 import type { InspectorDraft } from './NodePanels'
+import { MentionMenu } from './PromptComposer'
+import { StudioNodeActionsContext, type ComposerMention } from './studioNodeContext'
+import type { Editor } from '@tiptap/core'
 import './textNodeEditor.css'
 
-export function TextNodeEditor({ draft, writable, onChange, onSave, onClose, embedded = false, references = [] }: {
-  draft: InspectorDraft; writable: boolean; onChange: (draft: InspectorDraft) => void; onSave: () => void; onClose: () => void; embedded?: boolean; references?: PromptReference[]
+function mentionRange(editor: Editor) {
+  const { empty, $from } = editor.state.selection
+  if (!empty || !$from.parent.isTextblock) return null
+  const prefix = $from.parent.textBetween(0, $from.parentOffset, '', '\uFFFC')
+  const match = /[@＠]([^\s@＠\uFFFC]*)$/u.exec(prefix)
+  return match && { from: $from.pos - match[0].length, to: $from.pos, query: match[1] }
+}
+
+export function TextNodeEditor({ draft, writable, onChange, onSave, onClose, embedded = false, references = [], nodeId }: {
+  nodeId?: string; draft: InspectorDraft; writable: boolean; onChange: (draft: InspectorDraft) => void; onSave: () => void; onClose: () => void; embedded?: boolean; references?: PromptReference[]
 }) {
   const dialog = useRef<HTMLElement>(null)
   const initialText = useRef(draft.text)
   const latestText = useRef(draft.text)
   const [copyStatus, setCopyStatus] = useState('')
   const referenceRef = useRef(references); referenceRef.current = references
-  const referenceKey = JSON.stringify(references.map(({id,source,label,url}) => ({id,source,label,url})))
+  const actions = useContext(StudioNodeActionsContext)
+  const anchor = useRef<HTMLDivElement>(null)
+  const [mention, setMention] = useState<ReturnType<typeof mentionRange>>(null)
+  const [mentionError, setMentionError] = useState('')
+  const syncMention = (editor: Editor) => {
+    if (!writable || !nodeId || !editor.isFocused || editor.view.composing) return
+    setMention(mentionRange(editor))
+    setMentionError('')
+  }
   const editor = useEditor({
     extensions: [...studioTextExtensions, CanvasReference.configure({ references: () => referenceRef.current })],
     content: normalizeReferenceTokens(draft.text, references),
@@ -24,11 +43,29 @@ export function TextNodeEditor({ draft, writable, onChange, onSave, onClose, emb
     immediatelyRender: false,
     shouldRerenderOnTransaction: true,
     editorProps: { attributes: { role: 'textbox', 'aria-label': '文本正文', 'aria-multiline': 'true', spellcheck: 'false' } },
+    onSelectionUpdate: ({ editor }) => syncMention(editor),
+    onBlur: () => setMention(null),
     onUpdate: ({ editor: current }) => {
+      syncMention(current)
       latestText.current = current.getMarkdown()
       onChange({ ...draft, text: latestText.current })
     },
-  }, [referenceKey])
+  }, [nodeId])
+  const pickMention = (item: ComposerMention) => {
+    if (!editor || !nodeId || !writable || !actions?.bindWritingMention) return
+    const range = mentionRange(editor)
+    if (!range) return
+    try {
+      const ref = actions.bindWritingMention(nodeId, item)
+      referenceRef.current = [...referenceRef.current, ref]
+      editor.chain().focus().insertContentAt({ from: range.from, to: range.to },
+        { type: 'canvasReference', attrs: { id: ref.id, source: ref.source, label: ref.label } }).run()
+      setMention(null)
+    } catch (error) {
+      setMentionError(error instanceof Error ? error.message : '无法引用该素材')
+    }
+  }
+  const options = mention && writable && nodeId && actions?.writingMentionOptions?.(nodeId)
   useEffect(() => {
     if (embedded) return
     const previous = document.activeElement as HTMLElement | null
@@ -70,6 +107,7 @@ export function TextNodeEditor({ draft, writable, onChange, onSave, onClose, emb
     <section ref={dialog} tabIndex={-1} role={embedded ? 'region' : 'dialog'} aria-modal={embedded ? undefined : true} aria-label="编辑文本节点" className="pf-text-editor" onKeyDown={(event) => {
       event.stopPropagation()
       if (event.nativeEvent.isComposing) return
+      if (mention && event.key === 'Escape') { event.preventDefault(); setMention(null); return }
       if (embedded) { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); onSave() }; return }
       if (event.key === 'Escape') { event.preventDefault(); close(); return }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); close(); return }
@@ -91,7 +129,13 @@ export function TextNodeEditor({ draft, writable, onChange, onSave, onClose, emb
         <span className="pf-text-editor-status" role="status">{copyStatus || (!writable ? '只读' : '')}</span>
         {!embedded && <button type="button" className="pf-text-editor-close" aria-label="关闭文本编辑器" title={writable ? '保存并关闭（Esc）' : '关闭（Esc）'} onClick={close}><X size={23} strokeWidth={1.8} /></button>}
       </header>
-      <div className="pf-text-editor-content"><EditorContent editor={editor} /></div>
+      <div ref={anchor} className="pf-text-editor-content" onKeyUp={event => {
+        if (editor && event.key !== 'Escape' && !event.nativeEvent.isComposing) syncMention(editor)
+      }} onCompositionEnd={() => window.requestAnimationFrame(() => { if (editor && !editor.isDestroyed) syncMention(editor) })}>
+        <EditorContent editor={editor} />
+      </div>
+      {mention && options && <MentionMenu anchor={anchor} query={mention.query} mentions={options} onPick={pickMention} />}
+      {mention && mentionError && <p role="alert">{mentionError}</p>}
     </section>
   </div>
 }
