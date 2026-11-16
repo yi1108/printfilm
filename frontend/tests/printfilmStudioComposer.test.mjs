@@ -154,6 +154,10 @@ test('composer menus apply parameters; writing sends configured instructions and
       })
     }
     await act(async()=>root.render(h(WritingMentions)))
+    dom.window.Range.prototype.getBoundingClientRect = function () {
+      assert.equal(this.toString(), '@')
+      return { left: 245, top: 96, bottom: 114, height: 18 }
+    }
     const writingInput = document.querySelector('[aria-label="AI 写作要求"]')
     await act(async()=>{
       writingInput.focus()
@@ -161,6 +165,8 @@ test('composer menus apply parameters; writing sends configured instructions and
       window.getSelection().removeAllRanges();window.getSelection().addRange(range)
       writingInput.dispatchEvent(new KeyboardEvent('keyup',{key:'@',bubbles:true}))
     })
+    assert.equal(document.querySelector('.pf-mention').style.left, '245px')
+    assert.equal(document.querySelector('.pf-mention').style.top, '118px')
     assert.match(document.querySelector('.pf-mention').textContent,/已接入/)
     await act(async()=>{
       writingInput.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))
