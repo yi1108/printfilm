@@ -70,6 +70,7 @@ import { RecipeLibrary } from './canvas/RecipeLibrary'
 import { captureRecipe, instantiateRecipe } from './canvas/recipeGraph'
 import type { CanvasDocument } from './canvas/canvasCodec'
 import { ASSET_DRAG_TYPE, AssetLibraryPanel, assetMediaKind } from './canvas/AssetLibraryPanel'
+import { studioGenerationError } from './canvas/generationError'
 import { videoFileReferences, videoReferenceError, VIDEO_MODES, type StudioVideoMode, type MediaKind } from './canvas/generationReferences'
 import { storyVideoInputs, storyAssetPrompt } from './canvas/storyGenerationInputs'
 import { applyProposal, type AgentProposal, type ProposalAction, type ProposalStates } from './agent/proposals'
@@ -1092,7 +1093,8 @@ function PrintfilmStudioWorkspace() {
     if (action === 'crop') return
     const submittingId = selectedNodeId || 'new'
     const reportError = (message: string) => { setStatus(message); setSubmissionError({nodeId:submittingId,message}) }
-    if (referenceValidation) {reportError(referenceValidation);return}
+    const invalidInput = referenceValidation || videoValidation
+    if (invalidInput) { reportError(invalidInput); return }
     if (generationRunningRef.current.has(submittingId) || (action !== 'compose' && !liveComposerPrompt.trim())) return
     const setGenerationRunning = (value: boolean) => {
       if (value) generationRunningRef.current.add(submittingId)
@@ -1206,7 +1208,7 @@ function PrintfilmStudioWorkspace() {
         commitGraph([...nextNodes, created], nextEdges, result.task_id ? `任务 ${result.task_id} 已创建` : '生成已提交')
       }
       setGenPrompt(''); setComposerOpen(false); setBottomOpen(false)
-    } catch (error) { reportError(error instanceof Error ? error.message : '生成任务创建失败') }
+    } catch (error) { reportError(error instanceof Error ? studioGenerationError(error.message) : '生成任务创建失败') }
     finally { setGenerationRunning(false) }
   }
   const pendingImageRunRef = useRef(runNodeGeneration)

@@ -1,5 +1,6 @@
 import { StudioModelSelect } from '../StudioModelSelect'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { createPortal } from 'react-dom'
 import { ArrowUp, Camera, Eye, FileText, Film, Image as ImageIcon, Mic, Plus, PersonStanding, Sparkles, X } from 'lucide-react'
 import { ComposerMenu, ComposerSelect } from './ComposerMenu'
 import { PromptInput } from './PromptInput'
@@ -76,19 +77,64 @@ function ReferenceThumb({ item }: { item: { url?: string; mediaKind?: string } }
 /** Paba 图片节点生成面板：参考图 / 案例 + 提示词 + 模型 / 比例 / 张数。 */
 /** 从光标前取出尚未结束的 @ 查询。 */
 /** @ 引用菜单：已接入、画布上、素材库。 */
-export function MentionMenu({ query, mentions, onPick, onLibrary }: {
+export function MentionMenu({ query, mentions, onPick, onLibrary, anchor, fromButton = false }: {
   query: string
   mentions: { connected: ComposerMention[]; canvas: ComposerMention[]; assets: ComposerMention[] }
   onPick: (item: ComposerMention) => void
+  anchor: RefObject<HTMLElement | null>
+  fromButton?: boolean
   onLibrary?: () => void
 }) {
+  const menu = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const popup = menu.current, editor = anchor.current
+    if (!popup || !editor) return
+    let frame = 0
+    const place = () => {
+      let rect = editor.getBoundingClientRect()
+      const selection = window.getSelection()
+      if (!fromButton && selection?.rangeCount && editor.contains(selection.focusNode)) {
+        const range = selection.getRangeAt(0).cloneRange()
+        range.collapse(false)
+        // Measure the @ glyph itself; a collapsed range may have no box at a line break.
+        if (range.startContainer.nodeType === 3) {
+          const at = (range.startContainer.textContent || '').slice(0, range.startOffset).lastIndexOf('@')
+          if (at >= 0) {
+            range.setEnd(range.startContainer, at + 1)
+            range.setStart(range.startContainer, at)
+          }
+        }
+        const glyph = range.getBoundingClientRect?.()
+        if (glyph?.height) rect = glyph
+      }
+      const width = Math.min(300, window.innerWidth - 16)
+      const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))
+      const below = window.innerHeight - rect.bottom - 12
+      const above = below < 120 && rect.top > below
+      Object.assign(popup.style, { left: left + 'px', width: width + 'px',
+        top: above ? 'auto' : rect.bottom + 4 + 'px',
+        bottom: above ? window.innerHeight - rect.top + 4 + 'px' : 'auto',
+        maxHeight: Math.max(0, Math.min(280, above ? rect.top - 12 : below)) + 'px' })
+    }
+    const schedule = () => { if (!frame) frame = window.requestAnimationFrame(() => { frame = 0; place() }) }
+    place()
+    window.addEventListener('resize', schedule)
+    window.addEventListener('scroll', schedule, true)
+    document.addEventListener('selectionchange', schedule)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.removeEventListener('resize', schedule)
+      window.removeEventListener('scroll', schedule, true)
+      document.removeEventListener('selectionchange', schedule)
+    }
+  }, [anchor, query, fromButton])
   const match = (item: ComposerMention) => !query || `${item.label} ${item.hint || ''}`.toLowerCase().includes(query.toLowerCase())
   const groups = [
     { title: '已接入', items: mentions.connected.filter(match) },
     { title: '画布上', items: mentions.canvas.filter(match) },
     { title: '素材库', items: mentions.assets.filter(match) },
   ].filter((group) => group.items.length)
-  return <div className="pf-mention" role="listbox">
+  return createPortal(<div ref={menu} className="pf-mention nodrag nopan nowheel" role="listbox" style={{ position: 'fixed', right: 'auto', zIndex: 10000, boxSizing: 'border-box' }} onPointerDown={event => event.stopPropagation()} onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}>
     {!groups.length && <p>没有可引用的素材</p>}
     {groups.map((group) => <section key={group.title}>
       <h4>{group.title}</h4>
@@ -99,7 +145,7 @@ export function MentionMenu({ query, mentions, onPick, onLibrary }: {
       </button>)}
     </section>)}
     {onLibrary && <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={onLibrary}>从素材库选择</button>}
-  </div>
+  </div>, document.body)
 }
 
 export function PromptComposer({
@@ -114,12 +160,15 @@ export function PromptComposer({
     ? '描述画面内容与风格，输入 @ 引用参考图'
     : '描述你想要生成的画面、动作和声音，输入 @ 引用素材'
   const inputRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const [fromButton, setFromButton] = useState(false)
   const [mentionAt, setMentionAt] = useState<number | null>(null)
   const [query, setQuery] = useState('')
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const cancelBlur = () => { if (blurTimer.current !== null) { clearTimeout(blurTimer.current); blurTimer.current = null } }
   useEffect(() => () => cancelBlur(), [])
   const syncMention = (value: string, caret: number) => {
+    setFromButton(false)
     const next = mentionQuery(value, caret)
     setQuery(next || '')
     setMentionAt(next === null ? null : value.slice(0, caret).lastIndexOf('@'))
@@ -139,14 +188,14 @@ export function PromptComposer({
     <div className="pf-composer-tags">
       {chips.map((chip) => <span className="pf-chip" key={chip.id}>{chip.label}<button type="button" aria-label="移除标签" onClick={() => onRemoveChip(chip.id)}><X size={12} /></button></span>)}
       {refs.map((item) => <span className={`pf-chip is-ref${item.status?' is-pending':''}`} key={item.id} title={`${item.label}${item.status?' · '+item.status:''}`}><button type="button" className="pf-ref-jump" aria-label={`定位关联节点 ${item.label}`} onClick={()=>onFocusRef?.(item.id)}><ReferenceThumb item={item} /><span className="pf-ref-label">{item.label}</span></button><button type="button" aria-label="移除参考" onClick={() => onRemoveRef(item.id)}><X size={12} /></button></span>)}
-      {action !== 'audio' && <button type="button" className="pf-chip-btn" onMouseDown={(event) => event.preventDefault()} onClick={() => { cancelBlur(); setMentionAt(prompt.length); setQuery(''); inputRef.current?.focus() }}><Plus size={13} /> {isVideo ? '参考' : '参考图'}</button>}
+      {action !== 'audio' && <button ref={triggerRef} type="button" className="pf-chip-btn" onMouseDown={(event) => event.preventDefault()} onClick={() => { cancelBlur(); setFromButton(true); setMentionAt(prompt.length); setQuery(''); inputRef.current?.focus() }}><Plus size={13} /> {isVideo ? '参考' : '参考图'}</button>}
       {(imageMode || isVideo) && (isVideo ? (['特效', '运镜', '姿势', '案例'] as const) : (['姿势', '案例'] as const)).map((name) => <button type="button" key={name} className="pf-chip-btn" aria-expanded={presetMenu === name} onClick={() => setPresetMenu(presetMenu === name ? null : name)}>{name === '运镜' ? <Camera size={16} /> : name === '姿势' ? <PersonStanding size={16} /> : name === '特效' ? <Sparkles size={16} /> : <ImageIcon size={16} />}{name}</button>)}
       {!attached && <button type="button" className="pf-composer-close" aria-label="关闭" onClick={onClose}><X size={16} /></button>}
     </div>
     {presetMenu && <div className="pf-prompt-presets">{PRESETS[presetMenu].map((preset) => <button type="button" key={preset.id} onClick={() => { onAddChip(preset, preset.text); setPresetMenu(null) }}><b>{preset.label.replace('案例·', '')}</b><span>{preset.text}</span></button>)}</div>}
     <div className="pf-composer-input">
       <PromptInput inputRef={inputRef} value={prompt} label="生成描述" placeholder={placeholder} references={[...mentions.connected, ...mentions.canvas, ...mentions.assets]} onChange={(value, caret) => { onPrompt(value); syncMention(value, caret) }} onCaret={syncMention} onFocus={cancelBlur} onBlur={() => { cancelBlur(); blurTimer.current = setTimeout(() => setMentionAt(null), 120) }} />
-      {mentionAt !== null ? <MentionMenu query={query} mentions={mentions} onPick={pickMention} onLibrary={() => { setMentionAt(null); onAddRef() }} /> : null}
+      {mentionAt !== null ? <MentionMenu anchor={fromButton ? triggerRef : inputRef} fromButton={fromButton} query={query} mentions={mentions} onPick={pickMention} onLibrary={() => { setMentionAt(null); onAddRef() }} /> : null}
     </div>
     {action === 'crop' && <div className="pf-crop-row"><button type="button" onClick={onSubmit}>按当前比例裁剪</button></div>}
     <footer>

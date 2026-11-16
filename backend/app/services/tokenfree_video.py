@@ -121,30 +121,6 @@ def _media_url_from_item(item: dict[str, Any], key: str) -> str | None:
     return None
 
 
-def _content_media_only(
-    content: list[Any],
-    allowed_image_urls: list[str],
-) -> list[dict[str, Any]]:
-    """抽出图/音频项；图按 allowed 截断去重。文案由顶层 prompt 承担。"""
-    allowed = set(allowed_image_urls)
-    used: set[str] = set()
-    out: list[dict[str, Any]] = []
-    for item in content:
-        if not isinstance(item, dict):
-            continue
-        kind = item.get("type")
-        if kind == "image_url":
-            url = _media_url_from_item(item, "image_url")
-            if not url or url not in allowed or url in used:
-                continue
-            used.add(url)
-            out.append(item)
-            continue
-        if kind in {"audio_url", "video_url"}:
-            out.append(item)
-    return out
-
-
 def wrap_seedance_payload_for_newapi(payload: dict[str, Any]) -> dict[str, Any]:
     """把方舟 Seedance body 转成 TokenFree POST /v1/videos 请求体。
 
@@ -161,28 +137,28 @@ def wrap_seedance_payload_for_newapi(payload: dict[str, Any]) -> dict[str, Any]:
         aliased = resolve_preset_alias(str(src["model"])) or str(src["model"])
         src["model"] = canonicalize_channel_model_id(aliased)
     content = src.get("content")
-    # texts 全部文案；images/audios 按 content 顺序；roles 用来区分首帧 vs 多参考
     texts: list[str] = []
-    images: list[str] = []
-    image_roles: list[str] = []
-    audios: list[str] = []
+    media: list[dict[str, Any]] = []
+    seen_images: set[tuple[str, str]] = set()
     if isinstance(content, list):
+        # Unlabelled legacy single-image calls mean image-to-video. A set
+        # of images without roles represents references, never several first frames.
+        image_count = sum(isinstance(item, dict) and item.get("type") == "image_url" for item in content)
         for item in content:
             if not isinstance(item, dict):
                 continue
-            if item.get("type") == "text":
-                piece = str(item.get("text") or "").strip()
-                if piece:
+            kind = item.get("type")
+            if kind == "text":
+                if piece := str(item.get("text") or "").strip():
                     texts.append(piece)
-            if item.get("type") == "image_url":
+            elif kind == "image_url":
                 url = _media_url_from_item(item, "image_url")
-                if url:
-                    images.append(url)
-                    image_roles.append(str(item.get("role") or "").strip())
-            if item.get("type") == "audio_url":
-                url = _media_url_from_item(item, "audio_url")
-                if url:
-                    audios.append(url)
+                role = str(item.get("role") or ("first_frame" if image_count == 1 else "reference_image"))
+                if url and (role, url) not in seen_images:
+                    seen_images.add((role, url))
+                    media.append({**item, "role": role})
+            elif kind in {"video_url", "audio_url"}:
+                media.append(item)
     prompt = "\n".join(texts) or str(src.get("prompt") or "").strip() or "."
     duration = src.get("duration")
     duration_text = ""
@@ -192,33 +168,9 @@ def wrap_seedance_payload_for_newapi(payload: dict[str, Any]) -> dict[str, Any]:
         except (TypeError, ValueError):
             duration_text = str(duration).strip()
     ratio = str(src.get("ratio") or "").strip()
-    uses_reference_images = any(role == "reference_image" for role in image_roles)
-    unique_images: list[str] = []
-    unique_roles: list[str] = []
-    seen_urls: set[str] = set()
-    for url, role in zip(images, image_roles):
-        if url in seen_urls:
-            continue
-        seen_urls.add(url)
-        unique_images.append(url)
-        unique_roles.append(role)
-    # Model strategy validation owns reference limits; transport must never silently drop references.
-    images = unique_images
-    image_roles = unique_roles
-
-    # 方舟字段直接挂在 metadata 根上（插件 UnmarshalMetadata → requestPayload）
-    metadata: dict[str, Any] = {}
-    if isinstance(content, list) and content:
-        media = _content_media_only(content, images if images else [])
-        # 无图时仍可能有首帧；allowed 空则只保留音/视频
-        if not images:
-            media = [
-                item
-                for item in content
-                if isinstance(item, dict) and item.get("type") in {"audio_url", "video_url"}
-            ]
-        if media:
-            metadata["content"] = media
+    # The gateway creates a first_frame for top-level image. Send all roles
+    # exclusively via metadata.content so the gateway cannot add it twice.
+    metadata: dict[str, Any] = {"content": media} if media else {}
     if duration_text:
         try:
             metadata["duration"] = int(duration_text)
@@ -237,14 +189,6 @@ def wrap_seedance_payload_for_newapi(payload: dict[str, Any]) -> dict[str, Any]:
     if "return_last_frame" in src:
         metadata["return_last_frame"] = bool(src.get("return_last_frame"))
 
-    first_frame_url: str | None = None
-    if images and not uses_reference_images:
-        for url, role in zip(images, image_roles):
-            if role == "first_frame":
-                first_frame_url = url
-                break
-        first_frame_url = first_frame_url or images[0]
-
     out: dict[str, Any] = {
         "model": src.get("model"),
         "prompt": prompt,
@@ -252,9 +196,6 @@ def wrap_seedance_payload_for_newapi(payload: dict[str, Any]) -> dict[str, Any]:
     }
     if duration_text:
         out["seconds"] = duration_text
-    # 纯首帧：顶层 image 供插件 HasImage() 路径；content 里仍带 role=first_frame
-    if first_frame_url:
-        out["image"] = first_frame_url
     return out
 
 

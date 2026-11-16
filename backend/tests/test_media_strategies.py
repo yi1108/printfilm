@@ -81,3 +81,11 @@ def test_first_frame_and_reference_images_are_mutually_exclusive():
         get_strategy("seedance-2.5").normalize_and_validate({
             "first_frame": "https://first", "reference_images": ["https://ref"],
         })
+
+
+def test_quote_rejects_first_frame_supplied_in_two_fields():
+    with pytest.raises(ValueError, match="首帧只能设置一张"):
+        get_strategy("seedance-2.0").quote({
+            "first_frame": "https://cdn.example.com/first.jpg",
+            "content": [{"type": "image_url", "role": "first_frame", "image_url": {"url": "https://cdn.example.com/second.jpg"}}],
+        }, {})

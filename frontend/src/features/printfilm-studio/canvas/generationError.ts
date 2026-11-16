@@ -1,5 +1,6 @@
 export function studioGenerationError(value: unknown): string {
   const message = typeof value === 'string' ? value : ''
+  if (/at most one first[_ ]frame/i.test(message)) return '上次任务提交了多张首帧。图生视频只接受一张首帧；要指定结束画面请选择「首尾帧」，要参考多张图片请选择「全能参考」。'
   if (/ModelNotOpen|model.+not.+activated/i.test(message)) {
     const model = message.match(/(?:doubao-)?seedance-2[.-](?:0|5)(?:-fast)?(?:-\d{6})?/i)?.[0]
     const label = model ? `Seedance ${/2[.-]5/.test(model) ? '2.5' : '2.0'}${/-fast/i.test(model) ? ' Fast' : ''}` : '该次任务使用的模型'

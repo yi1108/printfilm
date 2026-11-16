@@ -71,7 +71,7 @@ def test_wrap_seedance_payload_uses_metadata_content_not_input():
     wrapped = wrap_seedance_payload_for_newapi(payload)
     assert wrapped["model"] == "seedance-2.5"
     assert wrapped["prompt"] == "镜头推进"
-    assert wrapped["image"] == "https://cdn.example.com/a.jpg"
+    assert "image" not in wrapped, "top-level image would create a second first frame"
     assert wrapped["seconds"] == "5"
     assert "input" not in wrapped["metadata"]
     meta = wrapped["metadata"]
@@ -368,3 +368,11 @@ async def test_resolve_tokenfree_media_download_url_keeps_content_on_200(monkeyp
     monkeypatch.setattr(httpx, "AsyncClient", client_factory)
     got = await resolve_tokenfree_media_download_url(content, api_key="sk-test")
     assert got == content
+
+
+def test_same_image_can_fill_distinct_first_and_last_slots():
+    content = [{"type": "image_url", "image_url": {"url": "https://cdn.example.com/loop.jpg"}, "role": role}
+               for role in ("first_frame", "last_frame")]
+    request = wrap_seedance_payload_for_newapi({"content": content})
+    assert "image" not in request
+    assert request["metadata"]["content"] == content

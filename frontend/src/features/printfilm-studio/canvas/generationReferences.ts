@@ -6,7 +6,7 @@ export const VIDEO_MODES: { id: StudioVideoMode; label: string }[] = [
 ]
 export function videoReferenceError(kinds: MediaKind[], mode: StudioVideoMode, limits?: { images: number; videos: number; audios: number }): string | undefined {
   if (mode === 'text_to_video') return kinds.length ? '文生视频不使用媒体参考，请移除引用或切换生成方式' : undefined
-  if (mode === 'image_to_video' && (kinds.length !== 1 || kinds[0] !== 'image')) return '图生视频需要一张首帧图片'
+  if (mode === 'image_to_video' && (kinds.length !== 1 || kinds[0] !== 'image')) return '图生视频需要一张首帧图片。要指定结束画面请选择「首尾帧」，多图参考请选择「全能参考」。'
   if (mode === 'first_last_frame' && (kinds.length !== 2 || kinds.some((kind) => kind !== 'image'))) return '首尾帧需要两张图片，按引用顺序分别作为首帧、尾帧'
   if (mode === 'omni_reference' && !kinds.length) return '请选择至少一份参考素材'
   if (kinds.length > 12) return '最多支持 12 份参考素材'
