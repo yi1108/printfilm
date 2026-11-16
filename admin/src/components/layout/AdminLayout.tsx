@@ -8,6 +8,7 @@ import {
   ArrowUpRight,
   Aperture,
   ChevronRight,
+  KeyRound,
   PanelLeftClose,
   Search,
   X,
@@ -49,6 +50,7 @@ import { clearAuth, getCachedUser } from "@/lib/auth";
 
 import { cn } from "@/lib/utils";
 import { AdminNavigationSearch } from "./AdminNavigationSearch";
+import { ChangePasswordDialog } from "@/components/admin/ChangePasswordDialog";
 
 type NavItem = {
 
@@ -211,6 +213,7 @@ export function AdminLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia("(max-width: 800px)").matches);
   const sidebarRef = useRef<HTMLElement>(null);
   const navigationToggleRef = useRef<HTMLButtonElement>(null);
@@ -347,12 +350,15 @@ export function AdminLayout() {
               if (!document.fullscreenElement) void document.documentElement.requestFullscreen().catch(() => undefined);
               else void document.exitFullscreen().catch(() => undefined);
             }}><Maximize2 size={17} /></button>
+            <button type="button" className="admin-icon-btn" title="修改登录密码" aria-label="修改登录密码"
+              onClick={() => setPasswordOpen(true)}><KeyRound size={17} /></button>
             <div className="admin-topbar-avatar" title={user?.email}>{initial}</div>
           </div>
         </header>
         <main className="admin-content" id="admin-main-content" tabIndex={-1}><Outlet /></main>
       </div>
       <AdminNavigationSearch open={searchOpen} onOpenChange={setSearchOpen} groups={visibleNavGroups} />
+      {passwordOpen && <ChangePasswordDialog email={user?.email} onClose={() => setPasswordOpen(false)} />}
     </div>
   );
 }
