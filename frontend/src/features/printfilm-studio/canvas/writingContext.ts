@@ -6,6 +6,19 @@ import { studioMediaRatio } from '../mediaRatio.ts'
 
 type WritingNode = { id: string; type?: string; data: Record<string, unknown> }
 type WritingEdge = { source: string; target: string }
+
+/** A writing reference cannot depend on the node that will consume it. */
+export function writingDependents(writerId: string, edges: WritingEdge[]) {
+  const outputs = new Map<string, string[]>()
+  for (const { source, target } of edges) {
+    const targets = outputs.get(source)
+    if (targets) targets.push(target)
+    else outputs.set(source, [target])
+  }
+  const seen = new Set([writerId])
+  for (const id of seen) for (const next of outputs.get(id) || []) seen.add(next)
+  return seen
+}
 type RunSettings = { imageModel: string; videoModel: string; imageRatio: string; videoRatio: string; duration: string }
 export type WritingOutput = { id: string; label: string; kind: string; model: string; ratio: string; duration: string }
 export type WritingReference = PromptReference & { text: string }

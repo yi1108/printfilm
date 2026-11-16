@@ -489,6 +489,20 @@ test('workspace creates, drags and autosaves nodes while a workflow is running',
     await settle(100)
     assert.ok(document.querySelector('.pf-text-editor-embedded [aria-label="文本正文"]'), 'storyboard opens an embedded rich text editor')
     assert.equal(Boolean(document.querySelector('.pf-text-editor-backdrop')), false, 'editing stays inside the detail panel')
+    const boardEditor = document.querySelector('.pf-text-editor-embedded .tiptap').editor
+    await act(async () => { boardEditor.commands.focus('end') })
+    await settle()
+    for (let occurrence = 0; occurrence < 2; occurrence++) {
+      await act(async () => { boardEditor.commands.insertContent('@分页素材') })
+      await settle()
+      await click([...document.querySelectorAll('.pf-mention button')].find(button => button.querySelector('b')?.textContent === '分页素材 54'))
+    }
+    await settle(1350)
+    const mentioned = stored.document.nodes.filter(node => node.data.assetId === 54)
+    assert.equal(mentioned.length, 1, 'repeated mentions reuse the project asset node')
+    const writer = stored.document.nodes.find(node => node.data.text?.includes(`(node:${mentioned[0].id})`))
+    assert.equal(writer?.data.text.split(`(node:${mentioned[0].id})`).length, 3, 'both reference tokens autosave')
+    assert.equal(stored.document.edges.filter(edge => edge.source === mentioned[0].id && edge.target === writer.id).length, 1)
     await click([...document.querySelectorAll('.pf-board-writing-tabs button')].find(button => button.textContent === 'AI 写'))
     assert.ok(document.querySelector('.pf-board-detail [aria-label="AI 写作要求"]'))
     await click([...document.querySelectorAll('.pf-board-tabs button')].find(button => button.textContent === '图片'))
@@ -504,7 +518,7 @@ test('workspace creates, drags and autosaves nodes while a workflow is running',
     assert.ok(saves.at(-1).document.nodes.some(node => node.data.prompt === '故事板修改的提示词'), 'storyboard draft autosaves without generating')
     await click([...document.querySelectorAll('.pf-board-detail header button')].find(button => button.textContent === '在画布中查看'))
     assert.ok(document.querySelector('.react-flow'))
-    assert.equal(count(), 8)
+    assert.equal(count(), 9)
     activeWorkflow = false
     stored = { version: stored.version + 1, document: { ...stored.document, nodes: stored.document.nodes.map((node, index) => index === 0 ? { ...node, data: { ...node.data, label: '其他项目成员的修改' } } : node) } }
     await settle(2200)
@@ -518,7 +532,7 @@ test('workspace creates, drags and autosaves nodes while a workflow is running',
     assert.equal(document.querySelector('[aria-label="整理画布"]').disabled, true, 'read-only sessions cannot organize')
     await key('a', { ctrlKey: true })
     for (const [value, modifiers] of [['Delete', {}], ['d', { ctrlKey: true }], ['x', { ctrlKey: true }], ['v', { ctrlKey: true }], ['g', { ctrlKey: true }], ['Tab', {}], ['z', { ctrlKey: true }]]) await key(value, modifiers)
-    assert.equal(count(), 8, 'read-only canvas refuses every destructive shortcut')
+    assert.equal(count(), 9, 'read-only canvas refuses every destructive shortcut')
     assert.equal(Boolean(document.querySelector('.pf-add-menu')), false)
     await settle(1350)
     assert.equal(saves.length, saveCount, 'read-only shortcuts never persist a write')
