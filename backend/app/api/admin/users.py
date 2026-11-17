@@ -1,4 +1,6 @@
 # Admin user list and wallet/plan patch
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,9 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.deps import get_current_admin
 from app.models import User, WalletLedger
-from app.schemas import AdminUserListOut, AdminUserOut, AdminUserPatch, PageMeta
+from app.schemas import AdminUserListOut, AdminUserOut, AdminUserPasswordReset, AdminUserPatch, PageMeta
+from app.services.auth import hash_password
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get("/users", response_model=AdminUserListOut,
@@ -55,6 +59,30 @@ async def list_users(
         items=[AdminUserOut.model_validate(u) for u in items],
         meta=PageMeta(page=page, page_size=page_size, total=total),
     )
+
+
+@router.post("/users/{user_id}/reset-password", summary="管理员重置用户登录密码")
+async def reset_user_password(
+    user_id: int,
+    body: AdminUserPasswordReset,
+    admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, bool]:
+    password = body.new_password.get_secret_value()
+    if not 6 <= len(password) <= 64 or len(password.encode("utf-8")) > 72 or "\x00" in password:
+        raise HTTPException(status_code=400, detail="新密码须为 6 至 64 个字符，最多 72 字节，不能包含空字符")
+    user = (await db.execute(
+        select(User).where(User.id == user_id, User.closed_at.is_(None))
+        .with_for_update().execution_options(populate_existing=True)
+    )).scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="用户不存在或已注销")
+    if user.role != "user" or user.id == admin.id:
+        raise HTTPException(status_code=403, detail="仅支持重置普通用户的密码")
+    user.hashed_password = hash_password(password)
+    await db.commit()
+    logger.info("Admin reset user password admin_id=%s user_id=%s", admin.id, user_id)
+    return {"ok": True}
 
 
 @router.patch("/users/{user_id}", response_model=AdminUserOut,
