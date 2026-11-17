@@ -3,6 +3,7 @@ import { ArrowRight, Loader2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { api, type AdminStats, type AdminUserRow, type PageMeta } from "@/api/client";
 import { AdminField } from "@/components/admin/AdminField";
+import { ChangePasswordDialog } from "@/components/admin/ChangePasswordDialog";
 import { AdminFilterBar } from "@/components/admin/AdminFilterBar";
 import { AdminListStats } from "@/components/admin/AdminListStats";
 import { AdminModal } from "@/components/admin/AdminModal";
@@ -34,6 +35,7 @@ export function UsersPage() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<AdminUserRow | null>(null);
+  const [resetTarget, setResetTarget] = useState<AdminUserRow | null>(null);
   const [detailUser, setDetailUser] = useState<AdminUserRow | null>(null);
   const [form, setForm] = useState({
     role: "user",
@@ -210,7 +212,7 @@ export function UsersPage() {
               <TableHead>冻结</TableHead>
               <TableHead>角色</TableHead>
               <TableHead>注册时间</TableHead>
-              <TableHead className="w-[140px]">操作</TableHead>
+                <TableHead className="w-[220px]">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -243,6 +245,7 @@ export function UsersPage() {
                     <Button size="sm" variant="ghost" onClick={() => openEdit(u)}>
                       编辑
                     </Button>
+                    {u.role === "user" && <Button size="sm" variant="ghost" onClick={() => setResetTarget(u)}>重置密码</Button>}
                   </div>
                 </TableCell>
               </TableRow>
@@ -271,6 +274,7 @@ export function UsersPage() {
         )}
       </div>
 
+      {resetTarget && <ChangePasswordDialog resetUserId={resetTarget.id} email={resetTarget.email} onClose={() => setResetTarget(null)} />}
       <UserDetailDrawer
         userId={userDetail.id}
         open={userDetail.isOpen}

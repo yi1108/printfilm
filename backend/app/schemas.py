@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated, Any
 
-from pydantic import BaseModel, BeforeValidator, EmailStr, Field, field_validator
+from pydantic import BaseModel, BeforeValidator, EmailStr, Field, SecretStr, field_validator
 
 from app.schemas_common import PageMeta
 from app.schemas_tasks import TaskRunBriefOut
@@ -473,6 +473,10 @@ class AdminUserOut(BaseModel):
 class AdminUserListOut(BaseModel):
     items: list[AdminUserOut]
     meta: PageMeta
+
+
+class AdminUserPasswordReset(BaseModel):
+    new_password: SecretStr
 
 
 class AdminUserPatch(BaseModel):
