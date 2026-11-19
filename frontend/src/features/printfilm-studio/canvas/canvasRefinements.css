@@ -13,6 +13,7 @@
 .pf-studio-shell.is-dark .react-flow__edge.selected .pf-connection{stroke:#8cb6ec!important}
 .pf-edge-cut{position:absolute;pointer-events:all;display:grid;place-items:center;width:28px;height:28px;border:1px solid #c6d3e4;border-radius:8px;background:#fff;color:#4e719c;box-shadow:0 2px 6px #243d6018;cursor:pointer}.pf-edge-cut:hover{background:#edf4fc}.pf-edge-cut:disabled{opacity:.4;cursor:default}
 .pf-chip.is-ref .pf-ref-jump{display:inline-flex;align-items:center;gap:5px;width:auto!important;height:auto!important;padding:0!important;border:0;background:transparent;color:inherit;font:inherit;border-radius:4px;cursor:pointer}.pf-chip.is-ref .pf-ref-jump:hover{color:#8054af;text-decoration:underline}
+.pf-chip.is-ref .pf-ref-jump>img,.pf-chip.is-ref .pf-ref-jump>video{display:block;flex:0 0 22px;width:22px;height:22px;border-radius:6px;object-fit:cover}
 .pf-studio-shell.is-light .pf-agent-mention-menu{max-height:410px;overflow:hidden;padding:9px;background:#fff;border-color:#cfd9e6;box-shadow:0 8px 28px #334b6520}
 .pf-mention-tabs{display:flex;gap:4px;padding:6px 0}
 .pf-mention-tabs button{flex:1;border:0!important;border-radius:6px;padding:7px!important;font-size:12px!important;color:#667991}
