@@ -53,6 +53,11 @@
 .pf-flow-area .react-flow__node-group{background:transparent;border:0;padding:0;box-shadow:none}
 /* Parameter popovers live outside the canvas transform. */
 .pf-studio-shell .pf-composer-card.is-attached,.pf-studio-shell .pf-composer-card.is-attached.is-image{width:760px;border-radius:22px;overflow:visible;box-shadow:0 16px 38px #25304b24;border:1px solid #e9eaf0}
+.pf-studio-shell .pf-composer-card{display:flex;flex-direction:column;box-sizing:border-box;height:min(420px,calc(100dvh - 120px))}
+.pf-studio-shell .pf-composer-card .pf-composer-input{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.pf-studio-shell .pf-composer-card .pf-composer-tags{flex-shrink:0;max-height:112px;overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box}
+.pf-studio-shell .pf-composer-card .pf-prompt-presets{flex-shrink:0;max-height:80px;overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box}
+.pf-studio-shell .pf-composer-card>footer,.pf-studio-shell .pf-composer-card>.pf-composer-validation,.pf-studio-shell .pf-composer-card>.pf-crop-row{flex-shrink:0}
 .pf-studio-shell .pf-composer-card .pf-composer-tags{padding:16px 16px 4px;gap:8px}
 .pf-studio-shell .pf-composer-card .pf-chip-btn,.pf-studio-shell .pf-composer-card .pf-chip{background:#f0f0f4;border:0;border-radius:12px;color:#565b6a;min-height:38px;padding:8px 12px;gap:7px;font-size:14px;box-sizing:border-box}
 .pf-studio-shell .pf-composer-card.is-attached textarea,.pf-studio-shell .pf-composer-card.is-attached.is-image textarea{padding:18px 18px 12px;min-height:96px;font-size:15px;color:#292b35;resize:vertical}
