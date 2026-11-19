@@ -186,15 +186,15 @@ export function PromptComposer({
   }
 
   return <div className={`pf-composer-card${attached ? ' is-attached' : ''}${imageMode ? ' is-image' : ''}`} onMouseDown={(event) => event.stopPropagation()}>
-    <div className="pf-composer-tags">
+    <div className="pf-composer-tags nowheel">
       {chips.map((chip) => <span className="pf-chip" key={chip.id}>{chip.label}<button type="button" aria-label="移除标签" onClick={() => onRemoveChip(chip.id)}><X size={12} /></button></span>)}
       {refs.map((item) => <span className={`pf-chip is-ref${item.status?' is-pending':''}`} key={item.id} title={`${item.label}${item.status?' · '+item.status:''}`}><button type="button" className="pf-ref-jump" aria-label={`定位关联节点 ${item.label}`} onClick={()=>onFocusRef?.(item.id)}><ReferenceThumb item={item} /><span className="pf-ref-label">{item.label}</span></button><button type="button" aria-label="移除参考" onClick={() => onRemoveRef(item.id)}><X size={12} /></button></span>)}
       {action !== 'audio' && <button ref={triggerRef} type="button" className="pf-chip-btn" onMouseDown={(event) => event.preventDefault()} onClick={() => { cancelBlur(); setFromButton(true); setMentionAt(prompt.length); setQuery(''); inputRef.current?.focus() }}><Plus size={13} /> {isVideo ? '参考' : '参考图'}</button>}
       {(imageMode || isVideo) && (isVideo ? (['特效', '运镜', '姿势', '案例'] as const) : (['姿势', '案例'] as const)).map((name) => <button type="button" key={name} className="pf-chip-btn" aria-expanded={presetMenu === name} onClick={() => setPresetMenu(presetMenu === name ? null : name)}>{name === '运镜' ? <Camera size={16} /> : name === '姿势' ? <PersonStanding size={16} /> : name === '特效' ? <Sparkles size={16} /> : <ImageIcon size={16} />}{name}</button>)}
       {!attached && <button type="button" className="pf-composer-close" aria-label="关闭" onClick={onClose}><X size={16} /></button>}
     </div>
-    {presetMenu && <div className="pf-prompt-presets">{PRESETS[presetMenu].map((preset) => <button type="button" key={preset.id} onClick={() => { onAddChip(preset, preset.text); setPresetMenu(null) }}><b>{preset.label.replace('案例·', '')}</b><span>{preset.text}</span></button>)}</div>}
-    <div className="pf-composer-input">
+    {presetMenu && <div className="pf-prompt-presets nowheel">{PRESETS[presetMenu].map((preset) => <button type="button" key={preset.id} onClick={() => { onAddChip(preset, preset.text); setPresetMenu(null) }}><b>{preset.label.replace('案例·', '')}</b><span>{preset.text}</span></button>)}</div>}
+    <div className="pf-composer-input nowheel">
       <PromptInput inputRef={inputRef} value={prompt} label="生成描述" placeholder={placeholder} references={[...mentions.connected, ...mentions.canvas, ...mentions.assets]} onChange={(value, caret) => { onPrompt(value); syncMention(value, caret) }} onCaret={syncMention} onFocus={cancelBlur} onBlur={() => { cancelBlur(); blurTimer.current = setTimeout(() => setMentionAt(null), 120) }} />
       {mentionAt !== null ? <MentionMenu anchor={fromButton ? triggerRef : inputRef} fromButton={fromButton} query={query} mentions={mentions} onPick={pickMention} onLibrary={() => { setMentionAt(null); onAddRef() }} /> : null}
     </div>
