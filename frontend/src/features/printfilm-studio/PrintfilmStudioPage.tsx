@@ -13,7 +13,7 @@ import { writingContext, writingDependents, writingInputSignature, createWriting
 import { connectedGenerationPrompt } from './canvas/generationPrompt'
 import { WritingRunStore } from './canvas/WritingRunStore'
 import { nodeDraft } from './canvas/nodeDraft'
-import { bindUploadedImageMentions, plainPrompt, type PromptReference } from './canvas/promptMentions'
+import { bindNamedPromptReferences, bindUploadedImageMentions, plainPrompt, type PromptReference } from './canvas/promptMentions'
 import { videoPromptAudio } from './canvas/videoPromptAudio'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react'
 import { createPortal } from 'react-dom'
@@ -1126,7 +1126,7 @@ function PrintfilmStudioWorkspace() {
     try { storyInputs = storyVideoInputs(source, nodesRef.current, edgesRef.current); assetPrompt = storyAssetPrompt(source, nodesRef.current, edgesRef.current) }
     catch (error) { setGenerationRunning(false); reportError(error instanceof Error ? error.message : '分镜参考不完整'); return }
     const userPrompt = storyInputs?.prompt || assetPrompt || liveComposerPrompt.trim()
-    const referenceText = storyInputs || assetPrompt || linkedPromptNode || !genPrompt.trim() ? '' : linkedRefs.filter((node) => nodeMediaKind(node) === 'text' && !hiddenRefIds.includes(node.id)).map((node) => `${node.data.label || '参考文本'}：${node.data.text || ''}`).join('\n').slice(0, 6000)
+    const referenceText = storyInputs || assetPrompt || linkedPromptNode || !genPrompt.trim() ? '' : linkedRefs.filter((node) => nodeMediaKind(node) === 'text' && !hiddenRefIds.includes(node.id)).map((node) => `${node.data.label || '参考文本'}：${node.data.text || ''}`).join('\n')
     if (!userPrompt) { setGenerationRunning(false); return }
     setStatus('正在提交生成任务…')
     try {
@@ -1192,7 +1192,8 @@ function PrintfilmStudioWorkspace() {
       const providerPrompt = storyInputs?.providerPrompt ?? (isVideoAction && videoMode === 'omni_reference'
         ? bindUploadedImageMentions(userPrompt, uploadedImages)
         : plainPrompt(userPrompt))
-      const rawMessage = [providerPrompt, referenceText && `参考脚本：\n${referenceText}`, voiceDirections.join('\n')].filter(Boolean).join('\n\n')
+      const referenceScript = isVideoAction ? referenceText : referenceText.slice(0, 6000)
+      const rawMessage = [providerPrompt, referenceScript && `参考脚本：\n${referenceScript}`, voiceDirections.join('\n')].filter(Boolean).join('\n\n')
       const message = isVideoAction ? videoPromptAudio(rawMessage, genModel) : rawMessage
       let priceVersion: number | undefined
       if (toolId === 't2v') {
@@ -1439,6 +1440,75 @@ function PrintfilmStudioWorkspace() {
       commitGraph(updateStudioNode(nodesRef.current,id,{...replaceNodeMedia(target.data,{mediaUrl:asset.url,assetId:asset.id,mediaType:'video'}),compositionOrder:clips.map(clip=>clip.id)}) as Node<Data>[],edgesRef.current,'合成视频已保存，可下载导出')
     } finally {generationRunningRef.current.delete(id);if(mountedRef.current)setSubmittingNodeIds(ids=>{const next=new Set(ids);next.delete(id);return next})}
   }
+  const bindNamedAssets = (value: string, targetId: string, writing: boolean) => {
+    if (!canEditRef.current) return value
+    let nextNodes = nodesRef.current
+    let nextEdges = edgesRef.current
+    const target = nextNodes.find((node) => node.id === targetId)
+    if (!target) return value
+    const dependents = writingDependents(targetId, nextEdges)
+    const connected = new Set(nextEdges.filter(edge => edge.target === targetId).map(edge => edge.source))
+    const storyTargets = nextNodes.filter(node => node.data.storyKind === 'shot_video' && (
+      node.id === targetId || writing && nextEdges.some(edge => edge.source === targetId && edge.target === node.id)
+    ))
+    const accepts = (node: Node<Data>) => {
+      const kind = nodeMediaKind(node)
+      return !dependents.has(node.id) && node.type !== 'group' && node.type !== 'frameAnalysis' && !!mediaOf(node)
+        && (writing ? kind === 'image' : kind !== 'text')
+        && (!writing || !target.data.sourceScriptId || !node.data.sourceScriptId || target.data.sourceScriptId === node.data.sourceScriptId)
+        && storyTargets.every(shot => node.data.sourceScriptId === shot.data.sourceScriptId && ['character', 'scene'].includes(String(node.data.storyKind)))
+    }
+    const candidates = nextNodes.filter(accepts).sort((a, b) => Number(connected.has(b.id)) - Number(connected.has(a.id))).map(node => ({
+      id: node.id, source: 'node' as const, label: String(node.data.label || node.data.name || ''), url: mediaOf(node),
+      mediaKind: nodeMediaKind(node), identity: node.data.assetId ? `asset:${node.data.assetId}` : `node:${node.id}`,
+    }))
+    const library = assets.flatMap<PromptReference & { identity: string }>(asset => {
+      if (!asset.name || !(asset.url || asset.cover)) return []
+      const existing = referenceAssetNode(nextNodes, asset, targetId, nextEdges)
+      if (existing) {
+        const candidate = candidates.find(item => item.id === existing.id)
+        return candidate ? [{ ...candidate, label: asset.name }] : []
+      }
+      const kind = assetMediaKind(asset)
+      if (storyTargets.length || writing && kind !== 'image') return []
+      return [{ id: String(asset.id), source: 'asset' as const, label: asset.name, url: String(asset.url || asset.cover), mediaKind: kind, identity: `asset:${asset.id}` }]
+    })
+    const matchedIds: string[] = []
+    const linked = bindNamedPromptReferences(value, [...candidates, ...library], (item) => {
+      let source = nextNodes.find(node => item.source === 'node' && node.id === item.id)
+      let candidateNodes = nextNodes
+      if (item.source === 'asset') {
+        const asset = assets.find(entry => String(entry.id) === item.id)
+        if (!asset) return undefined
+        const kind = assetMediaKind(asset)
+        const origin = nodeWorldPositions(nextNodes).get(targetId) ?? target.position
+        source = newNode(kind, nextNodes.length, { label: item.label, assetId: asset.id, mediaType: kind, mediaUrl: asset.url || asset.cover, status: 'completed' })
+        source.id = `node-${crypto.randomUUID()}`
+        source.position = { x: origin.x - 420, y: origin.y + (nextEdges.filter(edge => edge.target === targetId).length) * 260 }
+        candidateNodes = [...nextNodes, source]
+      }
+      if (!source) return undefined
+      const sourceId = source.id
+      if (writing) {
+        const graph = toggleWritingReference(target, candidateNodes, nextEdges, sourceId)
+        if (!graph.removing) {
+          const additions = graph.edges.filter(edge => !nextEdges.includes(edge))
+          if (additions.some(edge => validateStudioConnection(edge, graph.nodes, graph.edges.filter(item => item !== edge)))) return undefined
+          nextNodes = graph.nodes
+          nextEdges = graph.edges
+        }
+      } else if (!nextEdges.some(edge => edge.source === sourceId && edge.target === targetId)) {
+        if (validateStudioConnection({ source: sourceId, target: targetId }, candidateNodes, nextEdges)) return undefined
+        nextNodes = candidateNodes
+        nextEdges = [...nextEdges, { id: `edge-${crypto.randomUUID()}`, source: sourceId, target: targetId }]
+      }
+      matchedIds.push(source.id)
+      return { ...item, source: 'node', id: source.id, label: String(source.data.label || item.label) }
+    })
+    if (nextNodes !== nodesRef.current || nextEdges !== edgesRef.current) commitGraph(nextNodes, nextEdges, `已按名称关联 ${matchedIds.length} 个素材`)
+    if (!writing && matchedIds.length) setHiddenRefIds(ids => ids.filter(id => !matchedIds.includes(id)))
+    return linked
+  }
   const nodeActions: StudioNodeActions = {
     writingMentionOptions: id => {
       const writer = nodes.find(node => node.id === id)
@@ -1501,10 +1571,11 @@ function PrintfilmStudioWorkspace() {
     imageTools: (id, mode) => setImageTool({ id, mode }),
     generateText: (id) => { setTextGenerationNodeId(id); setSelectedNodeId(id); setSelectedNodeIds([id]); setPanelsSuppressed(false) },
     closeTextComposer: () => setTextGenerationNodeId(null),
-    textComposer: textGenerationNode ? { nodeId: textGenerationNode.id, content: <InlineTextComposer onFocusReference={id=>focusNode(id)} key={textGenerationNode.id} runStore={writingRuns} onValidate={validateTextWriting} projectId={projectId} nodeId={textGenerationNode.id} title={String(textGenerationNode.data.label || '文本')} text={String(textGenerationNode.data.text || '')} settings={textGenerationNode.data} headers={editLockRequestHeaders(canvasTarget)} writable={canEdit} references={textWritingContext.references} outputs={textWritingContext.outputs} candidates={nodes.filter((node) => node.id !== textGenerationNode.id && node.type !== 'group' && ['text','image'].includes(nodeMediaKind(node)) && (!textGenerationNode.data.sourceScriptId || !node.data.sourceScriptId || node.data.sourceScriptId === textGenerationNode.data.sourceScriptId)).map(writingReference)} onSetting={(key, value) => { if (!canEdit) return; setNodes((current) => updateStudioNode(current, textGenerationNode.id, { [key]: value }) as Node<Data>[]); dirtyRef.current = true }} onReference={(id) => { if (!canEdit) return; try { const graph = toggleWritingReference(textGenerationNode, nodesRef.current, edgesRef.current, id); if (!graph.removing) { const error = graph.edges.filter(edge=>!edgesRef.current.some(old=>old.id===edge.id)).map(edge=>validateStudioConnection(edge,graph.nodes,edgesRef.current)).find(Boolean); if (error) throw new Error(error) }; commitGraph(graph.nodes,graph.edges,graph.removing ? '已移除写作与视频参考' : '已关联写作与视频参考') } catch (error) { setStatus(error instanceof Error ? error.message : '参考关联失败') } }} onBusy={(busy) => setSubmittingNodeIds((ids) => { const next = new Set(ids); if (busy) next.add(textGenerationNode.id); else next.delete(textGenerationNode.id); return next })} onApply={(result, expected, outputs) => {
+    textComposer: textGenerationNode ? { nodeId: textGenerationNode.id, content: <InlineTextComposer onPasteText={value => bindNamedAssets(value, textGenerationNode.id, true)} onFocusReference={id=>focusNode(id)} key={textGenerationNode.id} runStore={writingRuns} onValidate={validateTextWriting} projectId={projectId} nodeId={textGenerationNode.id} title={String(textGenerationNode.data.label || '文本')} text={String(textGenerationNode.data.text || '')} settings={textGenerationNode.data} headers={editLockRequestHeaders(canvasTarget)} writable={canEdit} references={textWritingContext.references} outputs={textWritingContext.outputs} candidates={nodes.filter((node) => node.id !== textGenerationNode.id && node.type !== 'group' && ['text','image'].includes(nodeMediaKind(node)) && (!textGenerationNode.data.sourceScriptId || !node.data.sourceScriptId || node.data.sourceScriptId === textGenerationNode.data.sourceScriptId)).map(writingReference)} onSetting={(key, value) => { if (!canEdit) return; setNodes((current) => updateStudioNode(current, textGenerationNode.id, { [key]: value }) as Node<Data>[]); dirtyRef.current = true }} onReference={(id) => { if (!canEdit) return; try { const graph = toggleWritingReference(textGenerationNode, nodesRef.current, edgesRef.current, id); if (!graph.removing) { const error = graph.edges.filter(edge=>!edgesRef.current.some(old=>old.id===edge.id)).map(edge=>validateStudioConnection(edge,graph.nodes,edgesRef.current)).find(Boolean); if (error) throw new Error(error) }; commitGraph(graph.nodes,graph.edges,graph.removing ? '已移除写作与视频参考' : '已关联写作与视频参考') } catch (error) { setStatus(error instanceof Error ? error.message : '参考关联失败') } }} onBusy={(busy) => setSubmittingNodeIds((ids) => { const next = new Set(ids); if (busy) next.add(textGenerationNode.id); else next.delete(textGenerationNode.id); return next })} onApply={(result, expected, outputs) => {
       const current = nodesRef.current.find((node) => node.id === textGenerationNode.id)
       if (!canEditRef.current || !current || String(current.data.text || '') !== expected) throw new Error('节点正文已变化，生成结果已保留，请核对后复制')
-      commitGraph(updateStudioNode(nodesRef.current, current.id, { text: result, writingOutputSettings: outputs }) as Node<Data>[], edgesRef.current, 'AI 正文已写入节点')
+      const linked = bindNamedAssets(result, current.id, true)
+      commitGraph(updateStudioNode(nodesRef.current, current.id, { text: linked, writingOutputSettings: outputs }) as Node<Data>[], edgesRef.current, 'AI 正文已写入节点')
     }} /> } : undefined,
     videoStart: (id, mode) => { if (!canEdit) return; if (mode === 'script') createVideoInput(id, 'text'); else setVideoSetup({ id, mode }) },
     analyze: (id) => {
@@ -1784,7 +1855,7 @@ function PrintfilmStudioWorkspace() {
   const rememberParameter = (key: string, value: string | boolean) => { if (!canEdit || !selectedNodeId) return; setNodes((current) => updateStudioNode(current, selectedNodeId, { [key]: value }) as Node<Data>[]); dirtyRef.current = true }
   const linkedPromptNode = nodes.find((node) => node.id === selectedNode?.data.promptNodeId && ['text', 'script'].includes(node.type || ''))
   const strictStoryPrompt = selectedNode?.data.storyKind === 'shot_video' || ['character','scene'].includes(String(selectedNode?.data.storyKind))
-  const rawComposerPrompt = linkedPromptNode && (strictStoryPrompt || String(linkedPromptNode.data.text || '').trim()) ? String(linkedPromptNode.data.text || '') : connectedGenerationPrompt(genPrompt, linkedRefs.filter(node => !hiddenRefIds.includes(node.id)))
+  const rawComposerPrompt = linkedPromptNode && (strictStoryPrompt || String(linkedPromptNode.data.text || '').trim()) ? String(linkedPromptNode.data.text || '') : connectedGenerationPrompt(genPrompt, linkedRefs.filter(node => !hiddenRefIds.includes(node.id)), isVideoComposer)
   const liveComposerPrompt = linkedPromptNode && selectedNode?.data.storyKind === 'shot_video' ? linkedWritingResult(rawComposerPrompt,writingContext(linkedPromptNode,nodes,edges).references) : rawComposerPrompt
   const writeComposerPrompt = (value: string) => {
     setGenPrompt(value)
@@ -1821,6 +1892,7 @@ function PrintfilmStudioWorkspace() {
       assets: assets.filter((asset) => (asset.url || asset.cover) && (selectionAction === 'compose' ? assetMediaKind(asset) === 'video' : isVideoComposer ? true : selectionAction === 'audio' ? false : assetMediaKind(asset) === 'image')).map((asset) => ({ id: String(asset.id), label: asset.name || `素材 #${asset.id}`, url: String(asset.cover || asset.url || ''), mediaKind: assetMediaKind(asset), hint: '素材', source: 'asset' as const })),
     },
     onMention: pickMention,
+    onPasteText: value => ['edit', 'video', 'reference', 'inpaint', 'outpaint'].includes(selectionAction) ? (linkedPromptNode && selectedNode?.data.storyKind === 'shot_video' ? bindNamedAssets(value, linkedPromptNode.id, true) : bindNamedAssets(value, selectedNodeId, false)) : value,
     modelId: selectionAction === 'audio' ? '' : genModel,
     controls,
     videoMode: effectiveVideoMode,

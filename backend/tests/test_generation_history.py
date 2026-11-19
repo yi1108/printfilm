@@ -355,6 +355,10 @@ def test_history_uses_prepared_snapshot_and_leaves_unknown_prompt_empty():
     output = project_generation(row, viewer_id=1)
     assert output.prompt == "Frozen scene" and output.params["model_id"] == "actual"
     assert output.params["duration"] == 6
+    long_prompt = "镜" * 14_996 + "尾部标记"
+    row.payload = {"generation_params": {"prompt": long_prompt, "model_id": "seedance-2.5"}}
+    output = project_generation(row, viewer_id=1)
+    assert output.prompt == output.params["prompt"] == long_prompt
     row.payload = {}
     assert project_generation(row, viewer_id=1).prompt == ""
 

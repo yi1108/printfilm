@@ -1,7 +1,24 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { connectedGenerationPrompt } from '../src/features/printfilm-studio/canvas/generationPrompt.ts'
-import { bindUploadedImageMentions, mentionToken } from '../src/features/printfilm-studio/canvas/promptMentions.ts'
+import { bindNamedPromptReferences, bindUploadedImageMentions, mentionToken } from '../src/features/printfilm-studio/canvas/promptMentions.ts'
+
+test('pasted material names bind once and preserve ambiguous names and existing tokens', () => {
+  const character = { source: 'node', id: 'role', label: '尧帝.png', identity: 'asset:42' }
+  const library = { source: 'asset', id: '42', label: '尧帝.png', identity: 'asset:42' }
+  const duplicate = [
+    { source: 'node', id: 'scene-1', label: '祭台.png' },
+    { source: 'node', id: 'scene-2', label: '祭台.png' },
+  ]
+  const token = mentionToken(character)
+  const calls = []
+  assert.equal(bindNamedPromptReferences(
+    `@尧帝.png、尧帝、祭台.png、未知素材。${token}`,
+    [character, library, ...duplicate],
+    item => { calls.push(item.id); return item },
+  ), `${token}、${token}、祭台.png、未知素材。${token}`)
+  assert.deepEqual(calls, ['role'])
+})
 
 test('omni reference binds canvas and library image mentions in upload order by ID', () => {
   const uploadedImages = [{ nodeId: 'scene' }, { nodeId: 'character', assetId: '42' }]
@@ -20,6 +37,13 @@ test('a connected writing result supplies an otherwise empty image prompt', () =
   assert.equal(connectedGenerationPrompt(' ', [writing]), writing.data.text)
   assert.equal(connectedGenerationPrompt('改为全景', [writing]), '改为全景')
   assert.equal(connectedGenerationPrompt('', []), '')
+})
+
+test('video generation keeps long connected text and its ending', () => {
+  const text = '镜'.repeat(14_990) + '保留最后的内容'
+  const writing = { type: 'text', data: { text } }
+  assert.equal(connectedGenerationPrompt('', [writing], true), text)
+  assert.equal(connectedGenerationPrompt('', [writing]).length, 6000)
 })
 
 test('empty and media references cannot unlock generation; multiple text sources keep labels', () => {

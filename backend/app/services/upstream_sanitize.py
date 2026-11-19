@@ -8,6 +8,8 @@ from collections.abc import Mapping
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from app.schemas_tools import MAX_GENERATION_PROMPT_CHARS
+
 _REDACTED = "[REDACTED]"
 _MAX_STRING = 12_000
 _MAX_ITEMS = 80
@@ -48,7 +50,7 @@ def _safe_url(value: str) -> str:
         return "[INVALID URL]"
 
 
-def _safe_text(value: str) -> str:
+def _safe_text(value: str, max_length: int = _MAX_STRING) -> str:
     """清理错误等自由文本中的 URL、Bearer 凭据和键值形式的秘密。"""
     text = _URL_RE.sub(lambda match: _safe_url(match[0]), value)
     text = re.sub(r"\bBearer\s+[^\s,;\"']+", f"Bearer {_REDACTED}", text, flags=re.I)
@@ -58,7 +60,7 @@ def _safe_text(value: str) -> str:
     )
     text = re.sub(r"\bsk-[A-Za-z0-9_-]{12,}", _REDACTED, text)
     text = _DATA_URI_RE.sub(lambda match: f"[data:{match[1]};base64 length={len(match[2])}]", text)
-    return text if len(text) <= _MAX_STRING else text[:_MAX_STRING] + f"…[truncated; length={len(text)}]"
+    return text if len(text) <= max_length else text[:max_length] + f"…[truncated; length={len(text)}]"
 
 
 def sanitize_upstream_value(value: Any, *, _depth: int = 0, _key: str = "") -> Any:
@@ -75,7 +77,8 @@ def sanitize_upstream_value(value: Any, *, _depth: int = 0, _key: str = "") -> A
             len(value) >= 128 and len(value) % 4 == 0 and re.fullmatch(r"[A-Za-z0-9+/=\r\n]+", value)
         ):
             return {"type": "base64", "length": len(value)}
-        return _safe_text(value)
+        limit = MAX_GENERATION_PROMPT_CHARS if _key in {"prompt", "text"} else _MAX_STRING
+        return _safe_text(value, limit)
     if value is None or isinstance(value, (bool, int, float)):
         return value
     if _depth >= _MAX_DEPTH:

@@ -347,6 +347,40 @@ async def test_text_video_has_no_helper_image_and_preserves_selected_settings(st
     image.assert_not_awaited()
 
 
+async def test_seedance_prompt_limits_and_full_submission(studio_api, monkeypatch):
+    from app.services import studio_tools
+    from app.services.tasks.generation_metadata import submitted_generation_params
+    from app.services.tokenfree_video import prepare_video_create_body
+    from app.services.upstream_sanitize import sanitize_upstream_value
+
+    create = AsyncMock(return_value="long-prompt-provider-task")
+    monkeypatch.setattr(studio_tools, "get_ark", lambda: SimpleNamespace(gen_video_seedance_body=create))
+    prompt = "镜" * 14_996 + "尾部标记"
+    request = video_request(model_id="seedance-2.5", prompt=prompt)
+    quote = await studio_api.post("/api/tools/estimate", json=request)
+    assert quote.status_code == 200
+    response = await studio_api.post("/api/tools/run", files={
+        key: (None, json.dumps(value) if key == "references" else value)
+        for key, value in request.items()
+    })
+    assert response.status_code == 200
+    await executor.execute_task_run(response.json()["platform_task_id"])
+    body = prepare_video_create_body(create.await_args.args[0])
+    assert body["prompt"] == prompt
+    assert submitted_generation_params(sanitize_upstream_value(body))["prompt"] == prompt
+    record = await studio_api.get(f"/api/tools/runs/{response.json()['run_id']}")
+    assert record.json()["prompt"] == prompt
+
+    too_long = await studio_api.post("/api/tools/run", data={**request, "references": "[]", "prompt": prompt + "多"})
+    assert too_long.status_code == 422
+    for model in ("seedance-2.0", "seedance-2.0-fast"):
+        quote = await studio_api.post("/api/tools/estimate", json=video_request(model_id=model, prompt=prompt[:7000]))
+        assert quote.status_code == 200
+        rejected = await studio_api.post("/api/tools/estimate", json=video_request(model_id=model, prompt=prompt[:7001]))
+        assert rejected.status_code in (400, 422)
+        assert "7000" in rejected.json()["detail"]
+
+
 async def test_frame_mode_combines_upload_and_library_asset(studio, studio_api, monkeypatch):
     from app.services import studio_tools
     sessions, user, _ = studio

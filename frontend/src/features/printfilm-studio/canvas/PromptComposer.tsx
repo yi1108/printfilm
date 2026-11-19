@@ -27,6 +27,7 @@ type Props = {
   onAddRef: () => void
   mentions: { connected: ComposerMention[]; canvas: ComposerMention[]; assets: ComposerMention[] }
   onMention: (item: ComposerMention) => void
+  onPasteText?: (text: string) => string
   modelId: string
   modelOptions: ModelOption[]
   onModelChange: (id: string) => void
@@ -150,7 +151,7 @@ export function MentionMenu({ query, mentions, onPick, onLibrary, anchor, fromBu
 }
 
 export function PromptComposer({
-  action, prompt, onPrompt, chips, onRemoveChip, onAddChip, refs, onFocusRef, onRemoveRef, onAddRef, mentions, onMention,
+  action, prompt, onPrompt, chips, onRemoveChip, onAddChip, refs, onFocusRef, onRemoveRef, onAddRef, mentions, onMention, onPasteText,
   modelId, modelOptions, onModelChange, ratio, onRatioChange, count, onCountChange,
   resolution, onResolutionChange, duration, onDurationChange, estimate, isVideo, onClose, onSubmit, canSubmit, attached, controls, voice, onVoiceChange, videoMode, onVideoModeChange, videoModeOptions, validationMessage, generateAudio, onAudioChange,
 }: Props) {
@@ -172,7 +173,7 @@ export function PromptComposer({
     setFromButton(false)
     const next = mentionQuery(value, caret)
     setQuery(next || '')
-    setMentionAt(next === null ? null : value.slice(0, caret).lastIndexOf('@'))
+    setMentionAt(next === null || next.startsWith('[') ? null : value.slice(0, caret).lastIndexOf('@'))
   }
   const pickMention = (item: ComposerMention) => {
     const caret = inputRef.current ? promptCaret(inputRef.current) : prompt.length
@@ -195,7 +196,7 @@ export function PromptComposer({
     </div>
     {presetMenu && <div className="pf-prompt-presets nowheel">{PRESETS[presetMenu].map((preset) => <button type="button" key={preset.id} onClick={() => { onAddChip(preset, preset.text); setPresetMenu(null) }}><b>{preset.label.replace('案例·', '')}</b><span>{preset.text}</span></button>)}</div>}
     <div className="pf-composer-input nowheel">
-      <PromptInput inputRef={inputRef} value={prompt} label="生成描述" placeholder={placeholder} references={[...mentions.connected, ...mentions.canvas, ...mentions.assets]} onChange={(value, caret) => { onPrompt(value); syncMention(value, caret) }} onCaret={syncMention} onFocus={cancelBlur} onBlur={() => { cancelBlur(); blurTimer.current = setTimeout(() => setMentionAt(null), 120) }} />
+      <PromptInput inputRef={inputRef} value={prompt} label="生成描述" placeholder={placeholder} references={[...mentions.connected, ...mentions.canvas, ...mentions.assets]} onPasteText={onPasteText} onChange={(value, caret) => { onPrompt(value); syncMention(value, caret) }} onCaret={syncMention} onFocus={cancelBlur} onBlur={() => { cancelBlur(); blurTimer.current = setTimeout(() => setMentionAt(null), 120) }} />
       {mentionAt !== null ? <MentionMenu anchor={fromButton ? triggerRef : inputRef} fromButton={fromButton} query={query} mentions={mentions} onPick={pickMention} onLibrary={() => { setMentionAt(null); onAddRef() }} /> : null}
     </div>
     {action === 'crop' && <div className="pf-crop-row"><button type="button" onClick={onSubmit}>按当前比例裁剪</button></div>}

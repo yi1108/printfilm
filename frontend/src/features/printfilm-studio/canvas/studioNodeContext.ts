@@ -20,6 +20,7 @@ export type StudioComposerState = {
   action: ComposerAction
   prompt: string
   onPrompt: (value: string) => void
+  onPasteText?: (value: string) => string
   chips: { id: string; label: string }[]
   onRemoveChip: (id: string) => void
   onAddChip: (chip: { id: string; label: string }, append: string) => void

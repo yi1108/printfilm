@@ -27,6 +27,36 @@ export function splitPrompt(value: string): ({ text: string } | { token: string;
 }
 export function plainPrompt(value: string) { return splitPrompt(value).map((part) => 'text' in part ? part.text : `@${part.reference.label}`).join('') }
 
+/** Bind only unambiguous material names, visiting each matched asset once per paste. */
+export function bindNamedPromptReferences<T extends PromptReference & { identity?: string }>(
+  value: string, candidates: T[], bind: (item: T) => PromptReference | undefined,
+) {
+  const names = new Map<string, Map<string, T>>()
+  for (const item of candidates) {
+    const label = item.label.trim().toLowerCase()
+    const stem = label.replace(/\.(?:png|jpe?g|webp|gif|bmp|avif|mp4|mov|webm|wav|mp3|m4a|aac|ogg|flac)$/i, '')
+    for (const name of new Set([label, stem])) {
+      if (name.length < 2) continue
+      const matches = names.get(name) ?? new Map<string, T>()
+      const identity = item.identity ?? `${item.source}:${item.id}`
+      if (!matches.has(identity)) matches.set(identity, item)
+      names.set(name, matches)
+    }
+  }
+  if (!names.size) return value
+  const alternatives = [...names.keys()].sort((a, b) => b.length - a.length).map(name => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
+  const pattern = new RegExp(`(?<![A-Za-z0-9_])@?(${alternatives})(?![A-Za-z0-9_]|\\.[A-Za-z0-9])`, 'gi')
+  const bound = new Map<string, PromptReference | undefined>()
+  return splitPrompt(value).map(part => 'token' in part ? part.token : part.text.replace(pattern, (raw, label: string) => {
+    const matches = names.get(label.toLowerCase())
+    if (matches?.size !== 1) return raw
+    const [identity, item] = matches.entries().next().value!
+    if (!bound.has(identity)) bound.set(identity, bind(item))
+    const reference = bound.get(identity)
+    return reference ? mentionToken(reference) : raw
+  })).join('')
+}
+
 export function bindUploadedImageMentions(value: string, images: readonly { nodeId: string; assetId?: string }[]) {
   return splitPrompt(value).map((part) => {
     if ('text' in part) return part.text

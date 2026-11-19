@@ -12,6 +12,7 @@ from app.database import AsyncSessionLocal
 from app.models import ToolRun, User
 from app.models_tasks import TaskRun
 from app.schemas_tasks import TaskCreateRequest
+from app.schemas_tools import MAX_GENERATION_PROMPT_CHARS
 from app.services.billing.context import billing_scope
 from app.services.studio_tools import ensure_public_urls, poll_video_task, run_image_tool, start_video_tool
 from app.services.tasks.service import append_task_event, create_task, get_task_for_runtime
@@ -38,8 +39,10 @@ def validate_generation(tool_id: str, prompt: str, params: dict, file_count: int
     video_mode = params.get("video_mode") if kind == "video" else None
     if not quote and (tool_id in {"t2i", "t2v", "audio"} or video_mode) and not prompt.strip():
         raise ValueError("请填写生成内容")
-    if len(prompt) > (2000 if kind == "audio" else 7000):
-        raise ValueError("生成内容超过字数限制")
+    if kind != "video":
+        prompt_limit = 2000 if kind == "audio" else 7000
+        if len(prompt) > prompt_limit:
+            raise ValueError(f"生成内容超过 {prompt_limit} 字符")
     if tool_id in {"i2i", "i2p", "v2v"} and not video_mode and not file_count:
         raise ValueError("请上传参考文件")
     if tool_id == "v2v" and not video_mode and file_count > 1:
@@ -52,6 +55,10 @@ def validate_generation(tool_id: str, prompt: str, params: dict, file_count: int
         strategy = resolve_strategy(model)
         if strategy.capability != kind:
             raise ValueError("model: 模型类型不匹配")
+        if kind == "video":
+            prompt_limit = MAX_GENERATION_PROMPT_CHARS if strategy.model_id == "seedance-2.5" else 7000
+            if len(prompt) > prompt_limit:
+                raise ValueError(f"视频提示词超过 {prompt_limit} 字符（含自动附加的说明）")
         from app.services.media_models.planning import reference_params
         if video_mode:
             from app.services.studio_references import parse_references, validate_reference_mode

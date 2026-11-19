@@ -20,6 +20,7 @@ from app.models_drama import DramaAsset, DramaEpisode, DramaEpisodeFragment, Dra
 from app.models_tasks import TaskEvent, TaskRun
 from app.schemas_generation_history import GenerationListOut, GenerationRecordOut
 from app.schemas_media_references import MediaReferenceOut
+from app.schemas_tools import MAX_GENERATION_PROMPT_CHARS
 from app.services.tasks.generation_metadata import (
     merge_generation_params, planned_generation_params, prepared_generation_params,
     public_generation_params, request_matches_generation, submitted_generation_params,
@@ -224,7 +225,8 @@ def project_generation(task, *, viewer_id: int, owner_user_id: int | None = None
         id=task.id, source="task", record_key=f"task:{task.id}",
         tool_id=linked_tool.tool_id if linked_tool is not None else str((task.payload or {}).get("tool_id") or task.task_type),
         kind=kind, status=_public_status(task.status),
-        domain=task.domain, task_type=task.task_type, prompt=prompt[:7000], urls=urls, preview_url=preview,
+        domain=task.domain, task_type=task.task_type,
+        prompt=prompt[:MAX_GENERATION_PROMPT_CHARS if kind == "video" else 7000], urls=urls, preview_url=preview,
         text_content=next((text for output in outputs if (text := _text_output(output))), "") if kind == "text" else "",
         task_id=f"task-{task.id}", params=params, references=public_references(references),
         error=getattr(task, "error_message", None),

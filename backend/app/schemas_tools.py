@@ -12,6 +12,7 @@ from app.schemas_drama import DramaAssetOut
 
 VideoMode = Literal["text_to_video", "first_last_frame", "omni_reference"]
 ReferenceRole = Literal["first_frame", "last_frame", "reference_image", "reference_video", "reference_audio"]
+MAX_GENERATION_PROMPT_CHARS = 15_000
 
 
 class ToolReference(BaseModel):
@@ -32,7 +33,7 @@ class ToolEstimateRequest(BaseModel):
     model_config = {"extra": "forbid"}
 
     tool_id: Literal["t2v", "v2v"] = "t2v"
-    prompt: str = Field(default="", max_length=7000)
+    prompt: str = Field(default="", max_length=MAX_GENERATION_PROMPT_CHARS)
     model_id: str = Field(default="", max_length=128)
     video_mode: VideoMode
     generate_audio: bool | None = None
