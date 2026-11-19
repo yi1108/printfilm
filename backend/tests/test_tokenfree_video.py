@@ -76,7 +76,7 @@ def test_wrap_seedance_payload_uses_metadata_content_not_input():
     assert "input" not in wrapped["metadata"]
     meta = wrapped["metadata"]
     assert meta["duration"] == 5
-    assert meta["ratio"] == "16:9"
+    assert "ratio" not in meta
     assert meta["generate_audio"] is True
     assert meta["content"] == [
         {
@@ -373,6 +373,7 @@ async def test_resolve_tokenfree_media_download_url_keeps_content_on_200(monkeyp
 def test_same_image_can_fill_distinct_first_and_last_slots():
     content = [{"type": "image_url", "image_url": {"url": "https://cdn.example.com/loop.jpg"}, "role": role}
                for role in ("first_frame", "last_frame")]
-    request = wrap_seedance_payload_for_newapi({"content": content})
+    request = wrap_seedance_payload_for_newapi({"content": content, "ratio": "16:9"})
     assert "image" not in request
+    assert "ratio" not in request["metadata"]
     assert request["metadata"]["content"] == content

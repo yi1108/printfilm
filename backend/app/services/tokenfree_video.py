@@ -176,7 +176,12 @@ def wrap_seedance_payload_for_newapi(payload: dict[str, Any]) -> dict[str, Any]:
             metadata["duration"] = int(duration_text)
         except (TypeError, ValueError):
             metadata["duration"] = duration_text
-    if ratio and ratio.lower() != "adaptive":
+    # Seedance derives the output ratio from the first frame in frame modes.
+    uses_frame_ratio = any(
+        item.get("type") == "image_url" and item.get("role") in {"first_frame", "last_frame"}
+        for item in media
+    )
+    if ratio and ratio.lower() != "adaptive" and not uses_frame_ratio:
         # 方舟字段名是 ratio，不是 aspect_ratio
         metadata["ratio"] = ratio
     resolution = str(src.get("resolution") or "").strip()
