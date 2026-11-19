@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { storyVideoInputs } from '../src/features/printfilm-studio/canvas/storyGenerationInputs.ts'
+import { characterVoicePrompt, characterVoiceReferences, storyVideoInputs } from '../src/features/printfilm-studio/canvas/storyGenerationInputs.ts'
 
 test('stable image mentions resolve to actual upload order instead of canvas edge order',()=>{
   const {nodes,edges,video}=graph()
@@ -31,6 +31,23 @@ test('shot video consumes latest text and selected reference images, excluding a
   assert.equal(result.mode, 'omni_reference')
   assert.deepEqual(result.references.map((ref) => ref.url), ['/chosen.png', '/garden.png'])
   nodes[0].data.text = '再次编辑'; assert.equal(storyVideoInputs(video, nodes, edges).prompt, '再次编辑')
+})
+
+test('two shots referencing the same character read its current voice binding', () => {
+  const { nodes, edges, video } = graph()
+  const other = { ...video, id: 'video-two' }
+  nodes.push(other)
+  edges.push(...edges.map(edge => ({ ...edge, target: other.id })))
+  nodes[1].data.voiceReferenceAssetId = 42
+  nodes[2].data.voiceReferenceAssetId = 43
+  const voices = shot => characterVoiceReferences(storyVideoInputs(shot, nodes, edges).references.map(({ node }) => node))
+  for (const shot of [video, other]) {
+    assert.deepEqual(voices(shot), [{ assetId: 42, labels: ['刘备'] }])
+    assert.match(characterVoicePrompt(voices(shot)[0].labels, 2), /^@音频2：仅用于刘备的对白音色/)
+  }
+  nodes[1].data.voiceReferenceAssetId = 55
+  assert.equal(voices(video)[0].assetId, 55)
+  assert.equal(voices(other)[0].assetId, 55)
 })
 
 test('missing scene media and disconnected prompt or image block shot video generation', () => {

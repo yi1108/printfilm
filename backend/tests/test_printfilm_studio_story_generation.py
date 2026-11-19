@@ -61,7 +61,8 @@ def test_story_video_rejects_cross_script_and_missing_scene():
 
 
 @pytest.mark.asyncio
-async def test_two_story_images_remain_references_not_first_last_frames(monkeypatch, tmp_path):
+@pytest.mark.parametrize('with_voice', [False, True])
+async def test_story_uses_omni_roles_and_reuses_voice_across_shots(monkeypatch, tmp_path, with_voice):
     from app.printfilm_studio.integration import generation_inputs as module
     assets = [SimpleNamespace(id=1, url='/chosen.png', cover=None, asset_type='image'), SimpleNamespace(id=2, url='/garden.png', cover=None, asset_type='image')]
     canvas = SimpleNamespace(db=SimpleNamespace(scalars=AsyncMock(return_value=SimpleNamespace(all=lambda: assets))), project=SimpleNamespace(id=7), user=SimpleNamespace(id=8))
@@ -72,10 +73,29 @@ async def test_two_story_images_remain_references_not_first_last_frames(monkeypa
     monkeypatch.setattr(module, 'save_upload', lambda _user, raw, name: tmp_path / name)
     monkeypatch.setattr(module, 'reference_params', AsyncMock(return_value={}))
     document = graph()
-    files, options = await prepare_inputs(canvas, 'video', document, document['nodes'][-1], None)
+    first_shot = document['nodes'][-1]
+    second_shot = {**first_shot, 'id': 'second'}
+    document['nodes'].append(second_shot)
+    document['edges'].extend({**edge, 'target': 'second'} for edge in document['edges'][:])
+    if with_voice:
+        document['nodes'][1]['data']['voiceReferenceAssetId'] = 3
+        assets.append(SimpleNamespace(id=3, url='/voice.wav', cover=None, asset_type='audio'))
+    for shot in (first_shot, second_shot):
+        files, options = await prepare_inputs(canvas, 'video', document, shot, None)
+        assert len(files) == (3 if with_voice else 2)
+        assert options['video_mode'] == 'omni_reference'
+        assert [ref['role'] for ref in options['references']] == ['reference_image', 'reference_image'] + (['reference_audio'] if with_voice else [])
+        if with_voice:
+            assert files[2].suffix == '.wav'
+            assert options['_character_voice_directions'] == ['@音频1：仅用于刘备的对白音色，台词以本镜指定文本为准。']
+    if with_voice:
+        assets.pop()
+    files, options = await prepare_inputs(canvas, 'video', document, second_shot, None, generate_audio=False)
     assert len(files) == 2
-    assert options['video_mode'] == 'omni_reference'
-    assert [ref['role'] for ref in options['references']] == ['reference_image', 'reference_image']
+    assert '_character_voice_directions' not in options
+    if with_voice:
+        with pytest.raises(ValueError, match='角色参考音频已不可用'):
+            await prepare_inputs(canvas, 'video', document, second_shot, None)
 
 
 @pytest.mark.asyncio
@@ -87,7 +107,7 @@ async def test_agent_generation_reuses_story_video_and_ignores_stale_tool_prompt
     document['nodes'][-1]['data'].update(modelId='seedance-2.5', ratio='16:9', duration='6')
     task = SimpleNamespace(cancelable=False, payload={})
     canvas = SimpleNamespace(project=SimpleNamespace(id=7, team_id=None), user=SimpleNamespace(id=8), db=SimpleNamespace(info={}, get=AsyncMock(return_value=task), rollback=AsyncMock()), load=AsyncMock(return_value=(document, 1)), save=AsyncMock(return_value=2))
-    monkeypatch.setattr(generation_inputs, 'prepare_inputs', AsyncMock(return_value=([], {'video_mode': 'omni_reference', 'references': []})))
+    monkeypatch.setattr(generation_inputs, 'prepare_inputs', AsyncMock(return_value=([], {'video_mode': 'omni_reference', 'references': [], '_character_voice_directions': ['@音频1：仅用于刘备的对白音色。']})))
     enqueue = AsyncMock(return_value={'task_id': 'task-1', 'platform_task_id': 1, 'status': 'queued'})
     monkeypatch.setattr(studio_generation, 'enqueue_generation', enqueue)
     result = await media.create_media_task(canvas, 'video', '过期模型正文', node_id='video')
@@ -96,6 +116,8 @@ async def test_agent_generation_reuses_story_video_and_ignores_stale_tool_prompt
     assert enqueue.call_args.kwargs['prompt'].startswith('拍摄指令（只执行，不朗读')
     assert '@图片1：刘备' in enqueue.call_args.kwargs['prompt']
     assert '@图片2：桃园' in enqueue.call_args.kwargs['prompt']
+    assert '@音频1：仅用于刘备的对白音色。' in enqueue.call_args.kwargs['prompt']
+    assert '_character_voice_directions' not in enqueue.call_args.kwargs['params']
     assert enqueue.call_args.kwargs['params']['model_id'] == 'seedance-2.5'
     assert enqueue.call_args.kwargs['params']['duration'] == '6'
     assert len(document['nodes']) == 4 and len(document['edges']) == 3

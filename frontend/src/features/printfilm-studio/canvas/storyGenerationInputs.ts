@@ -3,6 +3,28 @@ import { splitPrompt } from './promptMentions.ts'
 type StoryGenerationNode = { id: string; type?: string; data: Record<string, unknown> }
 type StoryGenerationEdge = { source: string; target: string }
 
+export function isCanvasCharacter(node?: StoryGenerationNode) {
+  return node?.data.storyKind === 'character' || node?.type === 'character'
+}
+
+export function characterVoiceReferences(nodes: StoryGenerationNode[]) {
+  const references = new Map<number, string[]>()
+  for (const node of nodes) {
+    if (!isCanvasCharacter(node)) continue
+    const id = node.data.voiceReferenceAssetId
+    if (typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0) continue
+    const label = String(node.data.label || '角色')
+    const labels = references.get(id) ?? []
+    if (!labels.includes(label)) labels.push(label)
+    references.set(id, labels)
+  }
+  return [...references].map(([assetId, labels]) => ({ assetId, labels }))
+}
+
+export function characterVoicePrompt(labels: string[], audioNumber: number) {
+  return `@音频${audioNumber}：仅用于${labels.join('、')}的对白音色，台词以本镜指定文本为准。`
+}
+
 export function storyAssetPrompt(source: StoryGenerationNode | undefined, nodes: StoryGenerationNode[], edges: StoryGenerationEdge[]) {
   if (!source || !['character', 'scene'].includes(String(source.data.storyKind)) || !source.data.promptNodeId) return undefined
   const writer = nodes.find((node) => node.id === source.data.promptNodeId)
