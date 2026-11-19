@@ -128,7 +128,14 @@
 .pf-writing-director{display:flex;border:0;margin:0;padding:8px 12px;min-width:0;border-top:1px solid #eeeaf2}
 .pf-writing-progress{display:flex;align-items:center;gap:8px;margin:0 14px 12px;padding:11px 13px;border-radius:10px;background:#f6f3f9;color:#76558f;font-size:12px}
 .pf-writing-progress small{margin-left:auto;color:#91849c;font-size:11px;white-space:nowrap}.pf-writing-progress>svg{flex:none;animation:pf-writing-spin 1.2s linear infinite}
-.pf-inline-writing .pf-writing-prompt{position:relative;padding:0 16px}.pf-inline-writing .pf-writing-prompt .pf-prompt-editable{padding:14px 0;max-height:240px;line-height:1.8;font-size:14px}
+.pf-studio-shell .pf-composer-card.pf-inline-writing{height:auto;max-height:min(420px,calc(100dvh - 120px))}
+.pf-inline-writing .pf-writing-prompt{position:relative;min-height:0;max-height:240px;padding:0 16px;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.pf-inline-writing .pf-writing-prompt .pf-prompt-editable{padding:14px 0;max-height:none;overflow:visible;line-height:1.8;font-size:14px}
+.pf-inline-writing>.pf-writing-outputs,.pf-inline-writing>.pf-writing-skill-editor{min-height:0;overflow-y:auto;overscroll-behavior:contain}
+.pf-studio-shell .pf-inline-writing>footer{display:flex;align-items:center;flex-wrap:nowrap}
+.pf-inline-writing>footer>.pf-writing-parameters{flex:1;flex-wrap:wrap}
+.pf-inline-writing>footer>.pf-composer-spacer{display:none}
+.pf-inline-writing>footer>.pf-composer-cost,.pf-inline-writing>footer>.pf-composer-go{flex:none;white-space:nowrap}
 @keyframes pf-writing-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.pf-writing-progress>svg{animation:none}}
 

@@ -41,7 +41,7 @@ test('connected writing and the saved character voice reach both video requests'
   dom.window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} })
   localStorage.setItem('token', 'unit-test-token')
   const generationBodies = []
-  const assets = []
+  const assets = [{ id: 7, asset_type: 'image', name: '祭台夜景.png', url: '/altar.png' }]
   let stored = { version: 1, document: { toonflowCanvas: true, version: 1, nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } } }
   install('fetch', async (input, init) => {
     const path = new URL(String(input), dom.window.location.origin).pathname
@@ -88,13 +88,14 @@ test('connected writing and the saved character voice reach both video requests'
       await settle()
     }
     const mount = async () => { await act(async () => { root.render(h(StrictMode, null, h(MemoryRouter, { initialEntries: ['/drama/projects/361/printfilm-studio'] }, h(Routes, null, h(Route, { path: '/drama/projects/:projectId/printfilm-studio', element: h(Workspace) }))))) }); await settle() }
+    const writing = '16:9 横幅，7 秒，动漫舞者在飞机客舱跳舞。' + '镜'.repeat(10_000) + '尾部标记'
     stored.document.nodes = [
-      {id:'writing',type:'text',position:{x:0,y:0},data:{label:'新文本',text:'16:9 横幅，7 秒，动漫舞者在飞机客舱跳舞。'}},
-      {id:'video',type:'video',position:{x:450,y:0},data:{label:'新视频',editor:'video',modelId:'seedance-2.0',ratio:'16:9',duration:'7',resolution:'480p'}},
-      {id:'other',type:'video',position:{x:450,y:260},data:{label:'第二镜',editor:'video',modelId:'seedance-2.0',ratio:'16:9',duration:'7',resolution:'480p'}},
+      {id:'writing',type:'text',position:{x:0,y:0},data:{label:'新文本',text:writing}},
+      {id:'video',type:'video',position:{x:450,y:0},data:{label:'新视频',editor:'video',modelId:'seedance-2.5',ratio:'16:9',duration:'7',resolution:'720p'}},
+      {id:'other',type:'video',position:{x:450,y:260},data:{label:'第二镜',editor:'video',modelId:'seedance-2.5',ratio:'16:9',duration:'7',resolution:'720p'}},
       {id:'role',type:'character',position:{x:0,y:240},data:{label:'舞者',mediaType:'image',mediaUrl:'/role.png'}},
     ]
-    stored.document.edges = ['video', 'other'].flatMap(target => ['writing', 'role'].map(source => ({ id: `${source}-${target}`, source, target })))
+    stored.document.edges = ['video', 'other'].map(target => ({ id: `writing-${target}`, source: 'writing', target }))
     await mount()
     await act(async () => document.querySelector('.react-flow__node[data-id="role"]').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })))
     await click([...document.querySelectorAll('button')].find(button => button.textContent.includes('绑定角色参考音频')))
@@ -103,9 +104,24 @@ test('connected writing and the saved character voice reach both video requests'
     await act(async () => voiceInput.dispatchEvent(new Event('change', { bubbles: true })))
     await settle(100)
     const video = document.querySelector('.react-flow__node[data-id="video"]')
+    const paste = async (input, text) => {
+      await act(async () => {
+        input.focus()
+        const range = document.createRange()
+        range.selectNodeContents(input)
+        window.getSelection().removeAllRanges()
+        window.getSelection().addRange(range)
+        const event = new Event('paste', { bubbles: true, cancelable: true })
+        Object.defineProperty(event, 'clipboardData', { value: { getData: () => text } })
+        input.dispatchEvent(event)
+      })
+      await settle()
+      assert.ok(input.querySelector('.pf-inline-reference'))
+    }
     await click(video)
     const input = video.querySelector('[aria-label="生成描述"]')
     assert.equal(input.textContent, stored.document.nodes[0].data.text)
+    await paste(input, writing + '，@舞者抬头。')
     assert.equal(video.querySelector('[aria-label="生成"]').disabled, false)
     assert.equal(generationBodies.length, 0, 'opening a node does not create a paid task')
     await click(video.querySelector('[aria-label="生成"]'))
@@ -116,12 +132,16 @@ test('connected writing and the saved character voice reach both video requests'
     assert.equal(generationBodies[0].get('node_id'), 'video')
     const other = document.querySelector('.react-flow__node[data-id="other"]')
     await click(other)
+    await paste(other.querySelector('[aria-label="生成描述"]'), writing + '，@舞者抬头。')
     await click(other.querySelector('[aria-label="生成"]'))
     await settle(120)
     assert.equal(generationBodies.length, 2)
     assert.equal(stored.document.nodes.find(node => node.id === 'role').data.voiceReferenceAssetId, 42)
+    assert.equal(stored.document.edges.filter(edge => edge.source === 'role').length, 2)
     for (const body of generationBodies) {
       assert.equal(body.get('video_mode'), 'omni_reference')
+      assert.match(body.get('prompt'), /尾部标记/)
+      assert.match(body.get('prompt'), /@图片1抬头/)
       assert.match(body.get('prompt'), /@音频1：仅用于舞者的对白音色/)
       assert.deepEqual(JSON.parse(body.get('references')), [
         { file_index: 0, role: 'reference_image' },
@@ -129,7 +149,15 @@ test('connected writing and the saved character voice reach both video requests'
       ])
       assert.equal(await body.getAll('files')[1].text(), 'shared voice bytes')
     }
+    const writer = document.querySelector('.react-flow__node[data-id="writing"]')
+    await click(writer)
+    await click([...writer.querySelectorAll('button')].find(button => button.textContent === 'AI 写'))
+    await paste(document.querySelector('[aria-label="AI 写作要求"]'), '场景使用祭台夜景.png，保留祭台夜景。')
     await settle(1350) // Flush autosave and React Flow's deferred layout before teardown.
+    const libraryNode = stored.document.nodes.find(node => node.data.assetId === 7)
+    assert.ok(libraryNode, 'library-only asset should become a canvas node')
+    assert.equal(stored.document.nodes.filter(node => node.data.assetId === 7).length, 1)
+    assert.deepEqual(stored.document.edges.filter(edge => edge.source === libraryNode.id).map(edge => edge.target).sort(), ['other', 'video', 'writing'])
   } finally {
     if (root) { const { act } = await import('react'); await act(async () => root.unmount()) }
     await server?.close()

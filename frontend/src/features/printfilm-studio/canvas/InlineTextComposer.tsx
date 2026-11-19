@@ -16,10 +16,11 @@ import { WritingRunStore } from './WritingRunStore'
 import { points } from '../../../lib/points'
 
 type TextReference = { id: string; label: string; text: string; url?: string; mediaKind?: string }
-export function InlineTextComposer({ projectId, nodeId, title, text, settings, references, candidates, headers, writable, onSetting, onReference, onFocusReference, onBusy, onApply, onValidate, runStore: providedRunStore, outputs = [] }: {
+export function InlineTextComposer({ projectId, nodeId, title, text, settings, references, candidates, headers, writable, onSetting, onReference, onPasteText, onFocusReference, onBusy, onApply, onValidate, runStore: providedRunStore, outputs = [] }: {
   projectId: number; nodeId: string; title: string; text: string; settings: Record<string, unknown>; references: TextReference[]; candidates: TextReference[]; headers: HeadersInit; writable: boolean
   onSetting: (key: string, value: string | number[]) => void; onReference: (id: string) => void; onBusy: (busy: boolean) => void; onApply: (text: string, expected: string, outputs?: WritingOutput[]) => void
   onFocusReference?: (id:string)=>void; onRunDependencies?: () => void; outputs?: WritingOutput[]
+  onPasteText?: (value: string) => string
   runStore?: WritingRunStore; onValidate?: () => void
 }) {
   const [directorReady,setDirectorReady] = useState(false)
@@ -104,7 +105,7 @@ export function InlineTextComposer({ projectId, nodeId, title, text, settings, r
   return <div className="pf-composer-card is-attached pf-inline-writing" onMouseDown={(event) => event.stopPropagation()}>
     <div className="pf-composer-tags"><ComposerMenu label="引用故事素材" value={<><Plus size={16} />参考素材</>}>{(close) => <>{candidates.length ? candidates.map((item) => <button key={item.id} disabled={busy || !writable} onClick={() => { onReference(item.id); close() }}>{item.url && <img className="pf-writing-reference-thumb" src={item.url} alt=""/>}{item.label}</button>) : <p>暂无其他文本或图片节点</p>}</>}</ComposerMenu>{references.map((item) => <span className="pf-chip is-ref" key={item.id}><button type="button" className="pf-ref-jump" aria-label={`定位关联节点 ${item.label}`} onClick={()=>onFocusReference?.(item.id)}>{item.url && <img className="pf-writing-reference-thumb" src={item.url} alt=""/>}{item.label}</button><button aria-label={`移除参考 ${item.label}`} disabled={busy || !writable} onClick={() => onReference(item.id)}><X size={12}/></button></span>)}</div>
     <div className="pf-writing-prompt" onKeyDown={event => { if (event.key === 'Escape') { setMention(null); event.stopPropagation() } }}>
-      <PromptInput inputRef={promptInput} label="AI 写作要求" value={linkedPrompt} references={boundReferences} readOnly={busy || !writable} onChange={(value, caret) => { onSetting('writingPrompt', value); syncMention(value, caret) }} onCaret={syncMention} onFocus={cancelBlur} onBlur={() => { cancelBlur(); blurTimer.current = setTimeout(() => setMention(null), 120) }} placeholder="输入写作要求，输入 @ 引用文本或图片" />
+      <PromptInput inputRef={promptInput} label="AI 写作要求" value={linkedPrompt} references={boundReferences} readOnly={busy || !writable} onPasteText={onPasteText} onChange={(value, caret) => { onSetting('writingPrompt', value); syncMention(value, caret) }} onCaret={syncMention} onFocus={cancelBlur} onBlur={() => { cancelBlur(); blurTimer.current = setTimeout(() => setMention(null), 120) }} placeholder="输入写作要求，输入 @ 引用文本或图片" />
       {mention && writable && !busy && <MentionMenu anchor={promptInput} query={mention.query} mentions={{ connected: references.map(asMention), canvas: candidates.filter(item => !references.some(ref => ref.id === item.id)).map(asMention), assets: [] }} onPick={pickMention} />}
     </div>
     {!!outputs.length && <div className="pf-writing-outputs" aria-label="下游生成参数">{outputs.map(output => <span key={output.id}><b>{output.label}</b> · {output.model || '平台默认模型'} · {output.ratio || '未设置比例'}{output.kind === 'video' ? ` · ${output.duration ? `${output.duration} 秒` : '未设置时长'}` : ''}</span>)}<small>{imageOutput ? '按动漫风格生成图片提示词，保留角色与场景特征，比例跟随下游图片节点。' : '按图片名称与已有描述写作，图片会用于下游视频生成。时长、比例跟随下游节点。'}</small></div>}

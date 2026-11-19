@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from urllib.parse import urlsplit
 
+from app.schemas_tools import MAX_GENERATION_PROMPT_CHARS
+
 PUBLIC_PARAMETERS = frozenset({
     "prompt", "negative", "negative_prompt", "model_id", "model", "ratio", "aspect_ratio", "resolution",
     "duration", "duration_sec", "seconds", "voice", "voice_id", "phase", "video_mode", "mode", "strength",
@@ -17,7 +19,8 @@ def public_generation_params(data) -> dict:
     """Copy bounded public primitives, then normalize provider aliases without exposing references."""
     params = {key: value for key, value in (data.items() if isinstance(data, dict) else [])
               if key in PUBLIC_PARAMETERS and isinstance(value, (str, int, float, bool))
-              and len(str(value)) <= 7000 and (not isinstance(value, float) or math.isfinite(value))}
+              and len(str(value)) <= (MAX_GENERATION_PROMPT_CHARS if key == "prompt" else 7000)
+              and (not isinstance(value, float) or math.isfinite(value))}
     for canonical, aliases in (("model_id", ("model_id", "model")),
                                ("aspect_ratio", ("aspect_ratio", "ratio")),
                                ("duration", ("duration", "duration_sec", "seconds")),
@@ -42,7 +45,7 @@ def submitted_generation_params(body) -> dict:
                            if isinstance(item, dict) and item.get("type") == "text"
                            and isinstance(item.get("text"), str))
         if text:
-            params["prompt"] = text[:7000]
+            params["prompt"] = text[:MAX_GENERATION_PROMPT_CHARS]
     if isinstance(body, dict) and not params.get("prompt") and isinstance(body.get("input"), str):
         params["prompt"] = body["input"][:7000]
     return params

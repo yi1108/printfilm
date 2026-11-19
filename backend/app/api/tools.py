@@ -15,7 +15,7 @@ from app.deps import get_current_user
 from app.models import ToolRun, User
 from app.models_tasks import TaskRun
 from app.models_drama import DramaAsset, DramaProject
-from app.schemas_tools import ToolEstimateRequest, ToolReferenceAssetOut, ToolRunListOut, ToolRunOut, ToolRunRecordOut, ToolTaskOut, ToolTaskQueryOut, ToolTaskQueryRequest
+from app.schemas_tools import MAX_GENERATION_PROMPT_CHARS, ToolEstimateRequest, ToolReferenceAssetOut, ToolRunListOut, ToolRunOut, ToolRunRecordOut, ToolTaskOut, ToolTaskQueryOut, ToolTaskQueryRequest
 from app.services.billing import settle_deferred_video_poll
 from app.services.billing.http import http_exception_for_value_error
 from app.services.studio_generation import enqueue_generation, sync_generation_record, validate_generation
@@ -111,7 +111,7 @@ async def estimate_generation(
     response_description="已提交的工具生成记录",
 )
 async def run_tool(
-    tool_id: str = Form(..., max_length=16, description="工具标识：t2i 文生图、i2i 图生图、i2p 商品图、ecom 电商图片、t2v 文生视频、v2v 参考视频、audio 配音"), prompt: str = Form("", max_length=7000, description="生成提示词或音频朗读文本"),
+    tool_id: str = Form(..., max_length=16, description="工具标识：t2i 文生图、i2i 图生图、i2p 商品图、ecom 电商图片、t2v 文生视频、v2v 参考视频、audio 配音"), prompt: str = Form("", max_length=MAX_GENERATION_PROMPT_CHARS, description="生成提示词或音频朗读文本，具体上限按模型校验"),
     negative: str = Form("", max_length=2000, description="反向提示词，用于描述需要避免的内容"), ratio: str = Form("", max_length=16, description="输出画面比例，按所选模型支持的值填写"),
     strength: str = Form("", max_length=16, description="图生图参考相似度：低允许较大变化，高尽量保留参考图；其他值使用中等强度"), mode: str = Form("", max_length=32, description="商品图模式，如白底图、详情长图或场景图"),
     pack: str = Form("", max_length=32, description="电商图片组合方式：主图拼接、详情排版或卖点海报"), duration: str = Form("", max_length=16, description="生成视频的时长，如 5s；支持范围取决于所选模型"),

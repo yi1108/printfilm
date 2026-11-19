@@ -260,6 +260,7 @@ const StudioNodeView = memo(function StudioNodeView({ id, data, type, selected, 
         onAddRef={composer.onAddRef}
         mentions={composer.mentions}
         onMention={composer.onMention}
+        onPasteText={composer.onPasteText}
         modelId={composer.modelId}
         modelOptions={composer.modelOptions}
         onModelChange={composer.onModelChange}
