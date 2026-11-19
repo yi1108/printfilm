@@ -108,9 +108,14 @@ async def estimate_node(db, user, project_id, node, document, settings):
     else:
         from app.api.tools import estimate_generation
         from app.schemas_tools import ToolEstimateRequest
+        from app.printfilm_studio.integration.generation_inputs import character_voice_references, video_character_nodes
         incoming = {e['source'] for e in document['edges'] if e['target'] == node['id']}
         refs = [n for n in document['nodes'] if n['id'] in incoming and n.get('type') in {'character', 'scene', 'image', 'imageGeneration'}]
-        result = await estimate_generation(ToolEstimateRequest(**params, video_mode='omni_reference' if refs else 'text_to_video', references=[{'file_index': i, 'role': 'reference_image'} for i in range(len(refs))]), db, user)
+        roles = ['reference_image'] * len(refs)
+        if params.get('generate_audio') is not False:
+            voices = character_voice_references(video_character_nodes(document, node))
+            roles.extend('reference_audio' for _ in voices)
+        result = await estimate_generation(ToolEstimateRequest(**params, video_mode='omni_reference' if roles else 'text_to_video', references=[{'file_index': i, 'role': role} for i, role in enumerate(roles)]), db, user)
     return result['estimate_yuan']
 
 

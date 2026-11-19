@@ -72,7 +72,7 @@ import type { CanvasDocument } from './canvas/canvasCodec'
 import { ASSET_DRAG_TYPE, AssetLibraryPanel, assetMediaKind } from './canvas/AssetLibraryPanel'
 import { studioGenerationError } from './canvas/generationError'
 import { videoFileReferences, videoReferenceError, VIDEO_MODES, type StudioVideoMode, type MediaKind } from './canvas/generationReferences'
-import { storyVideoInputs, storyAssetPrompt } from './canvas/storyGenerationInputs'
+import { characterVoicePrompt, characterVoiceReferences, isCanvasCharacter, storyVideoInputs, storyAssetPrompt } from './canvas/storyGenerationInputs'
 import { applyProposal, type AgentProposal, type ProposalAction, type ProposalStates } from './agent/proposals'
 import { type BatchSettings, type BatchQuote } from './agent/batchGeneration'
 import { dependencyPlan, nodeResultReady, writingNode } from './agent/dependencyRun'
@@ -257,6 +257,8 @@ function PrintfilmStudioWorkspace() {
   const clipboardRef = useRef<GraphSnapshot | null>(null)
   const dragCopyRef = useRef<StudioDragCopy | null>(null)
   const uploadRef = useRef<HTMLInputElement | null>(null)
+  const voiceUploadRef = useRef<HTMLInputElement | null>(null)
+  const voiceUploadTarget = useRef<{ id: string } | null>(null)
   const commandRef = useRef<Record<string, () => void>>({})
   const keyboardBlockedRef = useRef(false)
   keyboardBlockedRef.current = viewMode !== 'canvas' || !!(tidyRun || previewUrl || compareNodeId || compositionNodeId || directorNodeId || mediaEdit || gridNodeId || analysisNodeId || imageTool || maskNodeId || recipeOpen || historyNodeId || inspectorOpen || historyOpen)
@@ -1080,11 +1082,11 @@ function PrintfilmStudioWorkspace() {
     if (resolved.startsWith('blob:') || resolved.startsWith('data:') || /^https?:\/\//i.test(resolved)) return resolved
     return new URL(resolved, window.location.origin).toString()
   }
-  const pushMediaFile = async (files: File[], url: string, name: string) => {
+  const pushMediaFile = async (files: File[], url: string, name: string, assetId?: number) => {
     const media = absoluteMediaUrl(url)
     if (!media) return
-    const blob = await readProjectMedia(media, projectId, assets.find((asset) => asset.url === media)?.id)
-    const ext = ({ 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov', 'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/mp4': 'm4a', 'audio/ogg': 'ogg' } as Record<string, string>)[blob.type.split(';')[0]] || (/\.(mp4|webm|mov|mp3|wav|m4a|ogg)(?:[?#]|$)/i.exec(media)?.[1]) || 'jpg'
+    const blob = await readProjectMedia(media, projectId, assetId ?? assets.find((asset) => asset.url === media)?.id)
+    const ext = ({ 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov', 'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/mp4': 'm4a', 'audio/ogg': 'ogg' } as Record<string, string>)[blob.type.split(';')[0]] || (/\.(mp4|webm|mov|mp3|wav|m4a|ogg|aac|flac)(?:[?#]|$)/i.exec(media)?.[1]) || 'jpg'
     const filename = name.includes('.') ? name : `${name}.${ext}`
     files.push(new File([blob], filename, { type: blob.type || 'image/jpeg' }))
   }
@@ -1131,6 +1133,9 @@ function PrintfilmStudioWorkspace() {
       const files: File[] = []
       const kinds: MediaKind[] = []
       const uploadedImages: { nodeId: string; assetId?: string }[] = []
+      const audioNumbers = new globalThis.Map<number, number>()
+      let audioCount = 0
+      const mediaNodes = [...(source ? [source] : []), ...linkedRefs.filter((node) => !hiddenRefIds.includes(node.id))]
       const isVideoAction = action === 'video' || action === 'reference'
       const requestRatio = outputRatio === 'auto' ? (isVideoAction ? '16:9' : '2:3') : outputRatio
       if (isVideoAction && source) assertWritingParameters(nodesRef.current.find(node=>node.id===source.data.promptNodeId),{id:source.id,label:String(source.data.label || ''),kind:'video',model:genModel,ratio:requestRatio,duration:outputDuration})
@@ -1141,7 +1146,7 @@ function PrintfilmStudioWorkspace() {
         await pushMediaFile(files, reference.url, `ref-${reference.node.id}`)
         kinds.push('image')
       }
-      if (!storyInputs && action !== 'audio') for (const node of [...(source ? [source] : []), ...linkedRefs.filter((node) => !hiddenRefIds.includes(node.id))]) {
+      if (!storyInputs && action !== 'audio') for (const node of mediaNodes) {
         if (inpaint && (node.id === source?.id || mediaOf(node) === inpaint.originalUrl)) continue
         const media = mediaOf(node)
         if (!media) continue
@@ -1153,8 +1158,32 @@ function PrintfilmStudioWorkspace() {
         if (files.length === fileCount) continue
         kinds.push(kind)
         if (kind === 'image') uploadedImages.push({ nodeId: node.id, assetId: node.data.assetId == null ? undefined : String(node.data.assetId) })
+        if (kind === 'audio') {
+          audioCount += 1
+          if (typeof node.data.assetId === 'number' && !audioNumbers.has(node.data.assetId)) audioNumbers.set(node.data.assetId, audioCount)
+        }
       }
-      if (isVideoAction) { const mode = storyInputs?.mode || outputVideoMode || (action === 'reference' && kinds.length ? 'omni_reference' : kinds.length === 1 && kinds[0] === 'image' ? 'image_to_video' : videoFileReferences(kinds).mode); const error = videoReferenceError(kinds, mode, catalogVideoModels(mediaCatalog).find((model) => model.id === genModel)?.reference_limits); if (error) throw new Error(error) }
+      const voiceDirections: string[] = []
+      if (isVideoAction && outputAudio !== false) {
+        const roleNodes = storyInputs ? storyInputs.references.map(({ node }) => node) : mediaNodes
+        for (const { assetId, labels } of characterVoiceReferences(roleNodes)) {
+          let audioNumber = audioNumbers.get(assetId)
+          if (audioNumber === undefined) {
+            const asset = assets.find((item) => item.id === assetId && assetMediaKind(item) === 'audio')
+            if (!asset?.url) throw new Error(`「${labels.join('、')}」的参考音频已不可用，请重新绑定`)
+            await pushMediaFile(files, asset.url, `voice-${assetId}`, assetId)
+            kinds.push('audio')
+            audioNumber = ++audioCount
+          }
+          voiceDirections.push(characterVoicePrompt(labels, audioNumber))
+        }
+      }
+      if (isVideoAction) {
+        const mode = storyInputs?.mode || outputVideoMode || (action === 'reference' && kinds.length ? 'omni_reference' : kinds.length === 1 && kinds[0] === 'image' ? 'image_to_video' : videoFileReferences(kinds).mode)
+        if (voiceDirections.length && mode !== 'omni_reference') throw new Error('角色参考音频需要全能参考模式')
+        const error = videoReferenceError(kinds, mode, catalogVideoModels(mediaCatalog).find((model) => model.id === genModel)?.reference_limits)
+        if (error) throw new Error(error)
+      }
       const videoRefs = videoFileReferences(kinds, action === 'reference', storyInputs?.mode || outputVideoMode)
       const references: ToolReferenceInput[] = videoRefs.references
       const isImageEdit = action === 'edit' || action === 'inpaint' || action === 'outpaint'
@@ -1163,7 +1192,7 @@ function PrintfilmStudioWorkspace() {
       const providerPrompt = storyInputs?.providerPrompt ?? (isVideoAction && videoMode === 'omni_reference'
         ? bindUploadedImageMentions(userPrompt, uploadedImages)
         : plainPrompt(userPrompt))
-      const rawMessage = referenceText ? `${providerPrompt}\n\n参考脚本：\n${referenceText}` : providerPrompt
+      const rawMessage = [providerPrompt, referenceText && `参考脚本：\n${referenceText}`, voiceDirections.join('\n')].filter(Boolean).join('\n\n')
       const message = isVideoAction ? videoPromptAudio(rawMessage, genModel) : rawMessage
       let priceVersion: number | undefined
       if (toolId === 't2v') {
@@ -1257,6 +1286,22 @@ function PrintfilmStudioWorkspace() {
     removeIds(chosenIds())
     setStatus('已剪切')
   }
+  const uploadCharacterVoice = async (target: { id: string }, file: File) => {
+    const { id } = target
+    if (!canEdit || !isCanvasCharacter(nodesRef.current.find((node) => node.id === id))) return
+    try {
+      if (!/\.(mp3|wav|m4a|aac|ogg)$/i.test(file.name) || !file.size || file.size > 30 * 1024 * 1024) {
+        throw new Error('请选择不超过 30 MB 的 MP3、WAV、M4A、AAC 或 OGG 音频')
+      }
+      const asset = await printfilmStudioApi.uploadAsset(projectId, file, editLockRequestHeaders(canvasTarget))
+      if (!mountedRef.current || !canEditRef.current || voiceUploadTarget.current !== target || !isCanvasCharacter(nodesRef.current.find((node) => node.id === id))) return
+      if (assetMediaKind(asset) !== 'audio' || !asset.url) throw new Error('素材未识别为音频')
+      setAssets((current) => [asset, ...current.filter((item) => item.id !== asset.id)])
+      commitGraph(updateStudioNode(nodesRef.current, id, { voiceReferenceAssetId: asset.id }) as Node<Data>[], edgesRef.current, `已绑定参考音频「${asset.name || file.name}」`)
+    } catch (error) {
+      if (mountedRef.current && voiceUploadTarget.current === target) setStatus(error instanceof Error ? error.message : '参考音频上传失败')
+    }
+  }
   const runMenuAction = (id: string) => {
     if (id === 'disconnect' && contextMenu?.kind === 'edge') {
       if (canEdit) {const next=disconnectStudioEdge(nodesRef.current,edgesRef.current,contextMenu.id);commitGraph(next.nodes as Node<Data>[],next.edges,'已断开连线')}
@@ -1264,6 +1309,14 @@ function PrintfilmStudioWorkspace() {
     }
     if (!canEdit && !['copy', 'share', 'ask_agent'].includes(id)) return
     const targetId = contextMenu?.id || selectedNodeId
+    if (id === 'bind_voice' && targetId) {
+      voiceUploadTarget.current = { id: targetId }
+      voiceUploadRef.current?.click()
+    }
+    if (id === 'remove_voice' && targetId) {
+      if (voiceUploadTarget.current?.id === targetId) voiceUploadTarget.current = null
+      commitGraph(updateStudioNode(nodesRef.current, targetId, { voiceReferenceAssetId: undefined }) as Node<Data>[], edgesRef.current, '已移除角色参考音频')
+    }
     if (id === 'run_here' && targetId) {
       openDependencyRun([targetId])
     }
@@ -1608,7 +1661,13 @@ function PrintfilmStudioWorkspace() {
       setContextMenu(null); setPaneAddMenu(pointer ? nodeMenuPosition(pointer, { width: window.innerWidth, height: window.innerHeight }) : { left: Math.max(12, Math.min(rect.left + rect.width / 2 - 150, window.innerWidth - 320)), top: Math.max(12, Math.min(rect.top + rect.height / 2 - 240, window.innerHeight - 510)) })
     },
   }
+  const menuNode = nodes.find((node) => node.id === (contextMenu?.id || selectedNodeId))
+  const hasVoice = !!menuNode?.data.voiceReferenceAssetId
   const menuActions = contextMenu?.kind === 'edge' ? [{ id: 'disconnect', label: '断开连线', disabled: !canEdit, danger: true }] : [
+    ...(isCanvasCharacter(menuNode) ? [
+      { id: 'bind_voice', label: hasVoice ? '更换角色参考音频' : '绑定角色参考音频', disabled: !canEdit },
+      ...(hasVoice ? [{ id: 'remove_voice', label: '移除角色参考音频', disabled: !canEdit }] : []),
+    ] : []),
     { id: 'run_here', label: '运行到这里', disabled: !canEdit },
     { id: 'recipe', label: '保存为配方', disabled: !canEdit },
     { id: 'share', label: '复制工作区链接' },
@@ -1641,14 +1700,27 @@ function PrintfilmStudioWorkspace() {
     if (!resolutions.length) return
     setImageResolution((current) => resolutions.includes(current) ? current : (model?.defaults?.resolution && resolutions.includes(model.defaults.resolution) ? model.defaults.resolution : resolutions[0]))
   }, [genModel, isVideoComposer, mediaCatalog, selectionAction])
-  const quoteKinds = JSON.stringify([...(selectedNode && selectedNode.data.storyKind !== 'shot_video' && mediaOf(selectedNode) ? [selectedNode] : []), ...linkedRefs.filter((node) => !hiddenRefIds.includes(node.id))].map(nodeMediaKind).filter((kind) => kind !== 'text'))
+  let storyReferences: ReturnType<typeof storyVideoInputs>
+  let storyValidation: string | undefined
+  try { storyReferences = storyVideoInputs(selectedNode, nodes, edges) }
+  catch (error) { storyValidation = error instanceof Error ? error.message : '分镜参考不完整' }
+  const quoteNodes = storyReferences?.references.map(({ node }) => node) ?? [
+    ...(selectedNode && selectedNode.data.storyKind !== 'shot_video' && mediaOf(selectedNode) ? [selectedNode] : []),
+    ...linkedRefs.filter((node) => !hiddenRefIds.includes(node.id)),
+  ]
+  const manuallyQuotedAudio = new Set(quoteNodes.filter((node) => nodeMediaKind(node) === 'audio').map((node) => node.data.assetId))
+  const quoteVoices = isVideoComposer && outputAudio !== false ? characterVoiceReferences(quoteNodes) : []
+  const quoteKinds = JSON.stringify([
+    ...quoteNodes.map(nodeMediaKind).filter((kind) => kind !== 'text'),
+    ...quoteVoices.filter(({ assetId }) => !manuallyQuotedAudio.has(assetId)).map(() => 'audio'),
+  ])
   const selectedGenerationModel = (isVideoComposer ? catalogVideoModels(mediaCatalog) : catalogImageModels(mediaCatalog)).find((model) => model.id === genModel)
   const referenceKinds = JSON.parse(quoteKinds) as MediaKind[]
   const effectiveVideoMode: StudioVideoMode = selectedNode?.data.storyKind === 'shot_video' ? 'omni_reference' : outputVideoMode || (selectionAction === 'reference' && referenceKinds.length ? 'omni_reference' : referenceKinds.length === 1 && referenceKinds[0] === 'image' ? 'image_to_video' : videoFileReferences(referenceKinds).mode)
-  const storyValidation = (() => { try { storyVideoInputs(selectedNode, nodes, edges); return undefined } catch (error) { return error instanceof Error ? error.message : '分镜参考不完整' } })()
   const pendingReference=linkedRefs.find(node=>!hiddenRefIds.includes(node.id) && referenceState(node))
   const referenceValidation=pendingReference ? `关联节点「${pendingReference.data.label || '参考节点'}」${referenceState(pendingReference)}，完成后再生成` : undefined
-  const videoValidation = isVideoComposer && selectionAction !== 'compose' ? storyValidation || videoReferenceError(referenceKinds, effectiveVideoMode, selectedGenerationModel?.reference_limits) : undefined
+  const voiceValidation = quoteVoices.length && effectiveVideoMode !== 'omni_reference' ? '角色参考音频需要全能参考模式' : undefined
+  const videoValidation = isVideoComposer && selectionAction !== 'compose' ? storyValidation || voiceValidation || videoReferenceError(referenceKinds, effectiveVideoMode, selectedGenerationModel?.reference_limits) : undefined
   useEffect(() => {
     if (!composerOpen || !selectionAction || selectionAction === 'crop') { setEstimateText('预计消耗 —'); return }
     if (selectionAction === 'compose') { setEstimateText('本地合成 · 无模型费用'); return }
@@ -1871,6 +1943,12 @@ function PrintfilmStudioWorkspace() {
         commitGraph(doc.nodes as Node<Data>[], doc.edges as Edge[], '画布已导入，正在保存')
         setViewport(doc.viewport); setFlowKey((key) => key + 1)
       } catch (error) { setStatus(error instanceof Error ? error.message : '画布导入失败') }
+    }} />
+    <input ref={voiceUploadRef} className="pf-upload-input" type="file" accept=".mp3,.wav,.m4a,.aac,.ogg" aria-label="上传角色参考音频" onChange={(event) => {
+      const file = event.target.files?.[0]
+      const target = voiceUploadTarget.current
+      if (target && file) void uploadCharacterVoice(target, file)
+      event.target.value = ''
     }} />
     <input ref={uploadRef} className="pf-upload-input" type="file" accept="image/*,video/*,audio/*" multiple onChange={(event) => { const files = event.target.files; const replacement = replaceTargetRef.current; replaceTargetRef.current = null; if (replacement && files?.length) { void uploadOntoNode(replacement, files); event.target.value = ''; return }; const target = selectedNodeId ? nodesRef.current.find((node) => node.id === selectedNodeId) : undefined; const empty = target && !(target.data.mediaUrl || target.data.url || target.data.cover) && (target.type === 'image' || target.type === 'video' || target.type === 'audio' || target.type === 'asset' || target.type === 'inpaint' || target.type === 'outpaint' || target.type === 'upscale'); if (empty && selectedNodeId) void uploadOntoNode(selectedNodeId, files); else void uploadFiles(files); event.target.value = '' }} />
     <WorkspaceChrome dockWidth={agentOpen ? agentDockWidth : 0} title={projectTitle || `项目 #${projectId || '—'}`} status={savingRef.current ? '保存中…' : saveBlockedRef.current ? '保存冲突' : dirtyRef.current ? '待保存' : !canvasReady ? '加载中…' : '已保存'} balance={points(wallet?.balance_fen)} mode={viewMode} onMode={setViewMode} onAction={workspaceAction} />

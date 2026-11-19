@@ -7,7 +7,7 @@ import react from '@vitejs/plugin-react'
 
 // Mount the actual workspace/menu/React Flow, with deterministic DOM measurements.
 // All HTTP is mocked: this test never reads or writes a real user's project.
-test('connected writing populates an empty video composer and its generation request', async () => {
+test('connected writing and the saved character voice reach both video requests', async () => {
   const dom = new JSDOM('<style>.react-flow__pane{z-index:1}</style><div id="root"></div>', { url: 'http://localhost/drama/projects/361/printfilm-studio', pretendToBeVisual: true })
   const previous = new Map()
   const install = (name, value) => { previous.set(name, Object.getOwnPropertyDescriptor(globalThis, name)); Object.defineProperty(globalThis, name, { configurable: true, writable: true, value }) }
@@ -41,6 +41,7 @@ test('connected writing populates an empty video composer and its generation req
   dom.window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} })
   localStorage.setItem('token', 'unit-test-token')
   const generationBodies = []
+  const assets = []
   let stored = { version: 1, document: { toonflowCanvas: true, version: 1, nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } } }
   install('fetch', async (input, init) => {
     const path = new URL(String(input), dom.window.location.origin).pathname
@@ -56,7 +57,14 @@ test('connected writing populates an empty video composer and its generation req
     else if (path.endsWith('/workflow')) data = { ...stored, run: null }
     else if (path.endsWith('/agent/sessions')) data = { sessions: [] }
     else if (path.endsWith('/agent/config')) data = { models: [], tools: [] }
-    else if (path.endsWith('/canvas/assets')) data = { assets: [] }
+    else if (path.endsWith('/canvas/assets')) data = { assets }
+    else if (path.endsWith('/canvas/assets/upload')) {
+      assert.equal(init.body.get('file').name, 'voice.wav')
+      data = { id: 42, asset_type: 'audio', name: 'voice.wav', url: '/voice.wav' }
+      assets.push(data)
+    }
+    else if (path.endsWith('/media/assets/42')) return new Response('shared voice bytes', { headers: { 'content-type': 'audio/wav' } })
+    else if (path.endsWith('/media/source')) return new Response('image bytes', { headers: { 'content-type': 'image/png' } })
     else if (path.includes('media-models')) data = { image_models: [], video_models: [], defaults: {} }
     else if (path.includes('wallet')) data = { balance_yuan: 0 }
     else if (path === '/api/tools/estimate') data = { estimate_fen: 588, price_version: 1 }
@@ -83,9 +91,17 @@ test('connected writing populates an empty video composer and its generation req
     stored.document.nodes = [
       {id:'writing',type:'text',position:{x:0,y:0},data:{label:'新文本',text:'16:9 横幅，7 秒，动漫舞者在飞机客舱跳舞。'}},
       {id:'video',type:'video',position:{x:450,y:0},data:{label:'新视频',editor:'video',modelId:'seedance-2.0',ratio:'16:9',duration:'7',resolution:'480p'}},
+      {id:'other',type:'video',position:{x:450,y:260},data:{label:'第二镜',editor:'video',modelId:'seedance-2.0',ratio:'16:9',duration:'7',resolution:'480p'}},
+      {id:'role',type:'character',position:{x:0,y:240},data:{label:'舞者',mediaType:'image',mediaUrl:'/role.png'}},
     ]
-    stored.document.edges = [{id:'writing-video',source:'writing',target:'video'}]
+    stored.document.edges = ['video', 'other'].flatMap(target => ['writing', 'role'].map(source => ({ id: `${source}-${target}`, source, target })))
     await mount()
+    await act(async () => document.querySelector('.react-flow__node[data-id="role"]').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })))
+    await click([...document.querySelectorAll('button')].find(button => button.textContent.includes('绑定角色参考音频')))
+    const voiceInput = document.querySelector('input[aria-label="上传角色参考音频"]')
+    Object.defineProperty(voiceInput, 'files', { value: [new File(['shared voice bytes'], 'voice.wav', { type: 'audio/wav' })] })
+    await act(async () => voiceInput.dispatchEvent(new Event('change', { bubbles: true })))
+    await settle(100)
     const video = document.querySelector('.react-flow__node[data-id="video"]')
     await click(video)
     const input = video.querySelector('[aria-label="生成描述"]')
@@ -94,10 +110,25 @@ test('connected writing populates an empty video composer and its generation req
     assert.equal(generationBodies.length, 0, 'opening a node does not create a paid task')
     await click(video.querySelector('[aria-label="生成"]'))
     await settle(120)
-    assert.equal(generationBodies.length, 1)
+    assert.equal(generationBodies.length, 1, video.textContent)
     assert.equal(generationBodies[0].get('tool_id'), 't2v')
     assert.match(generationBodies[0].get('prompt'), /动漫舞者在飞机客舱跳舞/)
     assert.equal(generationBodies[0].get('node_id'), 'video')
+    const other = document.querySelector('.react-flow__node[data-id="other"]')
+    await click(other)
+    await click(other.querySelector('[aria-label="生成"]'))
+    await settle(120)
+    assert.equal(generationBodies.length, 2)
+    assert.equal(stored.document.nodes.find(node => node.id === 'role').data.voiceReferenceAssetId, 42)
+    for (const body of generationBodies) {
+      assert.equal(body.get('video_mode'), 'omni_reference')
+      assert.match(body.get('prompt'), /@音频1：仅用于舞者的对白音色/)
+      assert.deepEqual(JSON.parse(body.get('references')), [
+        { file_index: 0, role: 'reference_image' },
+        { file_index: 1, role: 'reference_audio' },
+      ])
+      assert.equal(await body.getAll('files')[1].text(), 'shared voice bytes')
+    }
     await settle(1350) // Flush autosave and React Flow's deferred layout before teardown.
   } finally {
     if (root) { const { act } = await import('react'); await act(async () => root.unmount()) }

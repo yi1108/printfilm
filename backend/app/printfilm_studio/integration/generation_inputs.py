@@ -80,7 +80,32 @@ def story_video_inputs(document, source):
     return {'prompt': prompt, 'provider_prompt': provider_prompt, 'references': references}
 
 
-async def prepare_inputs(canvas, kind, document, source, asset_ids):
+def video_character_nodes(document, source):
+    if not source:
+        return []
+    data = source['data']
+    incoming = {edge['source'] for edge in document['edges'] if edge['target'] == source['id']}
+    if data.get('storyKind') == 'shot_video':
+        by_id = {node['id']: node for node in document['nodes']}
+        ids = data.get('referenceNodeIds')
+        return [by_id[ref] for ref in ids if isinstance(ref, str) and ref in incoming and ref in by_id] if isinstance(ids, list) else []
+    return [source, *(node for node in document['nodes'] if node['id'] in incoming)]
+
+
+def character_voice_references(nodes):
+    references = {}
+    for node in nodes:
+        data = node['data']
+        asset_id = data.get('voiceReferenceAssetId')
+        if (node.get('type') == 'character' or data.get('storyKind') == 'character') and type(asset_id) is int and asset_id > 0:
+            label = str(data.get('label') or '角色')
+            labels = references.setdefault(asset_id, [])
+            if label not in labels:
+                labels.append(label)
+    return references
+
+
+async def prepare_inputs(canvas, kind, document, source, asset_ids, *, generate_audio=None):
     ids = list(asset_ids or [])
     if any(type(value) is not int for value in ids):
         raise ValueError('reference_asset_ids 必须为素材 ID 数组')
@@ -112,11 +137,15 @@ async def prepare_inputs(canvas, kind, document, source, asset_ids):
                 ids.append(data['assetId'])
             elif (data.get('mediaUrl') or data.get('url')) and not data.get('assetId'):
                 raise ValueError('参考节点未绑定项目素材，请先将媒体添加到项目素材库')
+    voices = character_voice_references(video_character_nodes(document, source)) if kind == 'video' and generate_audio is not False else {}
+    ids.extend(asset_id for asset_id in voices if asset_id not in ids)
     if not ids: return [], {}
     if len(ids) > 12 or kind == 'audio':
         raise ValueError('最多 12 项参考素材；语音生成仅接收文本')
     assets = (await canvas.db.scalars(select(DramaAsset).where(DramaAsset.project_id == canvas.project.id, DramaAsset.id.in_(ids)))).all()
     by_id = {asset.id: asset for asset in assets}
+    if any(asset_id not in by_id or by_id[asset_id].asset_type != 'audio' or not by_id[asset_id].url for asset_id in voices):
+        raise ValueError('角色参考音频已不可用，请重新绑定当前项目的音频')
     if set(ids) != set(by_id): raise ValueError('参考素材不属于当前项目')
     kinds = [by_id[value].asset_type if by_id[value].asset_type in {'audio', 'video'} else 'image' for value in ids]
     if kind == 'image' and any(value != 'image' for value in kinds):
@@ -138,6 +167,12 @@ async def prepare_inputs(canvas, kind, document, source, asset_ids):
             frames = not story and len(kinds) <= 2 and all(value == 'image' for value in kinds)
             refs = [{'file_index': index, 'role': ('first_frame' if index == 0 else 'last_frame') if frames else f'reference_{value}'} for index, value in enumerate(kinds)]
             params = {'video_mode': 'first_last_frame' if frames else 'omni_reference', 'references': refs, **await reference_params(canvas.db, canvas.user, refs, files=saved)}
+            if voices:
+                audio_ids = [asset_id for asset_id, media_kind in zip(ids, kinds) if media_kind == 'audio']
+                params['_character_voice_directions'] = [
+                    f'@音频{audio_ids.index(asset_id) + 1}：仅用于{"、".join(labels)}的对白音色，台词以本镜指定文本为准。'
+                    for asset_id, labels in voices.items()
+                ]
         return saved, params
     except BaseException:
         for path in saved: path.unlink(missing_ok=True)

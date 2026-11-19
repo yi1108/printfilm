@@ -55,7 +55,10 @@ async def create_media_task(canvas, kind: str, prompt: str, **options: Any) -> d
             options['ratio'] = '16:9'
         writer = next((n for n in document['nodes'] if n['id'] == source['data'].get('promptNodeId')), None)
         assert_video_binding(writer, source, options)
-    files, reference_options = await prepare_inputs(canvas, kind, document, source, options.pop('reference_asset_ids', None))
+    files, reference_options = await prepare_inputs(
+        canvas, kind, document, source, options.pop('reference_asset_ids', None), generate_audio=options.get('generate_audio'),
+    )
+    voice_directions = reference_options.pop('_character_voice_directions', [])
     if kind == 'image' and files:
         tool_id = 'i2i'
     if 'count' in options:
@@ -69,6 +72,8 @@ async def create_media_task(canvas, kind: str, prompt: str, **options: Any) -> d
         request_prompt = story['provider_prompt'] if story else re.sub(r'@\[([^\]]*)\]\((?:node|asset):[^)]*\)', lambda m: '@' + unquote(m[1]), prompt)
         if kind == 'video':
             from app.printfilm_studio.video_prompt_audio import video_prompt_audio
+            if voice_directions:
+                request_prompt += '\n\n' + '\n'.join(voice_directions)
             request_prompt = video_prompt_audio(request_prompt, options.get('model_id'))
         result = await enqueue_generation(canvas.db, canvas.user, tool_id=tool_id, prompt=request_prompt,
             params=media_task_payload(kind, request_prompt, **options), files=files, drama_project_id=getattr(canvas.project, 'id', None))
