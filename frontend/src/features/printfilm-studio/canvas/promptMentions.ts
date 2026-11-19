@@ -27,6 +27,15 @@ export function splitPrompt(value: string): ({ text: string } | { token: string;
 }
 export function plainPrompt(value: string) { return splitPrompt(value).map((part) => 'text' in part ? part.text : `@${part.reference.label}`).join('') }
 
+export function bindUploadedImageMentions(value: string, images: readonly { nodeId: string; assetId?: string }[]) {
+  return splitPrompt(value).map((part) => {
+    if ('text' in part) return part.text
+    const { source, id, label } = part.reference
+    const index = images.findIndex(image => (source === 'node' ? image.nodeId : image.assetId) === id)
+    return index >= 0 ? `@图片${index + 1}` : `@${label}`
+  }).join('')
+}
+
 /** Keep stable reference IDs in storage, never serialize thumbnail URLs into the prompt. */
 export function readPromptDom(root: Node): string {
   if (root.nodeType === 3) return root.textContent || ''

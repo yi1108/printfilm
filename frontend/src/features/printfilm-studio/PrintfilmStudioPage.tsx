@@ -13,7 +13,7 @@ import { writingContext, writingDependents, writingInputSignature, createWriting
 import { connectedGenerationPrompt } from './canvas/generationPrompt'
 import { WritingRunStore } from './canvas/WritingRunStore'
 import { nodeDraft } from './canvas/nodeDraft'
-import { plainPrompt, type PromptReference } from './canvas/promptMentions'
+import { bindUploadedImageMentions, plainPrompt, type PromptReference } from './canvas/promptMentions'
 import { videoPromptAudio } from './canvas/videoPromptAudio'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react'
 import { createPortal } from 'react-dom'
@@ -1125,13 +1125,12 @@ function PrintfilmStudioWorkspace() {
     catch (error) { setGenerationRunning(false); reportError(error instanceof Error ? error.message : '分镜参考不完整'); return }
     const userPrompt = storyInputs?.prompt || assetPrompt || liveComposerPrompt.trim()
     const referenceText = storyInputs || assetPrompt || linkedPromptNode || !genPrompt.trim() ? '' : linkedRefs.filter((node) => nodeMediaKind(node) === 'text' && !hiddenRefIds.includes(node.id)).map((node) => `${node.data.label || '参考文本'}：${node.data.text || ''}`).join('\n').slice(0, 6000)
-    const rawMessage = storyInputs?.providerPrompt || (referenceText ? `${plainPrompt(userPrompt)}\n\n参考脚本：\n${referenceText}` : plainPrompt(userPrompt))
-    const message = action === 'video' || action === 'reference' ? videoPromptAudio(rawMessage,genModel) : rawMessage
     if (!userPrompt) { setGenerationRunning(false); return }
     setStatus('正在提交生成任务…')
     try {
       const files: File[] = []
       const kinds: MediaKind[] = []
+      const uploadedImages: { nodeId: string; assetId?: string }[] = []
       const isVideoAction = action === 'video' || action === 'reference'
       const requestRatio = outputRatio === 'auto' ? (isVideoAction ? '16:9' : '2:3') : outputRatio
       if (isVideoAction && source) assertWritingParameters(nodesRef.current.find(node=>node.id===source.data.promptNodeId),{id:source.id,label:String(source.data.label || ''),kind:'video',model:genModel,ratio:requestRatio,duration:outputDuration})
@@ -1149,8 +1148,11 @@ function PrintfilmStudioWorkspace() {
         const kind = nodeMediaKind(node)
         if (kind === 'text') continue
         if (!isVideoAction && kind !== 'image') throw new Error('图片编辑仅支持图片参考，请移除音视频参考')
+        const fileCount = files.length
         await pushMediaFile(files, media, `ref-${node.id}`)
+        if (files.length === fileCount) continue
         kinds.push(kind)
+        if (kind === 'image') uploadedImages.push({ nodeId: node.id, assetId: node.data.assetId == null ? undefined : String(node.data.assetId) })
       }
       if (isVideoAction) { const mode = storyInputs?.mode || outputVideoMode || (action === 'reference' && kinds.length ? 'omni_reference' : kinds.length === 1 && kinds[0] === 'image' ? 'image_to_video' : videoFileReferences(kinds).mode); const error = videoReferenceError(kinds, mode, catalogVideoModels(mediaCatalog).find((model) => model.id === genModel)?.reference_limits); if (error) throw new Error(error) }
       const videoRefs = videoFileReferences(kinds, action === 'reference', storyInputs?.mode || outputVideoMode)
@@ -1158,6 +1160,11 @@ function PrintfilmStudioWorkspace() {
       const isImageEdit = action === 'edit' || action === 'inpaint' || action === 'outpaint'
       const toolId = action === 'audio' ? 'audio' : isImageEdit ? (files.length || references.length ? 'i2i' : 't2i') : 't2v'
       const videoMode = videoRefs.mode
+      const providerPrompt = storyInputs?.providerPrompt ?? (isVideoAction && videoMode === 'omni_reference'
+        ? bindUploadedImageMentions(userPrompt, uploadedImages)
+        : plainPrompt(userPrompt))
+      const rawMessage = referenceText ? `${providerPrompt}\n\n参考脚本：\n${referenceText}` : providerPrompt
+      const message = isVideoAction ? videoPromptAudio(rawMessage, genModel) : rawMessage
       let priceVersion: number | undefined
       if (toolId === 't2v') {
         const quote = await estimateStudioTool({ tool_id: 't2v', model_id: genModel, generate_audio: outputAudio, resolution: outputResolution, ratio: requestRatio, duration: outputDuration, video_mode: videoMode, references })
