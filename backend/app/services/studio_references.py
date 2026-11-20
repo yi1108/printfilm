@@ -74,21 +74,30 @@ def personal_asset_filters(user_id: int):
             func.trim(func.coalesce(asset_url_expression(), "")) != "")
 
 
-async def reference_params(db, user, refs: list[dict], *, files: list[Path] | None = None) -> dict:
+async def reference_params(db, user, refs: list[dict], *, files: list[Path] | None = None, project_id: int | None = None) -> dict:
     """Resolve only authorized server-owned URLs; placeholder uploads support price estimation."""
     params: dict = {}
+    asset_ids = {ref["asset_id"] for ref in refs if "asset_id" in ref}
+    assets = {}
+    if asset_ids:
+        # A project identity can only come from the canvas route's write-access dependency.
+        scope = (DramaAsset.project_id == project_id,) if project_id is not None else personal_asset_filters(user.id)
+        rows = await db.execute(select(DramaAsset, asset_kind_expression()).join(
+            DramaProject, DramaProject.id == DramaAsset.project_id
+        ).where(DramaAsset.id.in_(asset_ids), *scope))
+        assets = {asset.id: (asset, kind) for asset, kind in rows}
     for ref in refs:
         role = ref["role"]
         if "asset_id" in ref:
-            result = (await db.execute(select(DramaAsset, asset_kind_expression()).join(
-                DramaProject, DramaProject.id == DramaAsset.project_id
-            ).where(DramaAsset.id == ref["asset_id"], *personal_asset_filters(user.id)))).first()
+            result = assets.get(ref["asset_id"])
             if result is None:
                 raise ValueError("references: 资产不存在或无权访问")
             asset, kind = result
             if kind != ROLE_KIND[role]:
                 raise ValueError("references: 资产媒体类型与参考位置不匹配")
             url = (asset.url or asset.cover) if kind == "image" else asset.url
+            if not url or not url.strip():
+                raise ValueError("references: 资产缺少可用的媒体文件")
         else:
             index = ref["file_index"]
             url = str(files[index]) if files is not None else f"pending://upload/{index}"

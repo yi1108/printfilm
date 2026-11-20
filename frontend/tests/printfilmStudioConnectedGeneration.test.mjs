@@ -41,7 +41,10 @@ test('connected writing and the saved character voice reach both video requests'
   dom.window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} })
   localStorage.setItem('token', 'unit-test-token')
   const generationBodies = []
-  const assets = [{ id: 7, asset_type: 'image', name: '祭台夜景.png', url: '/altar.png' }]
+  const assets = [
+    { id: 7, asset_type: 'image', name: '祭台夜景.png', url: '/altar.png' },
+    { id: 8, asset_type: 'image', name: '舞者', url: '/role.png' },
+  ]
   let stored = { version: 1, document: { toonflowCanvas: true, version: 1, nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } } }
   install('fetch', async (input, init) => {
     const path = new URL(String(input), dom.window.location.origin).pathname
@@ -63,8 +66,6 @@ test('connected writing and the saved character voice reach both video requests'
       data = { id: 42, asset_type: 'audio', name: 'voice.wav', url: '/voice.wav' }
       assets.push(data)
     }
-    else if (path.endsWith('/media/assets/42')) return new Response('shared voice bytes', { headers: { 'content-type': 'audio/wav' } })
-    else if (path.endsWith('/media/source')) return new Response('image bytes', { headers: { 'content-type': 'image/png' } })
     else if (path.includes('media-models')) data = { image_models: [], video_models: [], defaults: {} }
     else if (path.includes('wallet')) data = { balance_yuan: 0 }
     else if (path === '/api/tools/estimate') data = { estimate_fen: 588, price_version: 1 }
@@ -144,10 +145,10 @@ test('connected writing and the saved character voice reach both video requests'
       assert.match(body.get('prompt'), /@图片1抬头/)
       assert.match(body.get('prompt'), /@音频1：仅用于舞者的对白音色/)
       assert.deepEqual(JSON.parse(body.get('references')), [
-        { file_index: 0, role: 'reference_image' },
-        { file_index: 1, role: 'reference_audio' },
+        { asset_id: 8, role: 'reference_image' },
+        { asset_id: 42, role: 'reference_audio' },
       ])
-      assert.equal(await body.getAll('files')[1].text(), 'shared voice bytes')
+      assert.equal(body.getAll('files').length, 0)
     }
     const writer = document.querySelector('.react-flow__node[data-id="writing"]')
     await click(writer)

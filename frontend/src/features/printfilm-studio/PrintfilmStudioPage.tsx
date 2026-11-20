@@ -1132,10 +1132,33 @@ function PrintfilmStudioWorkspace() {
     try {
       const files: File[] = []
       const kinds: MediaKind[] = []
+      const isVideoAction = action === 'video' || action === 'reference'
+      const videoSources: ({ asset_id: number } | { file_index: number })[] = []
+      const referencedUrls = new Set<string>()
+      const addReference = async (node: { id: string; data: Data }, url: string, kind: MediaKind) => {
+        const absolute = absoluteMediaUrl(url)
+        if (!absolute) return false
+        if (isVideoAction && !referencedUrls.has(absolute)) {
+          const matches = (asset: ProjectAsset) => assetMediaKind(asset) === kind
+            && absoluteMediaUrl(String(kind === 'image' ? asset.url || asset.cover || '' : asset.url || '')) === absolute
+          const asset = assets.find(item => item.id === node.data.assetId && matches(item)) ?? assets.find(matches)
+          if (asset) {
+            videoSources.push({ asset_id: asset.id })
+            referencedUrls.add(absolute)
+            kinds.push(kind)
+            return true
+          }
+        }
+        const index = files.length
+        await pushMediaFile(files, url, `ref-${node.id}`)
+        if (files.length === index) return false
+        if (isVideoAction) videoSources.push({ file_index: index })
+        kinds.push(kind)
+        return true
+      }
       const uploadedImages: { nodeId: string; assetId?: string }[] = []
       const audioNumbers = new globalThis.Map<number, number>()
       let audioCount = 0
-      const isVideoAction = action === 'video' || action === 'reference'
       const activeReferences = linkedNodeReferences(source, nodesRef.current, edgesRef.current).filter((node) => !hiddenRefIds.includes(node.id))
       const frameMode = isVideoAction && !storyInputs && effectiveVideoMode === 'first_last_frame'
       const fixedFrames = frameMode ? fixedFrameNodes(source?.data.videoFrameNodeIds,
@@ -1152,8 +1175,7 @@ function PrintfilmStudioWorkspace() {
       if (action === 'inpaint' && !inpaint) throw new Error('请先在图片操作条选择局部重绘并涂抹选区')
       if (inpaint) { await pushMediaFile(files, inpaint.originalUrl, 'original.png'); await pushMediaFile(files, inpaint.guideUrl, 'guide.png'); kinds.push('image', 'image') }
       if (storyInputs) for (const reference of storyInputs.references) {
-        await pushMediaFile(files, reference.url, `ref-${reference.node.id}`)
-        kinds.push('image')
+        await addReference(reference.node, reference.url, 'image')
       }
       if (!storyInputs && action !== 'audio') for (const node of mediaNodes) {
         if (inpaint && (node.id === source?.id || mediaOf(node) === inpaint.originalUrl)) continue
@@ -1162,10 +1184,7 @@ function PrintfilmStudioWorkspace() {
         const kind = nodeMediaKind(node)
         if (kind === 'text') continue
         if (!isVideoAction && kind !== 'image') throw new Error('图片编辑仅支持图片参考，请移除音视频参考')
-        const fileCount = files.length
-        await pushMediaFile(files, media, `ref-${node.id}`)
-        if (files.length === fileCount) continue
-        kinds.push(kind)
+        if (!await addReference(node, media, kind)) continue
         if (kind === 'image') uploadedImages.push({ nodeId: node.id, assetId: node.data.assetId == null ? undefined : String(node.data.assetId) })
         if (kind === 'audio') {
           audioCount += 1
@@ -1180,7 +1199,7 @@ function PrintfilmStudioWorkspace() {
           if (audioNumber === undefined) {
             const asset = assets.find((item) => item.id === assetId && assetMediaKind(item) === 'audio')
             if (!asset?.url) throw new Error(`「${labels.join('、')}」的参考音频已不可用，请重新绑定`)
-            await pushMediaFile(files, asset.url, `voice-${assetId}`, assetId)
+            videoSources.push({ asset_id: assetId })
             kinds.push('audio')
             audioNumber = ++audioCount
           }
@@ -1194,7 +1213,9 @@ function PrintfilmStudioWorkspace() {
         if (error) throw new Error(error)
       }
       const videoRefs = videoFileReferences(kinds, action === 'reference', isVideoAction ? storyInputs?.mode || effectiveVideoMode : undefined)
-      const references: ToolReferenceInput[] = videoRefs.references
+      const references: ToolReferenceInput[] = videoRefs.references.map(({ role, file_index }) => ({
+        role, ...videoSources[file_index],
+      }))
       const isImageEdit = action === 'edit' || action === 'inpaint' || action === 'outpaint'
       const toolId = action === 'audio' ? 'audio' : isImageEdit ? (files.length || references.length ? 'i2i' : 't2i') : 't2v'
       const videoMode = videoRefs.mode
@@ -1206,7 +1227,7 @@ function PrintfilmStudioWorkspace() {
       const message = isVideoAction ? videoPromptAudio(rawMessage, genModel) : rawMessage
       let priceVersion: number | undefined
       if (toolId === 't2v') {
-        const quote = await estimateStudioTool({ tool_id: 't2v', model_id: genModel, generate_audio: outputAudio, resolution: outputResolution, ratio: requestRatio, duration: outputDuration, video_mode: videoMode, references })
+        const quote = await estimateStudioTool({ tool_id: 't2v', model_id: genModel, generate_audio: outputAudio, resolution: outputResolution, ratio: requestRatio, duration: outputDuration, video_mode: videoMode, references: videoRefs.references })
         priceVersion = quote.price_version ?? 0
         setStatus(`预计消耗 ${points(quote.estimate_fen)}，正在创建任务`)
       }

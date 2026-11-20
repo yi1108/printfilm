@@ -125,6 +125,7 @@ async def run_tool(
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ) -> ToolRunOut:
     tid = tool_id.strip()
+    project_id = db.info.get('printfilm_studio_project_id')
     params = dict(negative=negative, ratio=ratio, strength=strength, mode=mode, pack=pack,
                   duration=duration, motion=motion, voice=voice, model_id=model_id, resolution=resolution, generate_audio=generate_audio)
     if node_id.strip():
@@ -137,7 +138,7 @@ async def run_tool(
             refs = parse_references(references)
             validate_reference_mode(video_mode, refs, len(files or []))
             params.update(video_mode=video_mode, references=refs)
-            params.update(await reference_params(db, user, refs))
+            params.update(await reference_params(db, user, refs, project_id=project_id))
         elif references != "[]":
             raise ValueError("references: 请先选择视频生成模式")
         if price_version:
@@ -169,9 +170,9 @@ async def run_tool(
             else:
                 raise ValueError("请上传 JPG、PNG、WebP 图片，视频参考支持 MP4、MOV、WebM")
             saved.append(save_upload(user.id, raw, name))
-        if video_mode:
-            params.update(await reference_params(db, user, params["references"], files=saved))
-        data = await enqueue_generation(db, user, tool_id=tid, prompt=prompt, params=params, files=saved, drama_project_id=db.info.get('printfilm_studio_project_id'))
+        if video_mode and saved:
+            params.update(await reference_params(db, user, params["references"], files=saved, project_id=project_id))
+        data = await enqueue_generation(db, user, tool_id=tid, prompt=prompt, params=params, files=saved, drama_project_id=project_id)
         await db.commit()
     except ValueError as exc:
         await db.rollback()
