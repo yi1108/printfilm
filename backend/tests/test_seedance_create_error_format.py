@@ -17,6 +17,16 @@ def test_format_seedance_invalid_image_format():
     assert "1.8" not in msg
 
 
+def test_privacy_rejection_identifies_voice_instead_of_image():
+    message = _format_seedance_create_error(
+        400, '{"error":{"code":"PrivacyInformation","message":"content[2]"}}',
+        ["分镜文案", "角色「飞流」", "角色音色「飞流」"],
+    )
+    assert "参考音频未通过隐私审核" in message
+    assert "角色音色「飞流」" in message
+    assert "参考图疑似真人" not in message
+
+
 def test_format_seedance_audio_duration_too_short_with_label():
     body = (
         '{"error":{"code":"InvalidParameter","message":'

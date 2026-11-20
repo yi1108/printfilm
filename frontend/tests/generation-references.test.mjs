@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { videoReferenceError } from '../src/features/printfilm-studio/canvas/generationReferences.ts'
 import test from 'node:test'
 import { generationReferenceFileKind, generationReferenceLimits, serializeGenerationReferences, validateGenerationReferences } from '../src/lib/generationReferences.ts'
 
@@ -66,8 +67,20 @@ test('文生视频不携带引用，失效资料和过大文件不可提交', ()
   assert.match(validateGenerationReferences('omni_reference', [{ ...asset(1, 'image'), assetId: undefined, file }], limits), /40MB/)
 })
 
-test('参考上限收紧到协议范围且文件类型与服务端格式白名单一致', () => {
-  assert.deepEqual(generationReferenceLimits({ images: 20, videos: 4, audios: 0 }), { images: 9, videos: 3, audios: 0 })
+test('Seedance 2.5 使用目录配置的 30 图、10 视频、10 音频', () => {
+  const limits = { images: 30, videos: 10, audios: 10, total: 50 }
+  const references = ['image', 'video', 'audio'].flatMap((kind, index) =>
+    Array.from({ length: kind === 'image' ? 30 : 10 }, (_, offset) => asset(index * 100 + offset + 1, kind)),
+  )
+  assert.deepEqual(generationReferenceLimits(limits), limits)
+  assert.equal(validateGenerationReferences('omni_reference', references, limits), null)
+  assert.match(validateGenerationReferences('omni_reference', [...references, asset(900, 'image')], limits), /30/)
+  const kinds = references.map(reference => reference.kind)
+  assert.equal(videoReferenceError(kinds, 'omni_reference', limits, limits.total), undefined)
+  assert.match(videoReferenceError([...kinds, 'video'], 'omni_reference', limits, limits.total), /50/)
+})
+
+test('文件类型与服务端格式白名单一致', () => {
   assert.equal(generationReferenceFileKind({ type: 'audio/webm', name: 'recording.webm' }), null)
   assert.equal(generationReferenceFileKind({ type: '', name: 'clip.MOV' }), 'video')
   assert.equal(generationReferenceFileKind({ type: '', name: 'photo.jpeg' }), 'image')

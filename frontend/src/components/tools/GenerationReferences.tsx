@@ -108,7 +108,7 @@ export default function GenerationReferences({ mode, limits, value, onChange, on
   if (mode === 'text_to_video') return null
 
   return <section className={`gen-video-references${frameMode ? ' is-frames' : ' is-omni'}`} aria-label={text(frameMode ? '首尾帧参考' : '全能参考资料', frameMode ? 'Frame references' : 'Mixed references')}>
-    <header><span><ImagePlus size={15} />{text(frameMode ? '画面参考' : '参考资料', frameMode ? 'Frame references' : 'References')}</span><small>{frameMode ? `${value.length}/2` : `${value.length}/12`}</small></header>
+    <header><span><ImagePlus size={15} />{text(frameMode ? '画面参考' : '参考资料', frameMode ? 'Frame references' : 'References')}</span><small>{frameMode ? `${value.length}/2` : `${value.length}/${max.total}`}</small></header>
     {frameMode ? <div className="gen-frame-slots">{(['first_frame', 'last_frame'] as const).map((role, index) => {
       const reference = value.find(item => item.role === role)
       const unsupported = max.images <= index
@@ -123,7 +123,7 @@ export default function GenerationReferences({ mode, limits, value, onChange, on
         {value.map(reference => <div key={reference.id} className="gen-reference-media"><ReferencePreview reference={reference} /><button type="button" className="gen-reference-remove" aria-label={text('移除参考资料', 'Remove reference')} disabled={disabled} onClick={() => onChange(value.filter(item => item.id !== reference.id))}><X size={13} /></button><span title={reference.name}>{reference.name}</span><small className="gen-reference-kind">{reference.kind === 'image' ? <ImagePlus size={12} /> : reference.kind === 'video' ? <Video size={12} /> : <AudioLines size={12} />}</small></div>)}
         {value.length === 0 && <div className="gen-reference-placeholder"><ImagePlus size={26} /><span>{text('图片、视频、音频', 'Images, video and audio')}</span><small>{text('拖放文件到这里', 'Drop files here')}</small></div>}
       </div>
-      <div className="gen-reference-source-actions gen-mixed-reference-actions"><button type="button" disabled={sourceIsDisabled || value.length >= 12} onClick={() => chooseLocal('reference_image')}><Upload size={14} />{text('上传资料', 'Upload')}</button><button type="button" disabled={sourceIsDisabled || value.length >= 12} onClick={() => chooseLibrary('reference_image')}><FolderOpen size={14} />{text('从资产库选择', 'Asset library')}</button></div>
+      <div className="gen-reference-source-actions gen-mixed-reference-actions"><button type="button" disabled={sourceIsDisabled || value.length >= max.total} onClick={() => chooseLocal('reference_image')}><Upload size={14} />{text('上传资料', 'Upload')}</button><button type="button" disabled={sourceIsDisabled || value.length >= max.total} onClick={() => chooseLibrary('reference_image')}><FolderOpen size={14} />{text('从资产库选择', 'Asset library')}</button></div>
     </>}
     <p className="gen-reference-limits">{frameMode ? text('上传首帧，可选尾帧，让镜头连接起止画面。', 'Set a first frame and an optional last frame.') : text(`图片 ${max.images} 张 · 视频 ${max.videos} 段 · 音频 ${max.audios} 段`, `${max.images} images · ${max.videos} videos · ${max.audios} audio clips`)}</p>
     <input ref={fileInput} type="file" hidden multiple={!frameMode} accept={allowedKinds.map(kind => FILE_ACCEPT[kind]).join(',')} onChange={event => { addFiles(Array.from(event.target.files || []), targetRole); event.target.value = '' }} />

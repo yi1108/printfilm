@@ -105,11 +105,24 @@ def character_voice_references(nodes):
     return references
 
 
-async def prepare_inputs(canvas, kind, document, source, asset_ids, *, generate_audio=None):
+def fixed_video_frame_nodes(document, source):
+    if not source or source['data'].get('videoMode') != 'first_last_frame':
+        return []
+    ids = source['data'].get('videoFrameNodeIds')
+    connected = {edge['source'] for edge in document['edges'] if edge['target'] == source['id']}
+    by_id = {node['id']: node for node in document['nodes'] if node['id'] in connected}
+    if (not isinstance(ids, list) or len(ids) != 2 or not all(isinstance(value, str) and value in by_id for value in ids)
+            or ids[0] == ids[1]):
+        raise ValueError('请在画布分别确认首帧和尾帧图片')
+    return [by_id[value] for value in ids]
+
+
+async def prepare_inputs(canvas, kind, document, source, asset_ids, *, generate_audio=None, model_id=None):
     ids = list(asset_ids or [])
     if any(type(value) is not int for value in ids):
         raise ValueError('reference_asset_ids 必须为素材 ID 数组')
     story = story_video_inputs(document, source) if kind == 'video' else None
+    fixed_frames = fixed_video_frame_nodes(document, source) if kind == 'video' and not story else []
     if story:
         urls = [ref['url'] for ref in story['references']]
         linked_ids = [ref['node'].get('data', {}).get('assetId') for ref in story['references']]
@@ -128,6 +141,13 @@ async def prepare_inputs(canvas, kind, document, source, asset_ids, *, generate_
         if ids and not set(ids).issubset(resolved):
             raise ValueError('生成引用必须与分镜角色和场景连线一致')
         ids = resolved
+    elif fixed_frames:
+        frame_asset_ids = [node['data'].get('assetId') for node in fixed_frames]
+        if any(type(value) is not int or value <= 0 for value in frame_asset_ids):
+            raise ValueError('请先完成首帧和尾帧图片生成并保存到当前项目')
+        if ids and not set(ids).issubset(frame_asset_ids):
+            raise ValueError('生成引用必须与已确认的首帧和尾帧一致')
+        ids = frame_asset_ids
     elif source:
         connected = {edge['source'] for edge in document['edges'] if edge['target'] == source['id']}
         nodes = [source, *[node for node in document['nodes'] if node['id'] in connected]]
@@ -137,17 +157,27 @@ async def prepare_inputs(canvas, kind, document, source, asset_ids, *, generate_
                 ids.append(data['assetId'])
             elif (data.get('mediaUrl') or data.get('url')) and not data.get('assetId'):
                 raise ValueError('参考节点未绑定项目素材，请先将媒体添加到项目素材库')
-    voices = character_voice_references(video_character_nodes(document, source)) if kind == 'video' and generate_audio is not False else {}
+    source_mode = source['data'].get('videoMode') if source else None
+    voices = character_voice_references(video_character_nodes(document, source)) if kind == 'video' and not fixed_frames and source_mode != 'image_to_video' and generate_audio is not False else {}
     ids.extend(asset_id for asset_id in voices if asset_id not in ids)
     if not ids: return [], {}
-    if len(ids) > 12 or kind == 'audio':
-        raise ValueError('最多 12 项参考素材；语音生成仅接收文本')
+    if kind == 'audio':
+        raise ValueError('语音生成仅接收文本')
+    limit = 12
+    if kind == 'video':
+        from app.config import get_settings
+        from app.services.media_models.prices import resolve_strategy
+        limit = resolve_strategy(model_id or get_settings().model_video).studio_reference_limit
+    if len(ids) > limit:
+        raise ValueError(f'当前模型最多支持 {limit} 项参考素材')
     assets = (await canvas.db.scalars(select(DramaAsset).where(DramaAsset.project_id == canvas.project.id, DramaAsset.id.in_(ids)))).all()
     by_id = {asset.id: asset for asset in assets}
     if any(asset_id not in by_id or by_id[asset_id].asset_type != 'audio' or not by_id[asset_id].url for asset_id in voices):
         raise ValueError('角色参考音频已不可用，请重新绑定当前项目的音频')
     if set(ids) != set(by_id): raise ValueError('参考素材不属于当前项目')
     kinds = [by_id[value].asset_type if by_id[value].asset_type in {'audio', 'video'} else 'image' for value in ids]
+    if fixed_frames and kinds != ['image', 'image']:
+        raise ValueError('首帧和尾帧必须是图片')
     if kind == 'image' and any(value != 'image' for value in kinds):
         raise ValueError('图片生成只支持图片参考')
     async def stopped(): return bool(getattr(canvas, 'stopped', lambda: False)())

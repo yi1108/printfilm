@@ -71,7 +71,7 @@ import { captureRecipe, instantiateRecipe } from './canvas/recipeGraph'
 import type { CanvasDocument } from './canvas/canvasCodec'
 import { ASSET_DRAG_TYPE, AssetLibraryPanel, assetMediaKind } from './canvas/AssetLibraryPanel'
 import { studioGenerationError } from './canvas/generationError'
-import { videoFileReferences, videoReferenceError, VIDEO_MODES, type StudioVideoMode, type MediaKind } from './canvas/generationReferences'
+import { fixedFrameNodes, videoFileReferences, videoReferenceError, VIDEO_MODES, type StudioVideoMode, type MediaKind } from './canvas/generationReferences'
 import { characterVoicePrompt, characterVoiceReferences, isCanvasCharacter, storyVideoInputs, storyAssetPrompt } from './canvas/storyGenerationInputs'
 import { applyProposal, type AgentProposal, type ProposalAction, type ProposalStates } from './agent/proposals'
 import { type BatchSettings, type BatchQuote } from './agent/batchGeneration'
@@ -346,7 +346,7 @@ function PrintfilmStudioWorkspace() {
   }, [canvasReady, projectId, sessionExpired])
 
   useEffect(() => {
-    if (!canvasReady || !validProjectId) return
+    if (!canvasReady || !validProjectId || sessionExpired) return
     let active = true, fetching = false, lastStatus = ''
     const refresh = async () => {
       if (fetching || savingRef.current) return
@@ -369,7 +369,7 @@ function PrintfilmStudioWorkspace() {
     }
     void refresh(); const timer = window.setInterval(() => { void refresh() }, 2000)
     return () => { active = false; window.clearInterval(timer) }
-  }, [canvasReady, validProjectId, projectId, receiveRemoteCanvas])
+  }, [canvasReady, validProjectId, projectId, sessionExpired, receiveRemoteCanvas])
   useEffect(() => () => { agentAbort.current?.abort() }, [])
   useEffect(() => {
     if (!sessionId || agentAbort.current) return
@@ -1135,8 +1135,17 @@ function PrintfilmStudioWorkspace() {
       const uploadedImages: { nodeId: string; assetId?: string }[] = []
       const audioNumbers = new globalThis.Map<number, number>()
       let audioCount = 0
-      const mediaNodes = [...(source ? [source] : []), ...linkedRefs.filter((node) => !hiddenRefIds.includes(node.id))]
       const isVideoAction = action === 'video' || action === 'reference'
+      const activeReferences = linkedNodeReferences(source, nodesRef.current, edgesRef.current).filter((node) => !hiddenRefIds.includes(node.id))
+      const frameMode = isVideoAction && !storyInputs && effectiveVideoMode === 'first_last_frame'
+      const fixedFrames = frameMode ? fixedFrameNodes(source?.data.videoFrameNodeIds,
+        activeReferences.filter(node => edgesRef.current.some(edge => edge.source === node.id && edge.target === source?.id))) : undefined
+      if (frameMode && (!fixedFrames || fixedFrames.some(node => nodeMediaKind(node) !== 'image' || referenceState(node)))) {
+        throw new Error('请在「设置首尾帧」中分别确认两张已就绪的图片')
+      }
+      const mediaNodes = fixedFrames ?? [...(
+        source && !(isVideoAction && effectiveVideoMode === 'image_to_video' && nodeMediaKind(source) === 'video') ? [source] : []
+      ), ...activeReferences]
       const requestRatio = outputRatio === 'auto' ? (isVideoAction ? '16:9' : '2:3') : outputRatio
       if (isVideoAction && source) assertWritingParameters(nodesRef.current.find(node=>node.id===source.data.promptNodeId),{id:source.id,label:String(source.data.label || ''),kind:'video',model:genModel,ratio:requestRatio,duration:outputDuration})
       const inpaint = action === 'inpaint' ? source?.data.inpaint as InpaintData | undefined : undefined
@@ -1164,7 +1173,7 @@ function PrintfilmStudioWorkspace() {
         }
       }
       const voiceDirections: string[] = []
-      if (isVideoAction && outputAudio !== false) {
+      if (isVideoAction && effectiveVideoMode === 'omni_reference' && outputAudio !== false) {
         const roleNodes = storyInputs ? storyInputs.references.map(({ node }) => node) : mediaNodes
         for (const { assetId, labels } of characterVoiceReferences(roleNodes)) {
           let audioNumber = audioNumbers.get(assetId)
@@ -1179,12 +1188,12 @@ function PrintfilmStudioWorkspace() {
         }
       }
       if (isVideoAction) {
-        const mode = storyInputs?.mode || outputVideoMode || (action === 'reference' && kinds.length ? 'omni_reference' : kinds.length === 1 && kinds[0] === 'image' ? 'image_to_video' : videoFileReferences(kinds).mode)
-        if (voiceDirections.length && mode !== 'omni_reference') throw new Error('角色参考音频需要全能参考模式')
-        const error = videoReferenceError(kinds, mode, catalogVideoModels(mediaCatalog).find((model) => model.id === genModel)?.reference_limits)
+        const mode = storyInputs?.mode || effectiveVideoMode
+        const model = catalogVideoModels(mediaCatalog).find((item) => item.id === genModel)
+        const error = videoReferenceError(kinds, mode, model?.reference_limits, model?.reference_total_limit)
         if (error) throw new Error(error)
       }
-      const videoRefs = videoFileReferences(kinds, action === 'reference', storyInputs?.mode || outputVideoMode)
+      const videoRefs = videoFileReferences(kinds, action === 'reference', isVideoAction ? storyInputs?.mode || effectiveVideoMode : undefined)
       const references: ToolReferenceInput[] = videoRefs.references
       const isImageEdit = action === 'edit' || action === 'inpaint' || action === 'outpaint'
       const toolId = action === 'audio' ? 'audio' : isImageEdit ? (files.length || references.length ? 'i2i' : 't2i') : 't2v'
@@ -1775,23 +1784,34 @@ function PrintfilmStudioWorkspace() {
   let storyValidation: string | undefined
   try { storyReferences = storyVideoInputs(selectedNode, nodes, edges) }
   catch (error) { storyValidation = error instanceof Error ? error.message : '分镜参考不完整' }
-  const quoteNodes = storyReferences?.references.map(({ node }) => node) ?? [
-    ...(selectedNode && selectedNode.data.storyKind !== 'shot_video' && mediaOf(selectedNode) ? [selectedNode] : []),
-    ...linkedRefs.filter((node) => !hiddenRefIds.includes(node.id)),
+  const visibleRefs = linkedRefs.filter((node) => !hiddenRefIds.includes(node.id))
+  const candidateNodes = storyReferences?.references.map(({ node }) => node) ?? [
+    ...(selectedNode && selectedNode.data.storyKind !== 'shot_video' && mediaOf(selectedNode)
+      && !(outputVideoMode && ['first_last_frame', 'image_to_video'].includes(outputVideoMode) && nodeMediaKind(selectedNode) === 'video') ? [selectedNode] : []),
+    ...visibleRefs,
   ]
+  const candidateKinds = candidateNodes.map(nodeMediaKind).filter(kind => kind !== 'text')
+  const candidateVoices = isVideoComposer && outputAudio !== false ? characterVoiceReferences(candidateNodes) : []
+  const effectiveVideoMode: StudioVideoMode = selectedNode?.data.storyKind === 'shot_video' ? 'omni_reference' : outputVideoMode
+    || (candidateVoices.length || selectionAction === 'reference' && candidateKinds.length ? 'omni_reference'
+      : candidateKinds.length === 1 && candidateKinds[0] === 'image' ? 'image_to_video' : videoFileReferences(candidateKinds).mode)
+  const fixedFrames = effectiveVideoMode === 'first_last_frame' ? fixedFrameNodes(selectedNode?.data.videoFrameNodeIds,
+    visibleRefs.filter(node => edges.some(edge => edge.source === node.id && edge.target === selectedNodeId))) : undefined
+  const quoteNodes = fixedFrames ?? candidateNodes
   const manuallyQuotedAudio = new Set(quoteNodes.filter((node) => nodeMediaKind(node) === 'audio').map((node) => node.data.assetId))
-  const quoteVoices = isVideoComposer && outputAudio !== false ? characterVoiceReferences(quoteNodes) : []
+  const quoteVoices = effectiveVideoMode === 'omni_reference' ? candidateVoices : []
   const quoteKinds = JSON.stringify([
     ...quoteNodes.map(nodeMediaKind).filter((kind) => kind !== 'text'),
     ...quoteVoices.filter(({ assetId }) => !manuallyQuotedAudio.has(assetId)).map(() => 'audio'),
   ])
   const selectedGenerationModel = (isVideoComposer ? catalogVideoModels(mediaCatalog) : catalogImageModels(mediaCatalog)).find((model) => model.id === genModel)
   const referenceKinds = JSON.parse(quoteKinds) as MediaKind[]
-  const effectiveVideoMode: StudioVideoMode = selectedNode?.data.storyKind === 'shot_video' ? 'omni_reference' : outputVideoMode || (selectionAction === 'reference' && referenceKinds.length ? 'omni_reference' : referenceKinds.length === 1 && referenceKinds[0] === 'image' ? 'image_to_video' : videoFileReferences(referenceKinds).mode)
   const pendingReference=linkedRefs.find(node=>!hiddenRefIds.includes(node.id) && referenceState(node))
   const referenceValidation=pendingReference ? `关联节点「${pendingReference.data.label || '参考节点'}」${referenceState(pendingReference)}，完成后再生成` : undefined
-  const voiceValidation = quoteVoices.length && effectiveVideoMode !== 'omni_reference' ? '角色参考音频需要全能参考模式' : undefined
-  const videoValidation = isVideoComposer && selectionAction !== 'compose' ? storyValidation || voiceValidation || videoReferenceError(referenceKinds, effectiveVideoMode, selectedGenerationModel?.reference_limits) : undefined
+  const frameValidation = effectiveVideoMode === 'first_last_frame' && !fixedFrames ? '请在「设置首尾帧」中分别确认两张图片' : undefined
+  const videoValidation = isVideoComposer && selectionAction !== 'compose' ? storyValidation || frameValidation || videoReferenceError(
+    referenceKinds, effectiveVideoMode, selectedGenerationModel?.reference_limits, selectedGenerationModel?.reference_total_limit,
+  ) : undefined
   useEffect(() => {
     if (!composerOpen || !selectionAction || selectionAction === 'crop') { setEstimateText('预计消耗 —'); return }
     if (selectionAction === 'compose') { setEstimateText('本地合成 · 无模型费用'); return }
@@ -1885,7 +1905,10 @@ function PrintfilmStudioWorkspace() {
       if(Array.isArray(data.referenceNodeIds)) data.referenceNodeIds=data.referenceNodeIds.filter(item=>item!==id)
       commitGraph(nodesRef.current.map(node=>node.id===selectedNode.id?{...node,data}:node),edgesRef.current.filter(edge=>!(edge.source===id&&edge.target===selectedNode.id)),'已移除参考关联')
     },
-    onAddRef: () => { setReferenceTargetId(selectedNodeId); setAssetsOpen(true) },
+    onAddRef: () => {
+      if (isVideoComposer && effectiveVideoMode === 'first_last_frame') setVideoSetup({ id: selectedNodeId, mode: 'first_last_frame' })
+      else { setReferenceTargetId(selectedNodeId); setAssetsOpen(true) }
+    },
     mentions: {
       connected: linkedRefs.filter((node) => !hiddenRefIds.includes(node.id)).map((node, index) => ({ id: node.id, label: String(node.data.label || node.data.name || `图${index + 1}`), url: mediaOf(node), mediaKind: nodeMediaKind(node), hint: referenceState(node) || `图${index + 1}`, source: 'node' as const })),
       canvas: nodes.filter((node) => node.id !== selectedNodeId && mediaOf(node) && !validateStudioConnection({ source: node.id, target: selectedNodeId }, nodes, edges) && !linkedRefs.some((item) => item.id === node.id)).map((node) => ({ id: node.id, label: String(node.data.label || node.data.name || '图片'), url: mediaOf(node), mediaKind: nodeMediaKind(node), hint: '图片', source: 'node' as const })),
@@ -1896,8 +1919,22 @@ function PrintfilmStudioWorkspace() {
     modelId: selectionAction === 'audio' ? '' : genModel,
     controls,
     videoMode: effectiveVideoMode,
-    onVideoModeChange: (value) => { setOutputVideoMode(value); rememberParameter('videoMode', value) },
-    videoModeOptions: VIDEO_MODES.map((mode) => { const limits = selectedGenerationModel?.reference_limits; const disabled = selectedNode?.data.storyKind === 'shot_video' && mode.id !== 'omni_reference' || !!limits && (mode.id === 'first_last_frame' ? limits.images < 2 : mode.id === 'image_to_video' ? limits.images < 1 : mode.id === 'omni_reference' ? limits.images + limits.videos + limits.audios === 0 : false); return { ...mode, disabled, hint: disabled ? '当前模型不支持' : undefined } }),
+    onVideoModeChange: (value) => {
+      if (value === 'first_last_frame') { setVideoSetup({ id: selectedNodeId, mode: value }); return }
+      setOutputVideoMode(value); rememberParameter('videoMode', value)
+    },
+    videoModeOptions: VIDEO_MODES.map((mode) => {
+      const limits = selectedGenerationModel?.reference_limits
+      const disabled = selectedNode?.data.storyKind === 'shot_video' && mode.id !== 'omni_reference' || !!limits && (
+        mode.id === 'first_last_frame' ? limits.images < 2
+          : mode.id === 'image_to_video' ? limits.images < 1
+          : mode.id === 'omni_reference' && limits.images + limits.videos + limits.audios === 0
+      )
+      const hint = disabled ? '当前模型不支持' : mode.id === 'omni_reference' && limits
+        ? `图片 ${limits.images} · 视频 ${limits.videos} · 音频 ${limits.audios} · 共 ${selectedGenerationModel?.reference_total_limit ?? 12}`
+        : undefined
+      return { ...mode, disabled, hint }
+    }),
     validationMessage: referenceValidation || videoValidation || (incompatibleRefs.length ? '参考类型不兼容，请移除不支持的连线' : undefined) || (submissionError?.nodeId === selectedNodeId ? submissionError.message : undefined),
     voice: outputVoice,
     onVoiceChange: (value) => { setOutputVoice(value); rememberParameter('voice', value) },
@@ -2093,13 +2130,23 @@ function PrintfilmStudioWorkspace() {
       const asset = await printfilmStudioApi.uploadAsset(projectId, new File([blob], `${label}.png`, { type: 'image/png' }), editLockRequestHeaders(canvasTarget))
       putMediaResults(imageTool.id, [asset])
     }} />}
-    {videoSetup && <VideoNodeSetup key={`${videoSetup.id}:${videoSetup.mode}`} mode={videoSetup.mode} items={nodes.filter((node) => node.id !== videoSetup.id && nodeMediaKind(node) === 'image' && mediaOf(node)).map((node) => ({ id: node.id, label: String(node.data.label || '图片'), url: mediaOf(node) }))} initialIds={edges.filter((edge) => edge.target === videoSetup.id).map((edge) => edge.source)} onClose={() => setVideoSetup(null)} onCreate={() => createVideoInput(videoSetup.id, 'image', videoSetup.mode)} onLibrary={() => {
+    {videoSetup && <VideoNodeSetup key={`${videoSetup.id}:${videoSetup.mode}`} mode={videoSetup.mode} items={nodes.filter((node) => node.id !== videoSetup.id && nodeMediaKind(node) === 'image' && mediaOf(node) && !referenceState(node)).map((node) => ({ id: node.id, label: String(node.data.label || '图片'), url: mediaOf(node) }))} initialIds={(() => {
+      const stored = nodes.find(node => node.id === videoSetup.id)?.data.videoFrameNodeIds
+      if (videoSetup.mode === 'first_last_frame' && Array.isArray(stored)) return stored
+      return edges.filter(edge => edge.target === videoSetup.id && nodeMediaKind(nodes.find(node => node.id === edge.source)) === 'image').map(edge => edge.source)
+    })()} onClose={() => setVideoSetup(null)} onCreate={() => createVideoInput(videoSetup.id, 'image', videoSetup.mode)} onLibrary={() => {
       commitGraph(updateStudioNode(nodesRef.current, videoSetup.id, { videoMode: videoSetup.mode }) as Node<Data>[], edgesRef.current, '已选择视频生成方式')
-      openSelectionComposer('video', undefined, videoSetup.id); setReferenceTargetId(videoSetup.id); setAssetsOpen(true); setVideoSetup(null)
+      openSelectionComposer('video', undefined, videoSetup.id)
+      setReferenceTargetId(videoSetup.mode === 'first_last_frame' ? null : videoSetup.id)
+      setAssetsOpen(true); setVideoSetup(null)
     }} onApply={(ids) => {
       const targetId = videoSetup.id
       const retained = edgesRef.current.filter((edge) => edge.target !== targetId || nodeMediaKind(nodesRef.current.find((node) => node.id === edge.source)) === 'text')
-      commitGraph(updateStudioNode(nodesRef.current, targetId, { videoMode: videoSetup.mode }) as Node<Data>[], [...retained, ...ids.map((source) => ({ id: `edge-${crypto.randomUUID()}`, source, target: targetId }))], '已连接视频参考图片')
+      commitGraph(updateStudioNode(nodesRef.current, targetId, {
+        videoMode: videoSetup.mode,
+        videoFrameNodeIds: videoSetup.mode === 'first_last_frame' ? ids : undefined,
+      }) as Node<Data>[], [...retained, ...ids.map((source) => ({ id: `edge-${crypto.randomUUID()}`, source, target: targetId }))], '已连接视频参考图片')
+      setHiddenRefIds(current => current.filter(id => !ids.includes(id)))
       setVideoSetup(null); openSelectionComposer('video', undefined, targetId)
     }} />}
     {analysisNode && <FrameAnalysisEditor assetId={Number(analysisSource?.data.assetId || analysisNode.data.assetId) || undefined} key={`${analysisNode.id}:${analysisUrl}`} projectId={projectId} url={analysisUrl} report={analysisNode.data.analysisReport as FrameAnalysisReport | undefined} headers={editLockRequestHeaders(canvasTarget)} writable={canEdit} onClose={() => setAnalysisNodeId(null)} onComplete={(report, outputs) => {

@@ -40,10 +40,15 @@ class MediaModelStrategy:
     max_reference_images = 9
     max_reference_audios = 0
     max_reference_videos = 0
+    studio_reference_ceiling = 12
     supports_generate_audio = False
     max_count = 1  # Existing gateway delivers one output per request.
     duration_min = 4
     duration_max = 15
+
+    @property
+    def studio_reference_limit(self) -> int:
+        return min(self.studio_reference_ceiling, self.max_reference_images + self.max_reference_videos + self.max_reference_audios)
 
     def with_reference_limits(self, limits: dict[str, int] | None):
         if limits is None:
@@ -85,6 +90,7 @@ class MediaModelStrategy:
         if self.capability == "video":
             result.update(duration_min=self.duration_min, duration_max=self.duration_max,
                           duration_step=1, modes=["text_to_video", "image_to_video"])
+            result["reference_total_limit"] = self.studio_reference_limit
             result["defaults"]["duration"] = 8
             result["supports_audio"] = self.supports_generate_audio
         else:
@@ -273,6 +279,7 @@ class VideoModelStrategy(MediaModelStrategy):
 
 class Seedance25Strategy(VideoModelStrategy):
     model_id = "seedance-2.5"
+    studio_reference_ceiling = 50
     resolutions = ("480p", "720p", "1080p")
     duration_max = 30
 

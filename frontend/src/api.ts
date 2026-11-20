@@ -173,6 +173,7 @@ export type MediaModelOption = {
   available?: boolean
   available_resolutions?: string[]
   reference_limits?: { images: number; audios: number; videos: number }
+  reference_total_limit?: number
   defaults?: { resolution: string; aspect_ratio: string; duration?: number; count: number }
   /** 该模型允许的清晰度 */
   allowed_resolutions?: string[]

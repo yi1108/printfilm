@@ -147,6 +147,9 @@ export function duplicateStudioNodes(nodes: StudioNodeRecord[], edges: Edge[], s
       copy.position = { ...original.position }
     }
     if (Array.isArray(copy.data.children)) copy.data.children = copy.data.children.filter((id) => idMap.has(String(id))).map((id) => idMap.get(String(id))!)
+    if (Array.isArray(copy.data.videoFrameNodeIds)) {
+      copy.data.videoFrameNodeIds = copy.data.videoFrameNodeIds.map(id => typeof id === 'string' ? idMap.get(id) ?? id : id)
+    }
   })
   const copiedEdges = edges
     .filter((edge) => idMap.has(edge.target))

@@ -5,10 +5,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
-import struct
 import subprocess
 import uuid
 from pathlib import Path
+
+from PIL import Image
 
 from app.services.ffmpeg_compose import _which
 
@@ -69,55 +70,10 @@ def target_canvas_for_seedance_ar(
 # 从文件头读宽高（PNG / JPEG / WEBP）
 def read_image_size(path: Path) -> tuple[int, int] | None:
     try:
-        data = path.read_bytes()[:65536]
-    except OSError:
+        with Image.open(path) as image:
+            return image.size
+    except (OSError, Image.DecompressionBombError):
         return None
-    return _png_size(data) or _jpeg_size(data) or _webp_size(data)
-
-
-def _png_size(data: bytes) -> tuple[int, int] | None:
-    if len(data) < 24 or data[:8] != b"\x89PNG\r\n\x1a\n":
-        return None
-    w, h = struct.unpack(">II", data[16:24])
-    return int(w), int(h)
-
-
-def _jpeg_size(data: bytes) -> tuple[int, int] | None:
-    if len(data) < 4 or data[:2] != b"\xff\xd8":
-        return None
-    i = 2
-    while i + 9 < len(data):
-        if data[i] != 0xFF:
-            i += 1
-            continue
-        marker = data[i + 1]
-        if marker in (0xC0, 0xC1, 0xC2):
-            h, w = struct.unpack(">HH", data[i + 5 : i + 9])
-            return int(w), int(h)
-        if marker == 0xD9:
-            break
-        if marker in (0x00, 0x01) or 0xD0 <= marker <= 0xD9:
-            i += 2
-            continue
-        seglen = struct.unpack(">H", data[i + 2 : i + 4])[0]
-        i += 2 + seglen
-    return None
-
-
-def _webp_size(data: bytes) -> tuple[int, int] | None:
-    if len(data) < 30 or data[:4] != b"RIFF" or data[8:12] != b"WEBP":
-        return None
-    if data[12:16] == b"VP8 " and len(data) >= 30:
-        w = struct.unpack("<H", data[26:28])[0] & 0x3FFF
-        h = struct.unpack("<H", data[28:30])[0] & 0x3FFF
-        return int(w), int(h)
-    if data[12:16] == b"VP8L" and len(data) >= 25:
-        b = data[21:25]
-        bits = b[0] | (b[1] << 8) | (b[2] << 16) | (b[3] << 24)
-        w = (bits & 0x3FFF) + 1
-        h = ((bits >> 14) & 0x3FFF) + 1
-        return int(w), int(h)
-    return None
 
 
 def _run_ffmpeg_pad(src: Path, dest: Path, cw: int, ch: int) -> None:

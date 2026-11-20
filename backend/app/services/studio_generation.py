@@ -73,6 +73,8 @@ def validate_generation(tool_id: str, prompt: str, params: dict, file_count: int
             "resolution": params.get("resolution") or ("2K" if kind == "image" else "480p"),
             **references,
             **({"generate_audio": params["generate_audio"], "duration": str(params.get("duration") or "5").removesuffix("s")} if kind == "video" else {})})
+        if video_mode == "omni_reference" and len(refs) > strategy.studio_reference_limit:
+            raise ValueError(f"references: 当前模型最多支持 {strategy.studio_reference_limit} 份参考资料")
     if kind == "audio" and params.get("voice", "narrator_calm") not in VOICES:
         raise ValueError("不支持的音色")
     return kind

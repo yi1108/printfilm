@@ -381,6 +381,43 @@ async def test_seedance_prompt_limits_and_full_submission(studio_api, monkeypatc
         assert "7000" in rejected.json()["detail"]
 
 
+async def test_seedance_25_accepts_fifty_configured_references(studio_api, monkeypatch):
+    from collections import Counter
+    from app.services import studio_tools
+    from app.services.model_settings import get_routing_snapshot
+    from app.services.tokenfree_video import prepare_video_create_body
+
+    monkeypatch.setitem(get_routing_snapshot().media_reference_limits, "seedance-2.5", {
+        "images": 30, "videos": 10, "audios": 10,
+    })
+    create = AsyncMock(return_value="fifty-references-provider-task")
+    monkeypatch.setattr(studio_tools, "get_ark", lambda: SimpleNamespace(gen_video_seedance_body=create))
+    monkeypatch.setattr(studio_tools, "publish_public", lambda path: f"https://cdn.test/{path.name}")
+    uploads = (
+        [("image", "png", "image/png", png_bytes())] * 30
+        + [("video", "mp4", "video/mp4", b"\x00\x00\x00\x14ftypisom")] * 10
+        + [("audio", "wav", "audio/wav", b"RIFF\x00\x00\x00\x00WAVE")] * 10
+    )
+    refs = [{"file_index": index, "role": f"reference_{kind}"} for index, (kind, *_rest) in enumerate(uploads)]
+    request = video_request(model_id="seedance-2.5", video_mode="omni_reference", references=refs)
+    quote = await studio_api.post("/api/tools/estimate", json=request)
+    assert quote.status_code == 200, quote.text
+    response = await studio_api.post("/api/tools/run", data={**request, "references": json.dumps(refs)}, files=[
+        ("files", (f"ref-{index}.{suffix}", raw, mime))
+        for index, (_kind, suffix, mime, raw) in enumerate(uploads)
+    ])
+    assert response.status_code == 200, response.text
+    await executor.execute_task_run(response.json()["platform_task_id"])
+    body = prepare_video_create_body(create.await_args.args[0])
+    assert Counter(item["role"] for item in body["metadata"]["content"]) == {
+        "reference_image": 30, "reference_video": 10, "reference_audio": 10,
+    }
+    rejected = await studio_api.post("/api/tools/estimate", json={
+        **request, "references": refs + [{"role": "reference_image", "asset_id": 99}],
+    })
+    assert rejected.status_code == 422
+
+
 async def test_frame_mode_combines_upload_and_library_asset(studio, studio_api, monkeypatch):
     from app.services import studio_tools
     sessions, user, _ = studio

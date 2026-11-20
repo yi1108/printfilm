@@ -119,7 +119,7 @@ async def run_tool(
     model_id: str = Form("", max_length=128, description="生成模型标识；留空时使用工具默认模型"), resolution: str = Form("", max_length=16, description="输出分辨率，按所选模型支持的值填写"),
     generate_audio: bool | None = Form(default=None, description="生成声音；留空按模型能力默认开启"),
     node_id: str = Form("", max_length=128, description="画布节点编号，供批量轮询按 node_id 回写"),
-    video_mode: str = Form("", max_length=32, description="视频模式：text_to_video 文生视频、first_last_frame 首尾帧、omni_reference 全能参考；留空兼容旧流程"), references: str = Form("[]", max_length=8000, description="最多 12 项的 JSON 数组；每项包含 role，并且仅提供 file_index 上传文件索引或 asset_id 个人资产编号之一"),
+    video_mode: str = Form("", max_length=32, description="视频模式：text_to_video 文生视频、first_last_frame 首尾帧、omni_reference 全能参考；留空兼容旧流程"), references: str = Form("[]", max_length=8000, description="按当前模型数量限制提交 JSON 数组；每项包含 role，以及 file_index 或 asset_id 之一"),
     price_version: int | None = Form(default=None, ge=0, description="客户端确认的价格版本；传入有效版本时用于价格一致性校验"),
     files: list[UploadFile] | None = File(default=None, description="参考图片、视频或音频文件；单个文件最大 40 MB，格式由工具及素材角色决定"),
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),

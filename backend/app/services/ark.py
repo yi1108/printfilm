@@ -464,6 +464,11 @@ def _format_seedance_create_error(
         for k in ("PrivacyInformation", "InputImageSensitive", "SensitiveContentDetected", "real person")
     ):
         idx, label = _seedance_content_slot_label(text, content_labels)
+        if re.match(r"[^「]*音色「", label):
+            return (
+                f"参考音频未通过隐私审核：{label}（content[{idx}]，PrivacyInformation），"
+                "请检查该角色的音色绑定，并更换为有权使用的参考音频后重试"
+            )
         if label:
             return (
                 f"参考图疑似真人：{label}（content[{idx}]，PrivacyInformation），"
