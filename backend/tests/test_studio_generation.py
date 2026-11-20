@@ -266,10 +266,12 @@ async def test_live_remote_lease_is_not_recovered(studio, monkeypatch):
 @pytest.fixture
 async def studio_api(studio, monkeypatch, tmp_path):
     from app.api.tools import router
+    from app.printfilm_studio.integration.generation_routes import router as canvas_router
     from app.services import studio_tools
     sessions, user, _ = studio
     api = FastAPI()
     api.include_router(router, prefix="/api")
+    api.include_router(canvas_router, prefix="/api")
     api.dependency_overrides[get_current_user] = lambda: user
     async def database():
         async with sessions() as db:
@@ -476,6 +478,30 @@ async def test_reference_ids_cannot_access_other_users_or_teams(studio, studio_a
         assert (await studio_api.post("/api/tools/estimate", json=request)).status_code == 400
         response = await studio_api.post("/api/tools/run", data={**request, "references": json.dumps(request["references"])})
         assert response.status_code == 400
+
+
+async def test_canvas_generation_uses_project_asset_without_upload(studio, studio_api, monkeypatch):
+    from app.services import studio_tools
+
+    monkeypatch.setattr(get_settings(), "printfilm_studio_enabled", True)
+    sessions, user, other = studio
+    own = await add_reference_asset(sessions, user, kind="image", url="https://cdn.test/scene.png")
+    unrelated = await add_reference_asset(sessions, user, kind="image", url="https://cdn.test/other-project.png")
+    foreign = await add_reference_asset(sessions, other, kind="image", url="https://cdn.test/private.png")
+    create = AsyncMock(return_value="existing-asset-provider-task")
+    monkeypatch.setattr(studio_tools, "get_ark", lambda: SimpleNamespace(gen_video_seedance_body=create))
+    path = f"/api/printfilm-studio/projects/{own.project_id}/generations"
+    request = video_request(video_mode="omni_reference")
+    for asset, expected_status in [(unrelated, 400), (foreign, 400), (own, 200)]:
+        response = await studio_api.post(path, files={
+            **{key: (None, value) for key, value in request.items() if key != "references"},
+            "references": (None, json.dumps([{"role": "reference_image", "asset_id": asset.id}])),
+        })
+        assert response.status_code == expected_status, response.text
+    await executor.execute_task_run(response.json()["platform_task_id"])
+    assert create.await_args.args[0]["content"][-1] == {
+        "type": "image_url", "image_url": {"url": own.url}, "role": "reference_image",
+    }
 
 
 async def test_upload_role_and_file_content_are_validated(studio_api):
