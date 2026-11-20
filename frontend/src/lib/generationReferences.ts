@@ -2,7 +2,7 @@ import type { ToolReferenceAsset, ToolReferenceInput } from '../api/tools'
 
 export type VideoGenerationMode = 'text_to_video' | 'first_last_frame' | 'omni_reference'
 export type GenerationReferenceKind = 'image' | 'video' | 'audio'
-export type GenerationReferenceLimits = { images: number; videos: number; audios: number }
+export type GenerationReferenceLimits = { images: number; videos: number; audios: number; total?: number }
 export type GenerationReference = {
   id: string
   role: ToolReferenceInput['role']
@@ -50,19 +50,18 @@ export function checkGenerationReferenceCounts(
   const max = generationReferenceLimits(limits)
   const counts = { image: 0, video: 0, audio: 0 }
   for (const reference of next) counts[reference.kind] += 1
-  if (counts.image > max.images || counts.video > max.videos || counts.audio > max.audios || (!frameMode && next.length > 12)) {
+  if (counts.image > max.images || counts.video > max.videos || counts.audio > max.audios || (!frameMode && next.length > max.total)) {
     return t(
-      `参考资料超出上限：图片 ${max.images} 张、视频 ${max.videos} 段、音频 ${max.audios} 段，最多 12 份。`,
-      `Reference limit: ${max.images} images, ${max.videos} videos, ${max.audios} audio clips; 12 files in total.`,
+      `参考资料超出上限：图片 ${max.images} 张、视频 ${max.videos} 段、音频 ${max.audios} 段，最多 ${max.total} 份。`,
+      `Reference limit: ${max.images} images, ${max.videos} videos, ${max.audios} audio clips; ${max.total} files in total.`,
     )
   }
   return null
 }
 
-/** 将模型参考上限收紧到混合参考协议允许的范围，保留 0 表示不支持。 */
-export function generationReferenceLimits(limits?: GenerationReferenceLimits): GenerationReferenceLimits {
-  const bounded = (value: number | undefined, cap: number) => Math.max(0, Math.min(cap, Math.floor(value ?? cap)))
-  return { images: bounded(limits?.images, 9), videos: bounded(limits?.videos, 3), audios: bounded(limits?.audios, 3) }
+/** 优先使用模型目录的上限，目录尚未加载时保留原默认值。 */
+export function generationReferenceLimits(limits?: GenerationReferenceLimits): Required<GenerationReferenceLimits> {
+  return { images: limits?.images ?? 9, videos: limits?.videos ?? 3, audios: limits?.audios ?? 3, total: limits?.total ?? 12 }
 }
 
 /** 扩展名与 MIME 同时符合服务端格式范围，未提供 MIME 时按扩展名识别。 */
@@ -103,7 +102,7 @@ export function validateGenerationReferences(
     if (value.filter(item => item.role === 'first_frame').length > 1 || value.filter(item => item.role === 'last_frame').length > 1) return '首帧和尾帧分别只能选择一张图片。'
   } else {
     if (!value.length) return '请上传或从资产库选择至少一份参考资料。'
-    if (value.length > 12) return '全能参考最多支持 12 份资料，请移除多余资料。'
+    if (value.length > max.total) return `全能参考最多支持 ${max.total} 份资料，请移除多余资料。`
   }
   return null
 }

@@ -60,6 +60,18 @@ def test_story_video_rejects_cross_script_and_missing_scene():
         story_video_inputs(document, source)
 
 
+def test_fixed_frames_follow_slots_instead_of_edge_order():
+    from app.printfilm_studio.integration.generation_inputs import fixed_video_frame_nodes
+
+    document = graph()
+    source = document['nodes'][-1]
+    source['data'].update(videoMode='first_last_frame', videoFrameNodeIds=['scene', 'role'])
+    assert [node['id'] for node in fixed_video_frame_nodes(document, source)] == ['scene', 'role']
+    document['edges'].pop()
+    with pytest.raises(ValueError, match='分别确认首帧和尾帧'):
+        fixed_video_frame_nodes(document, source)
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize('with_voice', [False, True])
 async def test_story_uses_omni_roles_and_reuses_voice_across_shots(monkeypatch, tmp_path, with_voice):

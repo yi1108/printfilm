@@ -125,7 +125,7 @@ def _probe_has_audio(path: Path) -> bool:
         return False
 
 
-def probe_duration(path: Path) -> float | None:
+def probe_duration(path: Path, *, video_only: bool = False) -> float | None:
     """Return media duration in seconds via ffprobe, or None."""
     ffprobe = shutil.which(get_settings().ffprobe_path) or shutil.which("ffprobe")
     if not ffprobe or not path.exists():
@@ -136,8 +136,9 @@ def probe_duration(path: Path) -> float | None:
                 ffprobe,
                 "-v",
                 "error",
+                *(["-select_streams", "v:0"] if video_only else []),
                 "-show_entries",
-                "format=duration",
+                "stream=duration" if video_only else "format=duration",
                 "-of",
                 "default=noprint_wrappers=1:nokey=1",
                 str(path),
@@ -313,7 +314,7 @@ def extract_video_last_frame(video: str | Path, dest: Path) -> bool:
     if not src.exists():
         logger.warning("抽尾帧失败：视频不存在 path=%s", src)
         return False
-    duration = probe_duration(src)
+    duration = probe_duration(src, video_only=True)
     if duration is not None and duration > 0.1:
         # 距片尾约 0.08s，避免精确 seek 到 EOF 抽空帧
         return extract_video_poster_frame(src, dest, at_sec=max(0.0, float(duration) - 0.08))

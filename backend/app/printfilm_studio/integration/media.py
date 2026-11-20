@@ -56,7 +56,8 @@ async def create_media_task(canvas, kind: str, prompt: str, **options: Any) -> d
         writer = next((n for n in document['nodes'] if n['id'] == source['data'].get('promptNodeId')), None)
         assert_video_binding(writer, source, options)
     files, reference_options = await prepare_inputs(
-        canvas, kind, document, source, options.pop('reference_asset_ids', None), generate_audio=options.get('generate_audio'),
+        canvas, kind, document, source, options.pop('reference_asset_ids', None),
+        generate_audio=options.get('generate_audio'), model_id=options.get('model_id'),
     )
     voice_directions = reference_options.pop('_character_voice_directions', [])
     if kind == 'image' and files:

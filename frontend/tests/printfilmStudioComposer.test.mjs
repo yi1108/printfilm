@@ -108,7 +108,9 @@ test('composer menus apply parameters; writing sends configured instructions and
     let chosen
     await act(async () => root.render(h(VideoNodeSetup, { mode: 'first_last_frame', initialIds: ['connected-script'], items: [{ id: 'a', label: 'A', url: 'a.png' }, { id: 'b', label: 'B', url: 'b.png' }], onApply: (ids) => { chosen = ids }, onCreate: noop, onLibrary: noop, onClose: noop })))
     assert.equal(byText('完成 / 返回视频节点').disabled, true)
-    await click(byText('B')); await click(byText('A')); await click(byText('完成 / 返回视频节点')); assert.deepEqual(chosen, ['b', 'a'])
+    await click(byText('尾帧 · 待选择')); await click(byText('B'))
+    assert.equal(byText('完成 / 返回视频节点').disabled, true)
+    await click(byText('A')); await click(byText('完成 / 返回视频节点')); assert.deepEqual(chosen, ['a', 'b'])
     const busy = [], applied = []
     await act(async () => root.render(h(InlineTextComposer, { projectId: 1, nodeId: 'script-1', title: '故事脚本', text: '原正文', settings: { writingPrompt: '写开场', writingType: '分镜脚本', writingSkill: 'acting' }, references: [{ id: 'ref-1', label: '角色', text: '小明' }], candidates: [], headers: {}, writable: true, onSetting: noop, onReference: noop, onBusy: (value) => busy.push(value), onApply: (...args) => applied.push(args) })))
     await click(button('开始 AI 写作'))

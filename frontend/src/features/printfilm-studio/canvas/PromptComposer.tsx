@@ -156,6 +156,7 @@ export function PromptComposer({
   resolution, onResolutionChange, duration, onDurationChange, estimate, isVideo, onClose, onSubmit, canSubmit, attached, controls, voice, onVoiceChange, videoMode, onVideoModeChange, videoModeOptions, validationMessage, generateAudio, onAudioChange,
 }: Props) {
   const choices = controls || generationControls(undefined, isVideo)
+  const fixedRatio = isVideo && (videoMode === 'first_last_frame' || videoMode === 'image_to_video')
   const [presetMenu, setPresetMenu] = useState<keyof typeof PRESETS | null>(null)
   const imageMode = !isVideo && action !== 'audio' && action !== 'crop'
   const placeholder = action === 'audio' ? '输入要读出来的台词' : imageMode
@@ -190,7 +191,10 @@ export function PromptComposer({
     <div className="pf-composer-tags nowheel">
       {chips.map((chip) => <span className="pf-chip" key={chip.id}>{chip.label}<button type="button" aria-label="移除标签" onClick={() => onRemoveChip(chip.id)}><X size={12} /></button></span>)}
       {refs.map((item) => <span className={`pf-chip is-ref${item.status?' is-pending':''}`} key={item.id} title={`${item.label}${item.status?' · '+item.status:''}`}><button type="button" className="pf-ref-jump" aria-label={`定位关联节点 ${item.label}`} onClick={()=>onFocusRef?.(item.id)}><ReferenceThumb item={item} /><span className="pf-ref-label">{item.label}</span></button><button type="button" aria-label="移除参考" onClick={() => onRemoveRef(item.id)}><X size={12} /></button></span>)}
-      {action !== 'audio' && <button ref={triggerRef} type="button" className="pf-chip-btn" onMouseDown={(event) => event.preventDefault()} onClick={() => { cancelBlur(); setFromButton(true); setMentionAt(prompt.length); setQuery(''); inputRef.current?.focus() }}><Plus size={13} /> {isVideo ? '参考' : '参考图'}</button>}
+      {action !== 'audio' && <button ref={triggerRef} type="button" className="pf-chip-btn" onMouseDown={(event) => event.preventDefault()} onClick={() => {
+        if (isVideo && videoMode === 'first_last_frame') { onAddRef(); return }
+        cancelBlur(); setFromButton(true); setMentionAt(prompt.length); setQuery(''); inputRef.current?.focus()
+      }}><Plus size={13} /> {isVideo && videoMode === 'first_last_frame' ? '设置首尾帧' : isVideo ? '参考' : '参考图'}</button>}
       {(imageMode || isVideo) && (isVideo ? (['特效', '运镜', '姿势', '案例'] as const) : (['姿势', '案例'] as const)).map((name) => <button type="button" key={name} className="pf-chip-btn" aria-expanded={presetMenu === name} onClick={() => setPresetMenu(presetMenu === name ? null : name)}>{name === '运镜' ? <Camera size={16} /> : name === '姿势' ? <PersonStanding size={16} /> : name === '特效' ? <Sparkles size={16} /> : <ImageIcon size={16} />}{name}</button>)}
       {!attached && <button type="button" className="pf-composer-close" aria-label="关闭" onClick={onClose}><X size={16} /></button>}
     </div>
@@ -205,10 +209,10 @@ export function PromptComposer({
       {action !== 'crop' && action !== 'compose' && <StudioModelSelect label="模型" value={modelId} options={modelOptions.length ? modelOptions : [{ id: '', label: '默认模型' }]} onChange={onModelChange} />}
       {action === 'compose' ? <span>输入片段按连线顺序拼接，当前片段放在末尾</span> : action === 'audio' ? <ComposerSelect label="配音音色" value={voice || 'narrator_calm'} options={[{ id: 'narrator_calm', label: '沉稳旁白' }, { id: 'warm_storyteller', label: '温暖叙事' }, { id: 'teacher_clear', label: '清晰讲解' }]} onChange={(value) => onVoiceChange?.(value)} /> : isVideo ? <>
         <ComposerSelect label="视频生成方式" value={videoMode || 'text_to_video'} options={videoModeOptions || []} onChange={(value) => onVideoModeChange?.(value as StudioVideoMode)} />
-        <ComposerMenu label="视频参数" value={`${ratio} · ${resolution} · ${duration} 秒`} wide>{() => <>
+        <ComposerMenu label="视频参数" value={`${fixedRatio ? '跟随首帧' : ratio} · ${resolution} · ${duration} 秒`} wide>{() => <>
           <h3>视频参数</h3>
           {onAudioChange && <label className="pf-composer-audio"><input type="checkbox" checked={generateAudio !== false} onChange={event => onAudioChange(event.target.checked)} />生成声音（对白 / 环境声）</label>}
-          {([{ name: '比例', value: ratio, values: choices.ratios, change: onRatioChange }, { name: '清晰度', value: resolution, values: choices.resolutions, change: onResolutionChange }, { name: '时长', value: duration, values: choices.durations, change: onDurationChange }]).map((field) => <fieldset key={field.name}><legend>{field.name}</legend><div className="pf-composer-option-grid">{field.values.map((value) => <button type="button" role="radio" aria-checked={value === field.value} key={value} onClick={() => field.change(value)}>{field.name === '比例' && <i className="pf-ratio-preview" style={{ aspectRatio: value.replace(':', '/') }} />}{value}{field.name === '时长' ? ' 秒' : ''}</button>)}</div></fieldset>)}
+          {([{ name: '比例', value: ratio, values: choices.ratios, change: onRatioChange }, { name: '清晰度', value: resolution, values: choices.resolutions, change: onResolutionChange }, { name: '时长', value: duration, values: choices.durations, change: onDurationChange }]).filter(field => !fixedRatio || field.name !== '比例').map((field) => <fieldset key={field.name}><legend>{field.name}</legend><div className="pf-composer-option-grid">{field.values.map((value) => <button type="button" role="radio" aria-checked={value === field.value} key={value} onClick={() => field.change(value)}>{field.name === '比例' && <i className="pf-ratio-preview" style={{ aspectRatio: value.replace(':', '/') }} />}{value}{field.name === '时长' ? ' 秒' : ''}</button>)}</div></fieldset>)}
         </>}</ComposerMenu>
       </> : <>
         <ComposerSelect label="比例" value={ratio} options={choices.ratios.map((id) => ({ id, label: ({auto:'自动','1:1':'1:1 方形','3:2':'3:2 横版','2:3':'2:3 竖版'} as Record<string,string>)[id] || id }))} onChange={onRatioChange} />

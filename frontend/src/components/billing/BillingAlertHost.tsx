@@ -17,9 +17,11 @@ type BillingAlertItem = {
 export default function BillingAlertHost() {
   // 在发起 pending 请求前就上锁，避免 focus/interval/StrictMode 并发重入
   const showingRef = useRef(false)
+  const rejectedToken = useRef<string | null>(null)
 
   const checkAlerts = useCallback(async () => {
-    if (!localStorage.getItem('token') || showingRef.current) return
+    const token = localStorage.getItem('token')
+    if (!token || token === rejectedToken.current || showingRef.current) return
     showingRef.current = true
     try {
       const res = await api.billingAlertsPending()
@@ -37,8 +39,10 @@ export default function BillingAlertHost() {
           // 已确认或并发 ack 导致 404 时忽略，避免反复重试刷屏
         }
       }
-    } catch {
-      // 未登录或网络异常时静默跳过
+    } catch (error) {
+      if (typeof error === 'object' && error !== null && 'status' in error && error.status === 401) {
+        rejectedToken.current = token
+      }
     } finally {
       showingRef.current = false
     }

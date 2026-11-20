@@ -10,7 +10,7 @@ from pydantic import TypeAdapter, ValidationError
 from sqlalchemy import case, func, or_, select
 
 from app.models_drama import DramaAsset, DramaProject
-from app.schemas_tools import ToolReference
+from app.schemas_tools import MAX_TOOL_REFERENCES, ToolReference
 
 ROLE_KIND = {"first_frame": "image", "last_frame": "image", "reference_image": "image",
              "reference_video": "video", "reference_audio": "audio"}
@@ -28,8 +28,8 @@ def parse_references(raw: str | list) -> list[dict]:
         refs = TypeAdapter(list[ToolReference]).validate_python(value)
     except (ValueError, TypeError, ValidationError):
         raise ValueError("references: 参考资料格式无效，请选择上传文件或资产") from None
-    if len(refs) > 12:
-        raise ValueError("references: 全能参考最多支持 12 个资料")
+    if len(refs) > MAX_TOOL_REFERENCES:
+        raise ValueError(f"references: 全能参考最多支持 {MAX_TOOL_REFERENCES} 个资料")
     return [ref.model_dump(exclude_none=True) for ref in refs]
 
 

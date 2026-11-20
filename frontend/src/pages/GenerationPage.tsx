@@ -56,7 +56,8 @@ function GenerationWorkspace({ kind }: { kind: MediaKind }) {
   const selectedModel = models.find(item => item.id === model)
   const referenceImageLimit = selectedModel?.reference_limits?.images ?? 9
   // memo 化：引用稳定，避免作为 effect 依赖时每次渲染都重跑
-  const referenceLimits = useMemo(() => generationReferenceLimits(selectedModel?.reference_limits), [selectedModel])
+  const referenceLimits = useMemo(() => generationReferenceLimits(selectedModel?.reference_limits
+    && { ...selectedModel.reference_limits, total: selectedModel.reference_total_limit }), [selectedModel])
   const currentReferences = videoReferences[videoMode]
   const serializedReferences = useMemo(() => serializeGenerationReferences(currentReferences), [currentReferences])
   const referenceError = kind === 'video' ? validateGenerationReferences(videoMode, currentReferences, referenceLimits) : null
@@ -241,7 +242,7 @@ function GenerationWorkspace({ kind }: { kind: MediaKind }) {
           onChange={value => { setVideoMode(value as VideoGenerationMode); setError(''); setNotice(''); setMention(null) }} options={[
             { value: 'text_to_video', label: text('文生视频', 'Text to video'), description: text('只写一句话，画面由模型生成', 'Describe your idea without reference media') },
             { value: 'first_last_frame', label: text('首尾帧', 'First / last frame'), description: text('指定首帧，可选尾帧，补全中间运动', 'Choose the first frame and an optional final frame') },
-            { value: 'omni_reference', label: text('全能参考', 'Omni reference'), description: text(`图片 ${referenceLimits.images} 张 / 视频 ${referenceLimits.videos} 段 / 音频 ${referenceLimits.audios} 段 · 最多 12 份`, `${referenceLimits.images} images / ${referenceLimits.videos} videos / ${referenceLimits.audios} audio clips · 12 total`) },
+            { value: 'omni_reference', label: text('全能参考', 'Omni reference'), description: text(`图片 ${referenceLimits.images} 张 / 视频 ${referenceLimits.videos} 段 / 音频 ${referenceLimits.audios} 段 · 最多 ${referenceLimits.total} 份`, `${referenceLimits.images} images / ${referenceLimits.videos} videos / ${referenceLimits.audios} audio clips · ${referenceLimits.total} total`) },
           ]} />}
         {kind === 'audio' ? <span className="gen-control gen-model">{model || text('站点默认模型', 'Default model')}</span> : <GenerationSelect label={text('生成模型', 'Model')} icon={<Icon size={19} />} value={model} onChange={setModel} options={models.filter(item => item.available !== false).map(item => ({ value: item.id, label: item.label, description: item.pricing_hint }))} />}
         {kind === 'audio' ? <GenerationSelect label={text('音色', 'Voice')} icon={<Mic size={18} />} value={voice} onChange={setVoice} options={[

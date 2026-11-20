@@ -136,6 +136,9 @@
 .pf-inline-writing>footer>.pf-writing-parameters{flex:1;flex-wrap:wrap}
 .pf-inline-writing>footer>.pf-composer-spacer{display:none}
 .pf-inline-writing>footer>.pf-composer-cost,.pf-inline-writing>footer>.pf-composer-go{flex:none;white-space:nowrap}
+.pf-video-frame-slots{display:flex;gap:8px;padding:0 16px 10px}
+.pf-video-frame-slots button{min-width:0;padding:7px 10px;border:1px solid #dfe5ed;border-radius:8px;background:#fff;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pf-video-frame-slots button[aria-pressed=true]{border-color:#8373c6;background:#f2eefb;color:#594496}
 @keyframes pf-writing-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.pf-writing-progress>svg{animation:none}}
 

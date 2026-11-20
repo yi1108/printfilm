@@ -120,6 +120,14 @@ export function formatDramaGenError(raw: string | null | undefined): DramaGenErr
     }
   }
 
+  if (text.includes('参考音频未通过隐私审核')) {
+    return {
+      title: '参考音频未通过隐私审核',
+      message: text,
+      suggestion: '检查对应角色的音色绑定，更新参考音频后再生成。',
+    }
+  }
+
   if (
     /参考图疑似真人|PrivacyInformation|InputImageSensitive|SensitiveContentDetected|may contain real person/i.test(
       text,

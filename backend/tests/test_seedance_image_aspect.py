@@ -1,6 +1,13 @@
 """Seedance 参考图宽高比钳制单测。"""
 
-from app.services.seedance_image_aspect import target_canvas_for_seedance_ar
+from pathlib import Path
+
+from app.services.seedance_image_aspect import read_image_size, target_canvas_for_seedance_ar
+
+
+def test_reads_style_board_with_jpeg_content_and_png_extension():
+    board = Path(__file__).resolve().parents[1] / "static/drama/image-styles/wuxia-realistic-photo.png"
+    assert read_image_size(board) == (2560, 1440)
 
 
 def test_target_canvas_ok_16_9():

@@ -13,13 +13,14 @@ from app.schemas_drama import DramaAssetOut
 VideoMode = Literal["text_to_video", "first_last_frame", "omni_reference"]
 ReferenceRole = Literal["first_frame", "last_frame", "reference_image", "reference_video", "reference_audio"]
 MAX_GENERATION_PROMPT_CHARS = 15_000
+MAX_TOOL_REFERENCES = 50
 
 
 class ToolReference(BaseModel):
     model_config = {"extra": "forbid"}
 
     role: ReferenceRole
-    file_index: int | None = Field(default=None, ge=0, le=11, strict=True)
+    file_index: int | None = Field(default=None, ge=0, lt=MAX_TOOL_REFERENCES, strict=True)
     asset_id: int | None = Field(default=None, ge=1, strict=True)
 
     @model_validator(mode="after")
@@ -40,7 +41,7 @@ class ToolEstimateRequest(BaseModel):
     ratio: str = Field(default="9:16", max_length=16)
     resolution: str = Field(default="480p", max_length=16)
     duration: str | int = "5s"
-    references: list[ToolReference] = Field(default_factory=list, max_length=12)
+    references: list[ToolReference] = Field(default_factory=list, max_length=MAX_TOOL_REFERENCES)
 
 
 class ToolReferenceAssetOut(DramaAssetOut):

@@ -108,11 +108,16 @@ async def estimate_node(db, user, project_id, node, document, settings):
     else:
         from app.api.tools import estimate_generation
         from app.schemas_tools import ToolEstimateRequest
-        from app.printfilm_studio.integration.generation_inputs import character_voice_references, video_character_nodes
+        from app.printfilm_studio.integration.generation_inputs import character_voice_references, fixed_video_frame_nodes, video_character_nodes
+        if fixed_video_frame_nodes(document, node):
+            result = await estimate_generation(ToolEstimateRequest(**params, video_mode='first_last_frame', references=[
+                {'file_index': 0, 'role': 'first_frame'}, {'file_index': 1, 'role': 'last_frame'},
+            ]), db, user)
+            return result['estimate_yuan']
         incoming = {e['source'] for e in document['edges'] if e['target'] == node['id']}
         refs = [n for n in document['nodes'] if n['id'] in incoming and n.get('type') in {'character', 'scene', 'image', 'imageGeneration'}]
         roles = ['reference_image'] * len(refs)
-        if params.get('generate_audio') is not False:
+        if params.get('generate_audio') is not False and node['data'].get('videoMode') != 'image_to_video':
             voices = character_voice_references(video_character_nodes(document, node))
             roles.extend('reference_audio' for _ in voices)
         result = await estimate_generation(ToolEstimateRequest(**params, video_mode='omni_reference' if roles else 'text_to_video', references=[{'file_index': i, 'role': role} for i, role in enumerate(roles)]), db, user)

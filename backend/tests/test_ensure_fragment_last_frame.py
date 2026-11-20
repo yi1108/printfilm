@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -27,6 +29,24 @@ def test_write_fragment_last_frame_mirrors_generation():
     write_fragment_last_frame_url(frag, "/static/b_last.jpg")
     assert frag.params["lastFrameUrl"] == "/static/b_last.jpg"
     assert frag.params["generation"]["lastFrameUrl"] == "/static/b_last.jpg"
+
+
+def test_extracts_tail_frame_when_audio_outlasts_video(tmp_path):
+    from app.services.ffmpeg_compose import extract_video_last_frame, probe_duration
+
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg or not shutil.which("ffprobe"):
+        pytest.skip("FFmpeg and FFprobe are required")
+    video = tmp_path / "longer-audio.mp4"
+    subprocess.run([
+        ffmpeg, "-v", "error", "-f", "lavfi", "-i", "color=d=1:s=64x64:r=24",
+        "-f", "lavfi", "-i", "anullsrc=d=2", "-c:v", "mpeg4", "-c:a", "aac", str(video),
+    ], check=True)
+    assert probe_duration(video) == pytest.approx(2, abs=0.05)
+    assert probe_duration(video, video_only=True) == pytest.approx(1, abs=0.05)
+    frame = tmp_path / "last.jpg"
+    assert extract_video_last_frame(video, frame)
+    assert frame.stat().st_size > 0
 
 
 @pytest.mark.asyncio
