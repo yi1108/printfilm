@@ -22,6 +22,8 @@ from app.config import get_settings
 from app.database import get_db
 from app.deps import get_current_user
 from app.marketplace.dependencies import Visitor
+from app.marketplace.apple_api import APP_IDENTITY_OPENAPI
+from fastapi import Response
 from app.models import Order, Project, UsageEvent, User
 from app.models_tasks import TaskRun
 from app.services import billing, epay, stripe_payments
@@ -67,6 +69,7 @@ class CreateOrderBody(BaseModel):
     pay_type: Literal["alipay", "wxpay", "stripe", "apple_iap"]
     language: Literal["zh", "en"] = "zh"
     idempotency_key: str | None = Field(None, min_length=8, max_length=128)
+    app_edition: Literal["domestic", "international"] = "international"
 
 
 @router.get(
@@ -106,16 +109,17 @@ async def wallet(user: User = Depends(get_current_user), db: AsyncSession = Depe
 
 @router.get(
     "/skus",
+    openapi_extra=APP_IDENTITY_OPENAPI,
     summary="获取充值套餐",
     description="无需登录，返回可购买的充值套餐、支持的支付方式及计费倍率。",
     response_description="充值套餐与支付方式",
 )
-async def list_skus(request: Request, user: Visitor = None, language: Literal["zh", "en"] = Query("zh"), channel: Literal["web", "apple_iap"] = "web", db: AsyncSession = Depends(get_db)) -> dict:
+async def list_skus(request: Request, user: Visitor = None, language: Literal["zh", "en"] = Query("zh"), channel: Literal["web", "apple_iap"] = "web", app_edition: Literal["domestic", "international"] | None = None, db: AsyncSession = Depends(get_db), response: Response = None) -> dict:
     if channel == "apple_iap":
         from app.marketplace.apple_api import coin_products
         from app.marketplace.app_bootstrap import require_schema
         await require_schema(request)
-        result = await coin_products(db, user)
+        result = await coin_products(db, user, app_edition, request, response)
         return {**result, "skus": result["items"], "pay_types": ["apple_iap"] if result["purchasing_enabled"] else []}
     stripe_settings = get_settings()
     stripe_ready = stripe_payments.is_ready(stripe_settings, language=language)
@@ -222,6 +226,7 @@ def _client_ip(request: Request) -> str:
 
 @router.post(
     "/orders",
+    openapi_extra=APP_IDENTITY_OPENAPI,
     summary="创建个人充值订单",
     description=(
         "需要登录，选择充值套餐及支付宝、微信或已启用的 Stripe 支付方式，返回二维码或收银台链接和订单有效期。"
@@ -236,17 +241,18 @@ async def create_order(
     user: User = Depends(get_current_user),
 ) -> dict:
     if body.pay_type == "apple_iap":
-        from app.marketplace.apple_api import purchasing_enabled
+        from app.marketplace.apple_api import purchasing_enabled_for_app, resolve_app_edition
         from app.marketplace.app_bootstrap import require_schema
         from app.marketplace.apple_recharge import find_product_for_sku
         from app.marketplace.apple_service import purchase_intent
         from app.marketplace.coin_service import app_fail
         await require_schema(request)
-        if not purchasing_enabled(user.id):
+        edition = resolve_app_edition(request, body.app_edition if "app_edition" in body.model_fields_set else None)
+        if not await purchasing_enabled_for_app(user.id, edition):
             app_fail("MARKETPLACE_PAYMENT_UNAVAILABLE", "苹果充值暂不可用，请稍后重试。", 503)
         if not body.idempotency_key:
             app_fail("MARKETPLACE_IDEMPOTENCY_REQUIRED", "请提供充值操作编号。", 422)
-        product = await find_product_for_sku(db, body.sku_id)
+        product = await find_product_for_sku(db, body.sku_id, edition)
         from app.marketplace.sandbox_wallet import environment
         result = await purchase_intent(db, user.id, environment(user.id), product.product_id, body.idempotency_key)
         await db.commit()
@@ -502,7 +508,7 @@ async def list_orders(
     result = await db.execute(
         select(Order)
         .where(Order.user_id == user.id, Order.team_id.is_(None),
-               func.coalesce(Order.payment_environment, "Production") == "Production")
+               func.coalesce(Order.payment_environment, "Production") == get_settings().wallet_environment)
         .order_by(Order.created_at.desc())
         .limit(limit)
     )
@@ -525,6 +531,17 @@ async def list_orders(
                 **stripe_payments.payment_snapshot(o),
             }
         )
+    google_orders = [o.id for o in rows if o.pay_type == "google_play"]
+    if google_orders:
+        from app.marketplace.google_models import GooglePurchase
+        purchases = {p.order_id: p for p in (await db.scalars(select(GooglePurchase).where(GooglePurchase.order_id.in_(google_orders)))).all()}
+        for order, item in zip(rows, items):
+            if order.pay_type != "google_play":
+                continue
+            purchase = purchases.get(order.id)
+            micros = purchase.amount_micros if purchase else None
+            item.update(currency=purchase.currency if purchase else None, amount_micros=micros,
+                amount_fen=(micros // 10000 if micros is not None else None))
     return {"orders": items}
 
 
@@ -544,6 +561,13 @@ async def get_order(
     order = result.scalar_one_or_none()
     if not order or order.user_id != user.id or order.team_id is not None:
         raise HTTPException(status_code=404, detail="订单不存在")
+    snapshot = stripe_payments.payment_snapshot(order)
+    if order.pay_type == "google_play":
+        from app.marketplace.google_models import GooglePurchase
+        purchase = await db.scalar(select(GooglePurchase).where(GooglePurchase.order_id == order.id))
+        micros = purchase.amount_micros if purchase else None
+        snapshot.update(currency=purchase.currency if purchase else None, amount_micros=micros,
+            amount_fen=micros // 10000 if micros is not None else None)
     return {
         "out_trade_no": order.out_trade_no,
         "status": order.status,
@@ -553,7 +577,7 @@ async def get_order(
         "credit_fen": order.credit_fen,
         "pay_type": order.pay_type,
         "paid_at": order.paid_at.isoformat() if order.paid_at else None,
-        **stripe_payments.payment_snapshot(order),
+        **snapshot,
     }
 
 
@@ -582,6 +606,8 @@ async def close_order(
         return {"out_trade_no": order.out_trade_no, "status": "closed"}
     if order.status != "pending":
         raise HTTPException(status_code=400, detail="当前状态不可关闭")
+    if order.pay_type == "google_play":
+        raise HTTPException(status_code=409, detail="Google Play 付款状态由商店确认，不能在本站关闭；请在 App 中取消或等待付款结果。")
     if order.pay_type == "stripe":
         if not order.trade_no:
             raise HTTPException(status_code=409, detail="Stripe 收银台正在创建，请稍后重试")

@@ -7,7 +7,7 @@ from .wallet_base import (WalletError, allocations, allocate, debt_units, enable
 from .wallet_debts import sweep_debts
 from . import wallet_ranges as ranges
 
-_SOURCE_TYPES = {"web_order", "apple_transaction", "signup_grant", "admin_grant", "legacy_opening"}
+_SOURCE_TYPES = {"web_order", "apple_transaction", "google_transaction", "signup_grant", "admin_grant", "legacy_opening"}
 
 
 async def credit(db, user_id, units, *, source_type, source_ref, amount_fen=0, environment=None, note=""):

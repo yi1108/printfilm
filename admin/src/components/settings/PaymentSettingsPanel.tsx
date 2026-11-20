@@ -10,6 +10,7 @@ import { stripeRateInputError, stripeSettingsPatch, stripeSettingsReady } from "
 import { MediaPriceSettings } from "./MediaPriceSettings";
 import { AppleProductSettings } from "./AppleProductSettings";
 import { AppleConnectionSettings } from "./AppleConnectionSettings";
+import { GooglePlaySettings } from "./GooglePlaySettings";
 import { WalletMigrationSettings } from "./WalletMigrationSettings";
 
 const RATE_FIELDS = [
@@ -293,6 +294,7 @@ export function PaymentSettingsPanel() {
     <WalletMigrationSettings />
     <AppleConnectionSettings />
     <AppleProductSettings />
+    <GooglePlaySettings />
     <MediaPriceSettings />
   </div>;
 }

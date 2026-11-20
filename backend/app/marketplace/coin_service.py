@@ -74,6 +74,9 @@ async def apply_apple_transaction(db, txn: dict) -> AppleTransaction:
     product = await db.scalar(select(AppleProduct).where(AppleProduct.product_id == txn["product_id"]))
     if not product:
         app_fail("MARKETPLACE_IAP_PRODUCT_UNKNOWN", "充值商品尚未登记，请联系客服核对，交易不会被标记到账。", 409)
+    from .app_settings import get_app_settings
+    from .apple_recharge import validate_product_application
+    validate_product_application(product, txn, get_app_settings())
     product_snapshot(product)
     from .apple_fx import value_transaction
     txn = await value_transaction(db, txn)

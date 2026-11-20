@@ -4,7 +4,7 @@ import type { LegalDocument } from './legalDocuments'
 export const PRIVACY_ZH: LegalDocument = {
   slug: 'privacy',
   title: '隐私政策',
-  updatedAt: '2026年11月9日',
+  updatedAt: '2026年11月12日',
   intro: [
     '深圳德沛开源数据科技有限公司（以下简称“PRINTFILM”或“我们”）尊重您的隐私。本政策说明您使用 PRINTFILM iOS 应用、[https://www.printfilm.com](https://www.printfilm.com) 以及相关生成、播放和账户服务（统称“服务”）时，我们如何收集、使用和共享信息。',
     '如果您不同意本政策，请勿使用本服务。我们的[使用条款](/terms)说明了使用 PRINTFILM 的规则。',
@@ -48,7 +48,7 @@ export const PRIVACY_ZH: LegalDocument = {
         },
         {
           type: 'paragraph',
-          text: '**购买和用量。** 我们会接收积分包和 Studio 解锁的记录，以便向您交付所购内容。Apple 负责处理付款。我们不会接收您的完整支付卡号。我们会保存账户的积分余额、积分冻结、生成扣费、Token 用量、付费视频解锁记录和购买历史。',
+          text: '**购买和用量。** 我们会接收积分包和 Studio 解锁的记录，以便向您交付所购内容。iOS 由 Apple、国际版 Android 由 Google Play 处理应用内付款。为验单、到账和退款，我们保存商店订单编号、购买凭证、服务端生成的不透明账号及意向标识，并向相应商店查询交易状态；Google purchase token 加密保存，不作为公开链接或客户端身份凭证。我们不会接收您的完整支付卡号。我们会保存账户的积分余额、积分冻结、生成扣费、Token 用量、付费视频解锁记录和购买历史。',
         },
         {
           type: 'paragraph',
@@ -136,6 +136,7 @@ export const PRIVACY_ZH: LegalDocument = {
           type: 'bullets',
           items: [
             '云托管、存储和 AI 处理服务提供商：共享以合同约定为基础，且仅限于运行本服务；',
+            'Google Play：用于国际版 Android 应用内付款、购买验证、消耗确认及退款核对；Google 按其隐私政策处理这些信息。',
             'Apple：当您进行应用内购买、恢复购买，或使用语音识别、照片图库等 Apple 框架时。Apple 的隐私政策说明了 Apple 自身的处理活动；',
             '其他用户：当您发布视频、评论、点赞或分享时，共享范围以您的显示名称、头像和内容的展示范围为限；',
             '专业顾问，以及政府机关或其他相关方：当我们认为法律要求披露，或为了保护用户、公众或我们的权利而有必要披露时；',

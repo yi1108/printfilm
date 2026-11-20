@@ -225,7 +225,9 @@ export type BillingOrder = {
   out_trade_no: string
   sku_id: string
   sku_name: string
-  amount_fen: number
+  amount_fen: number | null
+  amount_micros?: number | null
+  currency?: string | null
   credit_fen: number
   pay_type: string
   status: string

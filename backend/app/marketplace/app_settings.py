@@ -27,6 +27,8 @@ class MarketplaceAppSettings(BaseSettings):
     apple_environment: Literal["Production", "Sandbox"] = "Production"
     apple_bundle_id: str = ""
     apple_app_id: int | None = Field(None, gt=0)
+    apple_domestic_bundle_id: str = ""
+    apple_domestic_app_id: int = 0
     apple_issuer_id: str = ""
     apple_key_id: str = ""
     apple_private_key_path: str = ""

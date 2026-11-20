@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     apple_iap_enabled: bool = Field(False, validation_alias="MARKETPLACE_APPLE_IAP_ENABLED")
     apple_bundle_id: str = Field("", validation_alias="MARKETPLACE_APPLE_BUNDLE_ID")
     apple_app_id: int = 0
+    apple_domestic_bundle_id: str = ""
+    apple_domestic_app_id: int = 0
     apple_issuer_id: str = Field("", validation_alias="MARKETPLACE_APPLE_ISSUER_ID")
     apple_key_id: str = Field("", validation_alias="MARKETPLACE_APPLE_KEY_ID")
     apple_private_key: str = ""

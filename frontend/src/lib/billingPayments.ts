@@ -45,7 +45,7 @@ export function cnyAmountDisplay(fen: number): string {
 
 /** Legacy orders without a payment snapshot used CNY. Invalid new snapshots stay unavailable. */
 export function billingOrderCharge(order: {
-  amount_fen: number
+  amount_fen: number | null
   payment_currency?: string | null
   payment_amount_minor?: number | null
 }): { currency: PaymentCurrency; amountMinor: number } | null {

@@ -517,7 +517,7 @@ async def close_expired_pending_orders(
     now = datetime.now(timezone.utc)
     # Stripe owns its Checkout expiry; never apply Epay's five-minute timeout.
     stmt = (
-        select(Order).where(Order.status == "pending", Order.pay_type.notin_(("stripe", "apple_iap")))
+        select(Order).where(Order.status == "pending", Order.pay_type.notin_(("stripe", "apple_iap", "google_play")))
         .with_for_update().execution_options(populate_existing=True)
     )
     if team_id is not None:

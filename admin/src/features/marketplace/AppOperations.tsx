@@ -86,7 +86,7 @@ export default function AppOperations({ revision = 0 }: { revision?: number }) {
     {panel === 'settlements' && <FinanceForm key={`settlement-${environment}`} kind="settlement" environment={environment} onSaved={() => setRefresh(value => value + 1)} />}
     {panel === 'payouts' && <FinanceForm key={`payout-${environment}`} kind="payout" environment={environment} onSaved={() => setRefresh(value => value + 1)} />}
     {panel === 'revenue' && <p className="market-ops-feedback">登记打款时使用此处的收益记录编号。只有全部来源充值均已对账、且未退款撤销的收益才能结算，后台会扣除历史退款应抵扣金额。</p>}
-    {(panel === 'products' || panel === 'media') && <p className="market-ops-context">{panel === 'products' ? '仅配置当前部署的商品映射。同一套餐只启用一个苹果商品；调整到账额度须停用旧商品并新建映射。' : '播放准备按当前部署的内容版本执行；生产与沙箱部署不共用任务和财务数据库。'}</p>}
+    {(panel === 'products' || panel === 'media') && <p className="market-ops-context">{panel === 'products' ? '仅配置当前部署的商品映射。同一应用的同一套餐只启用一个苹果商品；调整到账额度须停用旧商品并新建映射。' : '播放准备按当前部署的内容版本执行；生产与沙箱部署不共用任务和财务数据库。'}</p>}
     <div className="market-ops-filter"><div><h2>{appPanels[panel]}</h2><span>{listing ? `共 ${listing.meta.total} 条记录` : '读取服务端记录'}</span></div>{stateOptions[panel] && <select aria-label="App记录状态" value={status} onChange={event => { setStatus(event.target.value); setPage(1) }}><option value="">全部状态</option>{stateOptions[panel]?.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>}{supportsUserFilter && <label className="text-sm">{panel === 'revenue' ? '创作者编号' : '用户编号'} <input aria-label="筛选用户编号" type="number" min="1" value={userId} onChange={event => { setUserId(event.target.value); setPage(1) }} placeholder={panel === 'revenue' ? '全部创作者' : '全部用户'} /></label>}</div>
     {error && <p role="alert" className="market-ops-feedback is-error">{error}<button type="button" className="ml-3" onClick={() => setRefresh(value => value + 1)}>重新加载</button></p>}
     {message && <p role="status" className="market-ops-feedback">{message}</p>}
@@ -112,7 +112,7 @@ function ProductForm({ item, onSaved, onCancel }: { item: Item | null; onSaved: 
       const coins = Number(preset?.credit_fen)
       const price = Number(preset?.amount_fen)
       if (!Number.isSafeInteger(coins) || coins <= 0) throw new Error('请填写共同套餐的到账额度，包含套餐赠送的额度。')
-      await request(`${base}/products`, 'PUT', { product_id: String(item?.product_id || preset?.product_id), sku_id: skuId, coins, price_fen: price, expected_prices: preset?.expected_prices, enabled: form.get('enabled') === 'on' })
+      await request(`${base}/products`, 'PUT', { app_edition: String(item?.app_edition || 'international'), product_id: String(item?.product_id || preset?.product_id), sku_id: skuId, coins, price_fen: price, expected_prices: preset?.expected_prices, enabled: form.get('enabled') === 'on' })
       setMessage('商品配置已保存。商品还须在App Store Connect完成配置并可售后，App才能发起真实购买。'); onSaved()
     } catch (cause) { setError((cause as Error).message) } finally { setBusy(false) }
   }

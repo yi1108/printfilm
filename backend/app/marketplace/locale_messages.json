@@ -975,5 +975,10 @@
   "历史沙箱资金不在隔离账本中，请人工核对，不自动搬入正式余额。": "Legacy sandbox funds require manual review and will not be moved into production balances.",
   "沙箱测试交易不能进入正式财务对账。": "Sandbox transactions cannot enter production reconciliation.",
   "沙箱测试收益不能登记真实打款。": "Sandbox earnings cannot be paid out.",
-  "沙箱测试交易不参与正式收入核算。": "Sandbox transactions are excluded from production revenue accounting."
+  "沙箱测试交易不参与正式收入核算。": "Sandbox transactions are excluded from production revenue accounting.",
+  "苹果商品与当前应用不匹配，请刷新充值套餐。": "This product does not belong to this app. Refresh the top-up packages.",
+  "已登记商品的应用归属不可修改，请创建新商品。": "The app binding of a registered product cannot be changed. Create a new product.",
+  "应用版本参数不正确。": "Invalid app edition.",
+  "应用包名尚未配置，请联系管理员。": "This app bundle has not been configured. Contact the administrator.",
+  "应用版本与包名不一致，请刷新充值页面。": "The app edition and bundle do not match. Refresh the top-up page."
 }

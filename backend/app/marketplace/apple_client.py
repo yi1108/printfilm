@@ -15,6 +15,34 @@ from .coin_service import app_fail
 
 logger = logging.getLogger(__name__)
 _selected_environment = ContextVar("apple_verified_environment", default=None)
+_selected_bundle = ContextVar("apple_verified_bundle", default=None)
+
+
+def application_bundles():
+    cfg = get_app_settings()
+    return list(dict.fromkeys(bundle for bundle in (cfg.apple_bundle_id, getattr(cfg, "apple_domestic_bundle_id", "")) if bundle))
+
+
+def application_settings():
+    cfg = get_app_settings()
+    bundle = _selected_bundle.get()
+    if bundle and bundle != cfg.apple_bundle_id:
+        if bundle != cfg.apple_domestic_bundle_id:
+            app_fail("MARKETPLACE_IAP_TRANSACTION_INVALID", "苹果交易的应用未配置。")
+        cfg = cfg.model_copy(update={"apple_bundle_id": bundle, "apple_app_id": cfg.apple_domestic_app_id or None})
+    return cfg
+
+
+async def in_application(bundle, operation, *args, **kwargs):
+    if not bundle:
+        return await operation(*args, **kwargs)  # legacy persisted transactions
+    if bundle not in application_bundles():
+        app_fail("MARKETPLACE_IAP_TRANSACTION_INVALID", "苹果交易的应用未配置。")
+    token = _selected_bundle.set(bundle)
+    try:
+        return await operation(*args, **kwargs)
+    finally:
+        _selected_bundle.reset(token)
 
 
 async def in_environment(environment, operation, *args, **kwargs):
@@ -90,7 +118,7 @@ def _json_value(value: Any):
 def apple_configured() -> bool:
     """配置完整仅代表可以验签，不等同于真实支付已联调。"""
     from .apple_configuration import configuration_status
-    return configuration_status(get_app_settings())["configured"]
+    return configuration_status(application_settings())["configured"]
 
 
 def require_apple_configured() -> None:
@@ -123,7 +151,7 @@ def _official_objects(environment: str, bundle_id: str, app_id: int | None,
 def _objects():
     """运行时只接受当前服务器环境，客户端不能指定 Sandbox 绕过付款。"""
     require_apple_configured()
-    cfg = get_app_settings()
+    cfg = application_settings()
     if _selected_environment.get():
         cfg = cfg.model_copy(update={"apple_environment": _selected_environment.get()})
     try:
@@ -155,7 +183,7 @@ def _millisecond_date(value, *, required=False):
 
 def normalize_transaction(decoded) -> dict:
     """已验签消耗型交易严格转换为人民币分；币数仍由不可变商品配置决定。"""
-    cfg = get_app_settings()
+    cfg = application_settings()
     payload = _json_value(decoded)
     price, quantity = _field(decoded, "price"), _field(decoded, "quantity")
     env = _scalar(_field(decoded, "environment"))
@@ -175,7 +203,7 @@ def normalize_transaction(decoded) -> dict:
     if not transaction_id or len(transaction_id) > 100 or not isinstance(product_id, str) or not 0 < len(product_id) <= 200:
         app_fail("MARKETPLACE_IAP_TRANSACTION_INVALID", "苹果交易编号或商品编号不正确。")
     revoked = _millisecond_date(_field(decoded, "revocationDate"))
-    return {"environment": env, "transaction_id": transaction_id,
+    return {"environment": env, "bundle_id": cfg.apple_bundle_id, "transaction_id": transaction_id,
             "original_transaction_id": str(_field(decoded, "originalTransactionId") or transaction_id),
             "product_id": product_id, "amount_fen": price // 10 if _field(decoded, "currency") == "CNY" else 0,
             "payment_amount_minor": price // 10, "apple_price_milliunits": price,
@@ -266,14 +294,14 @@ _verify_notification_one = verify_notification
 
 
 async def _verified_in_any_environment(operation, signed):
-    if _selected_environment.get():
-        return await operation(signed)
     first_error = None
-    for env in verification_environments():
-        try:
-            return await in_environment(env, operation, signed)
-        except HTTPException as exc:
-            first_error = first_error or exc
+    bundles = [_selected_bundle.get()] if _selected_bundle.get() else application_bundles()
+    for bundle in bundles or [None]:
+        for env in ([_selected_environment.get()] if _selected_environment.get() else verification_environments()):
+            try:
+                return await in_application(bundle, in_environment, env, operation, signed)
+            except HTTPException as exc:
+                first_error = first_error or exc
     raise first_error
 
 

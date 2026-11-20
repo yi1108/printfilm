@@ -21,8 +21,8 @@ def acquire_schema_lock(connection) -> None:
 
 def register_models():
     """显式注册全部 App 模型，避免运行时导入次序遗漏表。"""
-    from . import app_models, app_media_models, apple_models, app_social_models, app_engagement_models, curation_models, sandbox_models
-    modules = {app_models.__name__, app_media_models.__name__, apple_models.__name__, app_social_models.__name__, app_engagement_models.__name__, curation_models.__name__, sandbox_models.__name__}
+    from . import app_models, app_media_models, apple_models, app_social_models, app_engagement_models, curation_models, sandbox_models, google_models
+    modules = {app_models.__name__, app_media_models.__name__, apple_models.__name__, app_social_models.__name__, app_engagement_models.__name__, curation_models.__name__, sandbox_models.__name__, google_models.__name__}
     names = {mapper.local_table.name for mapper in MarketBase.registry.mappers if mapper.class_.__module__ in modules}
     return [table for table in MarketBase.metadata.sorted_tables if table.name in names]
 
@@ -86,6 +86,7 @@ def apply_schema(connection) -> None:
         "marketplace_series": {"app_editions": "JSON NOT NULL DEFAULT '[\"domestic\"]'"},
         "marketplace_app_content_stats": {"share_count": "BIGINT NOT NULL DEFAULT 0"},
         "marketplace_apple_products": {
+            "app_edition": "VARCHAR(16) NOT NULL DEFAULT 'international'",
             "sku_id": "VARCHAR(64) NOT NULL DEFAULT ''",
             "sku_snapshot": "JSON NOT NULL DEFAULT '{}'",
             "expected_prices": "JSON NOT NULL DEFAULT '{}'",

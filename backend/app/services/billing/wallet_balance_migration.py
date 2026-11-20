@@ -100,7 +100,7 @@ def prepare(user, entries, orders, snapshot):
             validate_account_structure(user.id, production, production_allocations, [], [])
             preserved = production
         except (RuntimeError, ValueError):
-            if any(lot.source_type in ("web_order", "apple_transaction") for lot in production):
+            if any(lot.source_type in ("web_order", "apple_transaction", "google_transaction") for lot in production):
                 raise ValueError("真实付款来源损坏，必须修复证据，不能改成赠额或猜测实付")
     preserved_ids = {lot.id for lot in preserved}
     kept = sum(ranges.units(lot.available_ranges) for lot in preserved if lot.active)

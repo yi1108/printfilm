@@ -3,7 +3,7 @@ import type { LegalDocument } from './legalDocuments'
 export const TERMS_ZH: LegalDocument = {
   slug: 'terms',
   title: '用户协议',
-  updatedAt: '2026年11月9日',
+  updatedAt: '2026年11月12日',
   intro: [
     '本用户协议（以下简称“本协议”）是您与深圳德沛开源数据科技有限公司（以下简称“PRINTFILM”或“我们”）之间订立的合同，规范您对 PRINTFILM 移动应用、[https://www.printfilm.com](https://www.printfilm.com) 网站以及相关生成、播放和账户服务（以下合称“本服务”）的访问和使用。',
     '通过创建账户、点击“同意”、购买积分或 Studio 使用权限，或以其他方式使用本服务，即表示您同意本协议及我们的[隐私政策](/privacy)。如您不同意，请勿使用本服务。',
@@ -80,7 +80,7 @@ export const TERMS_ZH: LegalDocument = {
         },
         {
           type: 'paragraph',
-          text: '应用内数字商品通过 Apple In-App Purchase 销售。Apple 的付款界面会在您确认前显示价格和币种。在 iOS 应用内，我们不会要求您通过 Apple In-App Purchase 以外的任何方式支付积分、Studio 使用权限或其他数字商品的费用。',
+          text: 'iOS 应用内数字商品通过 Apple In-App Purchase 销售。Apple 的付款界面会在您确认前显示价格和币种。在 iOS 应用内，我们不会要求您通过 Apple In-App Purchase 以外的任何方式支付积分、Studio 使用权限或其他数字商品的费用。',
         },
       ],
     },
@@ -94,7 +94,9 @@ export const TERMS_ZH: LegalDocument = {
         {
           type: 'bullets',
           items: [
-            '积分包属于消耗型应用内购买项目。价格以 Apple 在结账时显示的价格为准。',
+            '积分包属于消耗型应用内购买项目。价格以相应商店在结账时显示的价格为准。',
+            '国际版 Android 通过 Google Play Billing 购买一次性消耗型积分包，支付币种和价格由 Google Play 展示。我们通过 Google 服务端校验购买凭证，将积分计入购买时绑定的同一 PRINTFILM 账户；待付款不发放积分，补单或重复验单不会重复发放。Android 本地 Studio 工具不因这次积分充值新增收费。',
+            'Google Play 购买的取消、退款及撤销由商店确认后按原资金来源处理：收回未用额度，必要时撤销关联观看权益；实际已发生的生成消费可能形成待补齐欠费。购买或退款问题可通过 Google Play 及本平台客服处理。',
             '积分不会过期，也不具有现金价值。积分不是银行余额、存款或电子货币，不得兑换现金或转让给他人，但我们明确书面同意的情形除外，例如通过客服申请的企业合作安排。',
             '已完成的积分购买会计入结账时已登录的 PRINTFILM 账户。请登录同一账户查看余额和购买记录。使用“恢复购买”功能不会再次发放这些积分。',
             '生成开始时，我们可能会根据预估金额冻结相应积分，然后根据实际用量（包括为该请求处理的 Token 数量）结算费用。图像生成和视频生成的费用可能不同。用量页面显示我们系统中您账户的相关记录。',

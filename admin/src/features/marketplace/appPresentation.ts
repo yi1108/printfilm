@@ -44,7 +44,7 @@ const labels: Record<string, string> = {
   debt_created: '记录欠费', debt_repay: '补齐欠费', debt_release: '退回代偿资金', debt_cancelled: '取消追偿',
   repayment_void: '代偿来源退款', freeze: 'AI预扣冻结', settle: 'AI实际结算', unfreeze: '退回未用冻结',
   consume: '余额消费', grant: '赠额到账', adjust: '管理员调整',
-  alipay: '支付宝', wxpay: '微信支付', apple_iap: '苹果内购', platform_balance: '平台余额',
+  alipay: '支付宝', wxpay: '微信支付', apple_iap: '苹果内购', google_play: 'Google Play', platform_balance: '平台余额',
   Production: '生产', Sandbox: '沙箱', pending: '待处理', processing: '处理中', running: '处理中', paid: '已付款',
   refunded: '已退款', refund_reversed: '退款已撤销', failed: '处理失败', done: '已完成', ready: '已就绪',
   approved: '审核通过', draft: '草稿', none: '未准备', cancelled: '已取消', revoked: '已撤销',

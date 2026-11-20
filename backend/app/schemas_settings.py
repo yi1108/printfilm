@@ -26,6 +26,8 @@ class AdminModelSettingsOut(BaseModel):
     apple_iap_enabled: bool = False
     apple_bundle_id: str = ""
     apple_app_id: int = 0
+    apple_domestic_bundle_id: str = ""
+    apple_domestic_app_id: int = 0
     apple_issuer_id: str = ""
     apple_key_id: str = ""
     apple_private_key: str = ""
@@ -169,6 +171,8 @@ class AdminModelSettingsPatch(BaseModel):
     apple_iap_enabled: bool | None = None
     apple_bundle_id: str | None = Field(None, max_length=255)
     apple_app_id: int | None = Field(None, ge=0)
+    apple_domestic_bundle_id: str | None = Field(None, max_length=255, pattern=r"^(?:[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)?$")
+    apple_domestic_app_id: int | None = Field(None, ge=0)
     apple_issuer_id: str | None = Field(None, max_length=64)
     apple_key_id: str | None = Field(None, max_length=64)
     apple_private_key: str | None = Field(None, max_length=16384)
@@ -370,6 +374,8 @@ def model_config_field_names() -> tuple[str, ...]:
         "apple_environment",
         "apple_bundle_id",
         "apple_app_id",
+        "apple_domestic_bundle_id",
+        "apple_domestic_app_id",
         "apple_issuer_id",
         "apple_key_id",
         "apple_private_key",

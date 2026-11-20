@@ -716,6 +716,14 @@ async def patch_admin_model_settings(
         from app.marketplace.apple_configuration import validate_material, configuration_status
         from app.marketplace.app_settings import get_app_settings
         validate_material(current["apple_private_key"], current["apple_root_certificates"])
+        domestic = current.get("apple_domestic_bundle_id", "").strip()
+        current["apple_domestic_bundle_id"] = domestic
+        if domestic and domestic == current["apple_bundle_id"].strip():
+            raise ValueError("国内版与国际版 Bundle ID 不能相同。")
+        if domestic and current["apple_environment"] == "Production" and not current.get("apple_domestic_app_id"):
+            raise ValueError("配置国内版应用时请填写对应的 Apple App ID。")
+        if not domestic and current.get("apple_domestic_app_id"):
+            raise ValueError("请同时填写国内版 Bundle ID。")
         candidate = get_app_settings().model_copy(update={key: value for key, value in current.items() if key.startswith("apple_")})
         if current["apple_sandbox_enabled"]:
             if current["wallet_environment"] != "Production" or current["apple_environment"] != "Production":

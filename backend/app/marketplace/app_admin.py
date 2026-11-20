@@ -29,6 +29,7 @@ def _sku_snapshot(sku_id: str) -> dict:
 
 class ProductInput(BaseModel):
     """苹果商品绑定现有Web套餐，赠送额度也必须原样冻结；已使用映射不可改。"""
+    app_edition: Literal["domestic", "international"] = "international"
     model_config = ConfigDict(extra="forbid")
     product_id: str = Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9._-]+$")
     sku_id: str = Field(min_length=1, max_length=64)
@@ -148,7 +149,7 @@ async def summary(db: DB, user: Admin, environment: Environment = "Production"):
 
 @router.get("/products", response_model=dict)
 async def products(db: DB, user: Admin, environment: Environment = "Production", page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100)):
-    return await listing(db, AppleProduct, "id product_id sku_id sku_snapshot coins price_fen expected_prices enabled created_at", environment, page, page_size)
+    return await listing(db, AppleProduct, "id product_id app_edition sku_id sku_snapshot coins price_fen expected_prices enabled created_at", environment, page, page_size)
 
 
 @router.put("/products", response_model=dict)
@@ -162,11 +163,13 @@ async def save_product(body: ProductInput, db: DB, user: Admin):
         app_fail("MARKETPLACE_IAP_PRODUCT_BINDING_REQUIRED", "商品价格和到账额度必须与共同套餐一致。", 409)
     await lock_creator(db, 0, "Production")
     if body.enabled and await db.scalar(select(AppleProduct.id).where(
-            AppleProduct.sku_id == body.sku_id, AppleProduct.enabled.is_(True),
+            AppleProduct.sku_id == body.sku_id, AppleProduct.app_edition == body.app_edition, AppleProduct.enabled.is_(True),
             AppleProduct.product_id != body.product_id).limit(1)):
         app_fail("MARKETPLACE_IAP_PRODUCT_CONFLICT", "该套餐已有启用的苹果商品，请先停用旧商品后再启用新商品。", 409)
     item = (await db.execute(select(AppleProduct).where(AppleProduct.product_id == body.product_id).with_for_update())).scalar_one_or_none()
     if item:
+        if item.app_edition != body.app_edition:
+            app_fail("MARKETPLACE_IAP_PRODUCT_IMMUTABLE", "已登记商品的应用归属不可修改，请创建新商品。", 409)
         if item.coins != body.coins or item.price_fen != body.price_fen:
             app_fail("MARKETPLACE_IAP_PRODUCT_IMMUTABLE", "已创建的商品币数和价格映射不可改写，请创建新的苹果商品。", 409)
         if item.sku_id and item.sku_id != body.sku_id:
@@ -189,13 +192,14 @@ async def save_product(body: ProductInput, db: DB, user: Admin):
     await db.flush()
     event(db, user.id, "apple_product", item.id, "configured", "更新商品映射；苹果可售状态须独立验证")
     await db.commit()
-    return view(item, "id product_id sku_id sku_snapshot coins price_fen expected_prices enabled created_at")
+    return view(item, "id product_id app_edition sku_id sku_snapshot coins price_fen expected_prices enabled created_at")
 
 
 @router.get("/product-presets", response_model=dict)
-async def product_presets(user: Admin):
+async def product_presets(user: Admin, app_edition: Literal["domestic", "international"] = "international"):
     from app.services.billing.pricing import SKUS, topup_prices
-    return {"items": [{**sku, "product_id": f'com.deep.printfilm.credits.{sku["id"]}',
+    prefix = "com.qianzhi.deep.app01.credits" if app_edition == "domestic" else "com.deep.printfilm.credits"
+    return {"items": [{**sku, "app_edition": app_edition, "product_id": f'{prefix}.{sku["id"]}',
         "coins": sku["credit_fen"], "price_fen": sku["amount_fen"], "expected_prices": topup_prices(sku)} for sku in SKUS]}
 
 

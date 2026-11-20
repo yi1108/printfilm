@@ -9,7 +9,7 @@ def validate_document(document: dict, routes) -> int:
     """检查内部引用与已挂载HTTP操作，防止交付断裂或漏接口的OpenAPI。"""
     from fastapi.routing import APIRoute
 
-    allowed = ("/api/marketplace/app/v1/", "/api/admin/marketplace/app/", "/api/admin/marketplace/curation/", "/api/billing/")
+    allowed = ("/api/marketplace/app/v1/", "/api/admin/marketplace/app/", "/api/admin/marketplace/curation/", "/api/admin/settings/google-play", "/api/billing/")
     notification = "/api/marketplace/payments/apple/notifications"
     paths = document.get("paths", {})
     if not paths or any(not path.startswith(allowed) and path != notification for path in paths):
@@ -42,6 +42,11 @@ def validate_document(document: dict, routes) -> int:
     required = {
         "/api/billing/wallet", "/api/billing/skus", "/api/billing/orders",
         "/api/billing/apple/transactions/verify", "/api/billing/apple/notifications",
+        "/api/marketplace/app/v1/iap/google/skus",
+        "/api/marketplace/app/v1/iap/google/purchase-intents",
+        "/api/marketplace/app/v1/iap/google/transactions/verify",
+        "/api/billing/google/notifications",
+        "/api/admin/settings/google-play",
         "/api/marketplace/app/v1/capabilities",
         "/api/marketplace/app/v1/categories",
         "/api/marketplace/app/v1/feed",

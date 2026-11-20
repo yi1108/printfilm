@@ -67,6 +67,8 @@ export type AdminModelSettings = {
   apple_environment: "Production" | "Sandbox";
   apple_bundle_id: string;
   apple_app_id: number;
+  apple_domestic_bundle_id: string;
+  apple_domestic_app_id: number;
   apple_issuer_id: string;
   apple_key_id: string;
   apple_private_key: string;

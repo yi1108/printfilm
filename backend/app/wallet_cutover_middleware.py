@@ -25,6 +25,7 @@ def guarded(method, path):
     if path in ("/api/auth/login", "/api/auth/logout"):
         return False
     return (method not in ("GET", "HEAD", "OPTIONS") or "notify" in path or "webhook" in path
+            or path == "/api/marketplace/app/v1/iap/google/skus"
             or path == "/api/admin/settings/models")
 
 
