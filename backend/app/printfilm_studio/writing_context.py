@@ -87,34 +87,11 @@ def linked_writing_result(text, writer, document):
     if not text.strip():
         return text
     pictures = [ref for ref in writing_references(writer, document) if ref['mediaKind'] == 'image']
-    by_id = {ref['id']: ref for ref in pictures}
-    labels = sorted((ref for ref in pictures if len(ref['name']) >= 2 and sum(other['name'] == ref['name'] for other in pictures) == 1), key=lambda ref: -len(ref['name']))
-    included = set()
-
-    def link_prose(value, index=0):
-        if index >= len(labels):
-            return value
-        ref = labels[index]
-        parts = re.split(r'(?<![A-Za-z0-9_])@?' + re.escape(ref['name']) + r'(?![A-Za-z0-9_])', value)
-        if len(parts) > 1:
-            included.add(ref['id'])
-        return reference_token(ref).join(link_prose(part, index + 1) for part in parts)
-
-    result, offset = [], 0
-    for match in re.finditer(r'@\[([^\]]*)\]\((node|asset):([^)]*)\)', text.strip()):
-        result.append(link_prose(text.strip()[offset:match.start()]))
-        identity = unquote(match[3])
-        if match[2] == 'node' and identity in by_id:
-            included.add(identity)
-            result.append(reference_token(by_id[identity]))
-        else:
-            result.append(unquote(match[1]))
-        offset = match.end()
-    result.append(link_prose(text.strip()[offset:]))
+    included = {unquote(match[1]) for match in re.finditer(r'@\[[^\]]*\]\(node:([^)]*)\)', text)}
     missing = [ref for ref in pictures if ref['id'] not in included]
     if missing:
-        result.append('\n参考图片：' + '、'.join(reference_token(ref) for ref in missing))
-    return ''.join(result)
+        return text + '\n参考素材：' + '、'.join(reference_token(ref) for ref in missing)
+    return text
 
 
 def writing_context(writer, document, settings):
@@ -139,5 +116,5 @@ def writing_context(writer, document, settings):
     prompt += '\n下游实际生成设置（优先于旧要求中的参数，时长、比例必须一致，不得擅自更改）：\n' + json.dumps(outputs, ensure_ascii=False)
     pictures = [ref for ref in refs if ref['mediaKind'] == 'image']
     if pictures:
-        prompt += '\n图片引用标记（在正文提及对应人物或场景时原样使用，标记不是网址；不要自行编造编号）：\n' + '\n'.join(f'{ref["name"]}：{reference_token(ref)}' for ref in pictures)
+        prompt += '\n图片引用标记（正文保留素材名称，引用标记可附在正文末尾）：\n' + '\n'.join(f'{ref["name"]}：{reference_token(ref)}' for ref in pictures)
     return prompt, outputs

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, type ClipboardEvent, type Ref } from 'react'
-import { promptCaret, readPromptDom, splitPrompt, type PromptReference } from './promptMentions'
+import { appendPromptReferences, promptCaret, readPromptDom, splitPrompt, type PromptReference } from './promptMentions'
 
 type Props = { readOnly?: boolean; value: string; onChange: (value: string, caret: number) => void; references: PromptReference[]; placeholder?: string; label: string; className?: string; inputRef?: Ref<HTMLDivElement>; onPasteText?: (value: string) => string; onCaret?: (value: string, caret: number) => void; onFocus?: () => void; onBlur?: () => void }
 export function restorePromptCaret(root: HTMLElement, offset: number) {
@@ -58,12 +58,19 @@ export function PromptInput({ value, onChange, references, placeholder, label, c
     const original = event.clipboardData.getData('text/plain')
     const text = onPasteText?.(original) ?? original
     range.deleteContents()
-    const node = document.createTextNode(text)
+    const node = document.createTextNode(original)
     range.insertNode(node)
     range.setStartAfter(node)
     range.collapse(true)
     selection.removeAllRanges()
     selection.addRange(range)
+    if (text !== original) {
+      const el = event.currentTarget
+      const current = readPromptDom(el)
+      const references = splitPrompt(text.slice(original.length)).flatMap(part => 'reference' in part ? [part.reference] : [])
+      const updated = appendPromptReferences(current, references)
+      if (updated !== current) el.append(document.createTextNode(updated.slice(current.length)))
+    }
     publish(event.currentTarget, text !== original)
   }
   return <div ref={(el) => { localRef.current = el; if (typeof inputRef === 'function') inputRef(el); else if (inputRef) inputRef.current = el }} contentEditable={!readOnly} aria-readonly={readOnly} suppressContentEditableWarning role="textbox" aria-multiline="true" aria-label={label} data-placeholder={placeholder} className={`pf-prompt-editable nodrag nopan nowheel ${className}`} onInput={(event) => { if (!composing.current) publish(event.currentTarget) }} onCompositionStart={() => { composing.current = true }} onCompositionEnd={(event) => { composing.current = false; publish(event.currentTarget) }} onFocus={onFocus} onBlur={onBlur} onClick={(event) => onCaret?.(readPromptDom(event.currentTarget), promptCaret(event.currentTarget))} onKeyUp={(event) => { if (!composing.current && event.key !== 'Escape') onCaret?.(readPromptDom(event.currentTarget), promptCaret(event.currentTarget)) }} onPaste={paste} />

@@ -1,6 +1,6 @@
 import { nodeMediaKind } from './nodeOperations.ts'
 import { collectMediaUrls, clampMediaIndex } from './imageVariants.ts'
-import { mentionToken, plainPrompt, splitPrompt, type PromptReference } from './promptMentions.ts'
+import { appendPromptReferences, mentionToken, plainPrompt, splitPrompt, type PromptReference } from './promptMentions.ts'
 import { editableWritingRequirements } from './textWriting.ts'
 import { studioMediaRatio } from '../mediaRatio.ts'
 
@@ -98,28 +98,16 @@ export function linkedWritingPrompt(value: string, references: WritingReference[
   let prompt = value
   const videos = outputs.filter(output => output.kind === 'video')
   const pictures = references.filter(item => item.mediaKind === 'image')
-  const labels = pictures.filter(item => item.label.length >= 2 && pictures.filter(other => other.label === item.label).length === 1).sort((a,b) => b.label.length-a.label.length)
   prompt = splitPrompt(prompt).map(part => {
-    if ('token' in part) return references.some(ref=>ref.id===part.reference.id) ? part.token : part.reference.label
+    if ('token' in part) return part.token
     let prose = part.text
     if (videos.length === 1) {
       if (videos[0].duration) prose = prose.replace(/(总时长|片长|镜头时长|时长|约)\s*[:：]?\s*\d+(?:\.\d+)?\s*(?:秒|s\b)/gi, `$1 ${videos[0].duration} 秒`)
       if (videos[0].ratio && videos[0].ratio !== 'auto') prose = prose.replace(/\b\d{1,2}\s*[:：]\s*\d{1,2}\b/g, videos[0].ratio)
     }
-    // Split once around the longest matching label; never rewrite inside a token.
-    const tokenize = (text: string, index: number): string => {
-      if (index >= labels.length) return text
-      const ref = labels[index]
-      const escaped = ref.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      const pattern = new RegExp(`(?<![A-Za-z0-9_])@?${escaped}(?![A-Za-z0-9_])`, 'g')
-      return text.split(pattern).map(piece => tokenize(piece,index+1)).join(mentionToken(ref))
-    }
-    return tokenize(prose,0)
+    return prose
   }).join('')
-  const included = new Set(splitPrompt(prompt).flatMap(part => 'reference' in part ? [part.reference.id] : []))
-  const missing = pictures.filter(item => !included.has(item.id))
-  if (missing.length) prompt += `\n参考图片：${missing.map(mentionToken).join('、')}`
-  return prompt
+  return appendPromptReferences(prompt, pictures)
 }
 
 export function writingOutputInstruction(outputs: WritingOutput[]) {
@@ -131,12 +119,12 @@ export function writingOutputInstruction(outputs: WritingOutput[]) {
 export function writingRequest(prompt: string, references: WritingReference[], outputs: WritingOutput[]) {
   const pictures = references.filter(ref => ref.mediaKind === 'image')
   return plainPrompt(linkedWritingPrompt(editableWritingRequirements(prompt),references,outputs)) + writingOutputInstruction(outputs)
-    + (pictures.length ? '\n图片引用标记（在正文提及对应人物或场景时原样使用，标记不是网址；不要自行编造编号）：\n' + pictures.map(ref => `${ref.label}：${mentionToken(ref)}`).join('\n') : '')
+    + (pictures.length ? '\n图片引用标记（正文保留素材名称，引用标记可附在正文末尾）：\n' + pictures.map(ref => `${ref.label}：${mentionToken(ref)}`).join('\n') : '')
 }
 
 /** Restore image identities after text-only models paraphrase or omit the markers. */
 export function linkedWritingResult(text: string, references: WritingReference[]) {
-  return text.trim() ? linkedWritingPrompt(text.trim(), references, []) : text
+  return text.trim() ? linkedWritingPrompt(text, references, []) : text
 }
 
 export function writingOutputSignature(outputs: WritingOutput[]) {

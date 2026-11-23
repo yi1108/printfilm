@@ -44,7 +44,7 @@ export function InlineTextComposer({ projectId, nodeId, title, text, settings, r
   const imageOutput = outputs.length > 0 && outputs.every(output=>output.kind==='image')
   const prompt = (imageOutput ? imageWritingRequirements : editableWritingRequirements)(String(settings.writingPrompt || '')), type = imageOutput && (!settings.writingType || settings.writingType==='镜头提示词') ? '图片提示词' : String(settings.writingType || (outputs.some(output=>output.kind==='video') ? '镜头提示词' : '故事脚本')), skill = String(settings.writingSkill || 'none')
   const boundReferences: WritingReference[] = references.map(item => ({...item,source:'node',mediaKind:item.mediaKind || (item.url ? 'image' : 'text')}))
-  const linkedPrompt = linkedWritingPrompt(prompt,boundReferences,outputs)
+  const linkedPrompt = linkedWritingPrompt(prompt,boundReferences,[])
   const promptInput = useRef<HTMLDivElement | null>(null)
   const [mention, setMention] = useState<{ value: string; start: number; end: number; query: string } | null>(null)
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null)

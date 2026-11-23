@@ -33,13 +33,15 @@ test('Seedance switches keep usable prose but duration, ratio and other families
 test('generated prose retains stable image IDs, handles @names and ambiguous names safely',()=>{
   const {nodes,edges,writer}=graph()
   const refs=writingContext(writer,nodes,edges).references
-  const result=linkedWritingResult('@角色·司马懿在城门抬头。',refs)
+  const original='  @角色·司马懿在城门抬头。  '
+  const result=linkedWritingResult(original,refs)
+  assert.ok(result.startsWith(original+'\n参考素材：'))
   assert.deepEqual(splitPrompt(result).filter(p=>'reference'in p).map(p=>p.reference.id),['role','scene'])
   assert.ok(!result.includes('@@'))
   assert.equal(linkedWritingResult(result,refs),result)
   const ambiguous=[{...refs[0],label:'人'},{...refs[1],label:'人'}]
   const withRefs=linkedWritingResult('人群走过。',ambiguous)
-  assert.ok(withRefs.startsWith('人群走过。\n参考图片：'))
+  assert.ok(withRefs.startsWith('人群走过。\n参考素材：'))
   assert.deepEqual(splitPrompt(withRefs).filter(p=>'reference'in p).map(p=>p.reference.id),['role','scene'])
   assert.equal(linkedWritingResult('',refs),'')
 })
