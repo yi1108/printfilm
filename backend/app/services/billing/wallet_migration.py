@@ -3,6 +3,7 @@ from dataclasses import asdict, dataclass, field
 import hashlib
 import json
 
+from .order_origin import funding_source
 from sqlalchemy import or_, select
 
 from app.models import Order, User, WalletLedger
@@ -142,7 +143,7 @@ def replay_ledger(entries, orders, expected_balance, expected_frozen, *, opening
                 if order.credit_fen != delta:
                     raise RuntimeError(f"流水 {entry.id} 到账 {delta}，订单 {order.out_trade_no} 到账 {order.credit_fen}")
                 cash = order_cash(order)
-                source = Source("web_order", order.out_trade_no, delta, cash or 0, [[0, delta]], cash is None)
+                source = Source(funding_source(order), order.out_trade_no, delta, cash or 0, [[0, delta]], cash is None)
             elif kind == "grant":
                 source = Source("signup_grant" if entry.ref_type == "signup" else "admin_grant",
                                 f"legacy-ledger:{entry.id}", delta, 0, [[0, delta]])
@@ -214,7 +215,7 @@ def payment_findings(entries, orders, lots=(), apple_transactions=(), google_tra
     refs = {str(entry.ref_id) for entry in entries
             if entry.kind == "topup" and entry.ref_type == "order" and int(entry.delta_fen) > 0}
     refs.update(str(lot.source_ref) for lot in lots
-                if lot.source_type == "web_order" and getattr(lot, "source_ref", None))
+                if lot.source_type in ("web_order", "android_epay_order") and getattr(lot, "source_ref", None))
     missing, sandbox = [], []
     for order in orders:
         if order.status != "paid" or order.team_id is not None:
@@ -274,7 +275,7 @@ def source_payment_problems(lots, orders):
     problems = []
     seen_orders = set()
     for lot in lots:
-        if lot.source_type == "web_order":
+        if lot.source_type in ("web_order", "android_epay_order"):
             order = by_ref.get(str(lot.source_ref))
             if order is not None and order.out_trade_no in seen_orders:
                 problems.append(f"订单 {order.out_trade_no} 存在重复来源")
@@ -291,6 +292,8 @@ def source_payment_problems(lots, orders):
                   or getattr(order, "pay_type", "alipay") not in ("alipay", "wxpay", "stripe")
                   or getattr(order, "payment_environment", None) not in (None, "Production")):
                 problems.append(f"来源订单 {lot.source_ref} 不是已支付的正式个人订单")
+            elif funding_source(order) != lot.source_type:
+                problems.append(f"来源订单 {order.out_trade_no} 的 App/Web 标记不一致")
             elif int(order.credit_fen) != int(lot.total_units) or (cash is not None and cash != int(lot.total_amount_fen)):
                 problems.append(f"来源订单 {order.out_trade_no} 额度或历史实付成本不一致")
             elif cash is None and lot.settlement_status != "pending_fx":

@@ -97,6 +97,14 @@ class AdminModelSettingsOut(BaseModel):
     epay_key: str = Field(default="", description="易支付商户签名密钥；响应始终为空串，请通过 has_epay_key 判断是否已配置")
     epay_notify_url: str = Field(default="", description="易支付异步支付通知地址")
     epay_return_url: str = Field(default="", description="易支付支付完成后的浏览器跳转地址")
+    android_epay_enabled: bool = False
+    android_epay_alipay_enabled: bool = False
+    android_epay_wxpay_enabled: bool = False
+    android_epay_package_name: str = ""
+    android_epay_sha256_fingerprints: str = ""
+    android_epay_return_base_url: str = ""
+    android_epay_checkout_hosts: str = ""
+    android_epay_app_scheme: str = ""
     has_epay_key: bool = Field(default=False, description="是否已配置易支付商户签名密钥；实际密钥不在响应中返回")
 
     # Stripe Checkout
@@ -244,6 +252,14 @@ class AdminModelSettingsPatch(BaseModel):
     epay_key: str | None = Field(default=None, description="易支付商户签名密钥；省略、null 或空白字符串时保留原值；使用 clear_epay_key=true 清空")
     epay_notify_url: str | None = Field(default=None, description="易支付异步支付通知地址；省略或 null 时不修改")
     epay_return_url: str | None = Field(default=None, description="易支付支付完成后的浏览器跳转地址；省略或 null 时不修改")
+    android_epay_enabled: bool | None = None
+    android_epay_alipay_enabled: bool | None = None
+    android_epay_wxpay_enabled: bool | None = None
+    android_epay_package_name: str | None = None
+    android_epay_sha256_fingerprints: str | None = None
+    android_epay_return_base_url: str | None = None
+    android_epay_checkout_hosts: str | None = None
+    android_epay_app_scheme: str | None = None
     clear_epay_key: bool = Field(default=False, description="是否显式清空易支付商户签名密钥；默认为 false；若同时提交非空新值，以新值为准")
 
     stripe_enabled: bool | None = Field(default=None, description="是否开放 Stripe 钱包充值；省略或 null 时不修改")
@@ -367,6 +383,14 @@ def model_config_field_names() -> tuple[str, ...]:
         "epay_key",
         "epay_notify_url",
         "epay_return_url",
+        "android_epay_enabled",
+        "android_epay_alipay_enabled",
+        "android_epay_wxpay_enabled",
+        "android_epay_package_name",
+        "android_epay_sha256_fingerprints",
+        "android_epay_return_base_url",
+        "android_epay_checkout_hosts",
+        "android_epay_app_scheme",
         "stripe_enabled",
         "apple_sandbox_enabled",
         "apple_sandbox_user_ids",

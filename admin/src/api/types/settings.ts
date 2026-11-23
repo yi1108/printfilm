@@ -59,6 +59,15 @@ export type AdminModelSettings = {
   epay_key: string;
   epay_notify_url: string;
   epay_return_url: string;
+  android_epay_enabled: boolean;
+  android_epay_alipay_enabled: boolean;
+  android_epay_wxpay_enabled: boolean;
+  android_epay_package_name: string;
+  android_epay_sha256_fingerprints: string;
+  android_epay_return_base_url: string;
+  android_epay_checkout_hosts: string;
+  android_epay_app_scheme: string;
+
   has_epay_key: boolean;
   stripe_enabled: boolean;
   apple_sandbox_enabled: boolean;

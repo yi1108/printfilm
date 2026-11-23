@@ -21,6 +21,7 @@ export default function AppOperations({ revision = 0 }: { revision?: number }) {
   const [environment, setEnvironment] = useState('Production')
   const [page, setPage] = useState(1)
   const [status, setStatus] = useState('')
+  const [paymentClient, setPaymentClient] = useState('')
   const [userId, setUserId] = useState('')
   const [listing, setListing] = useState<Listing | null>(null)
   const [summary, setSummary] = useState<Record<string, unknown> | null>(null)
@@ -37,12 +38,13 @@ export default function AppOperations({ revision = 0 }: { revision?: number }) {
     setLoading(true); setError(''); setListing(null)
     const params = new URLSearchParams({ page: String(page), page_size: '20', environment })
     if (status) params.set('status', status)
+    if (panel === 'recharge-orders' && paymentClient) params.set('payment_client', paymentClient)
     if (userId && supportsUserFilter) params.set('user_id', userId)
     request<Listing>(`${base}/${panel}?${params}`).then(value => { if (active) setListing(value) })
       .catch(cause => { if (active) setError((cause as Error).message) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [panel, page, status, userId, supportsUserFilter, environment, refresh, revision])
+  }, [panel, page, status, paymentClient, userId, supportsUserFilter, environment, refresh, revision])
   useEffect(() => {
     let active = true
     setSummary(null); setSummaryError('')
@@ -85,6 +87,7 @@ export default function AppOperations({ revision = 0 }: { revision?: number }) {
     {panel === 'funding-reviews' && <FundingReviewForm environment={environment} onSaved={() => setRefresh(value => value + 1)} />}
     {panel === 'settlements' && <FinanceForm key={`settlement-${environment}`} kind="settlement" environment={environment} onSaved={() => setRefresh(value => value + 1)} />}
     {panel === 'payouts' && <FinanceForm key={`payout-${environment}`} kind="payout" environment={environment} onSaved={() => setRefresh(value => value + 1)} />}
+    {panel === 'recharge-orders' && <label>支付来源 <select aria-label="支付来源" value={paymentClient} onChange={e => { setPaymentClient(e.target.value); setPage(1) }}><option value="">全部来源</option><option value="web">Web</option><option value="android_domestic">国内 Android</option><option value="ios">iOS</option><option value="android_international">国际 Android</option></select></label>}
     {panel === 'revenue' && <p className="market-ops-feedback">登记打款时使用此处的收益记录编号。只有全部来源充值均已对账、且未退款撤销的收益才能结算，后台会扣除历史退款应抵扣金额。</p>}
     {(panel === 'products' || panel === 'media') && <p className="market-ops-context">{panel === 'products' ? '仅配置当前部署的商品映射。同一应用的同一套餐只启用一个苹果商品；调整到账额度须停用旧商品并新建映射。' : '播放准备按当前部署的内容版本执行；生产与沙箱部署不共用任务和财务数据库。'}</p>}
     <div className="market-ops-filter"><div><h2>{appPanels[panel]}</h2><span>{listing ? `共 ${listing.meta.total} 条记录` : '读取服务端记录'}</span></div>{stateOptions[panel] && <select aria-label="App记录状态" value={status} onChange={event => { setStatus(event.target.value); setPage(1) }}><option value="">全部状态</option>{stateOptions[panel]?.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>}{supportsUserFilter && <label className="text-sm">{panel === 'revenue' ? '创作者编号' : '用户编号'} <input aria-label="筛选用户编号" type="number" min="1" value={userId} onChange={event => { setUserId(event.target.value); setPage(1) }} placeholder={panel === 'revenue' ? '全部创作者' : '全部用户'} /></label>}</div>

@@ -100,7 +100,7 @@ def prepare(user, entries, orders, snapshot):
             validate_account_structure(user.id, production, production_allocations, [], [])
             preserved = production
         except (RuntimeError, ValueError):
-            if any(lot.source_type in ("web_order", "apple_transaction", "google_transaction") for lot in production):
+            if any(lot.source_type in ("web_order", "android_epay_order", "apple_transaction", "google_transaction") for lot in production):
                 raise ValueError("真实付款来源损坏，必须修复证据，不能改成赠额或猜测实付")
     preserved_ids = {lot.id for lot in preserved}
     kept = sum(ranges.units(lot.available_ranges) for lot in preserved if lot.active)
@@ -142,8 +142,8 @@ def prepare(user, entries, orders, snapshot):
         except (RuntimeError, ValueError, TypeError) as error:
             raise ValueError("存在真实付款但无法确定剩余来源，请先核对，不能将真实充值改成零成本") from error
         kept = sum(ranges.units(source.available_ranges) for source in sources)
-    funded_web = {lot.source_ref for lot in preserved if lot.source_type == "web_order"}
-    funded_web.update(source.source_ref for source in sources if source.source_type == "web_order")
+    funded_web = {lot.source_ref for lot in preserved if lot.source_type in ("web_order", "android_epay_order")}
+    funded_web.update(source.source_ref for source in sources if source.source_type in ("web_order", "android_epay_order"))
     funded_apple = {lot.source_ref for lot in preserved if lot.source_type == "apple_transaction"}
     for lot in preserved:
         if lot.source_type != "apple_transaction":
@@ -227,7 +227,7 @@ async def apply(db, plan, backup_reference):
         marker.environment, marker.migration_reference = "Production", backup_reference
     new_lots = []
     for index, source in enumerate(plan.sources):
-        ref = source.source_ref if source.source_type == "web_order" else f"balance:{preview['fingerprint']}:{index}"
+        ref = source.source_ref if source.source_type in ("web_order", "android_epay_order") else f"balance:{preview['fingerprint']}:{index}"
         lot = WalletFundingLot(user_id=user.id, environment="Production", source_type=source.source_type,
             source_ref=ref, total_units=source.total_units, total_amount_fen=source.total_amount_fen,
             available_ranges=source.available_ranges, void_ranges=[], active=True, revision=0,

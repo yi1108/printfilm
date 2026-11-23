@@ -291,13 +291,13 @@ async def revenue(db: DB, user: Admin, environment: Environment = "Production", 
 
 
 @router.get("/{kind}", response_model=dict)
-async def records(kind: str, db: DB, user: Admin, environment: Environment = "Production", page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100), status: str = "", user_id: int | None = Query(None, gt=0)):
+async def records(kind: str, db: DB, user: Admin, environment: Environment = "Production", page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100), status: str = "", user_id: int | None = Query(None, gt=0), payment_client: str = Query("", pattern="^(|web|android_domestic|ios|android_international)$")):
     """金融和媒体记录白名单；未知 kind 不能反射访问任意表。"""
     from .apple_models import AppleNotification
     from .app_media_models import AppMedia
     if kind in ("wallets", "wallet-entries", "funding-sources", "debts", "repayments", "recharge-orders", "funding-reviews"):
         from .unified_admin import records as unified_records
-        return await unified_records(db, kind, environment, page, page_size, status, user_id)
+        return await unified_records(db, kind, environment, page, page_size, status, user_id, payment_client)
     choices = {
         "transactions": (AppleTransaction, "id user_id environment transaction_id product_id coins amount_fen currency payment_amount_minor storefront valuation_status fx_snapshot status settlement_status anomaly created_at"),
         "notifications": (AppleNotification, "id environment notification_uuid notification_type transaction_id status attempts error created_at"),
@@ -312,7 +312,7 @@ async def records(kind: str, db: DB, user: Admin, environment: Environment = "Pr
     if kind not in choices:
         app_fail("MARKETPLACE_RECORD_NOT_FOUND", "业务记录不存在。", 404)
     model, fields = choices[kind]
-    return await listing(db, model, fields, environment, page, page_size, status, user_id)
+    return await listing(db, model, fields, environment, page, page_size, status, user_id, payment_client)
 
 
 @router.post("/notifications/{notification_id}/retry", response_model=dict)

@@ -167,6 +167,15 @@ class Settings(BaseSettings):
     epay_key: str = ""
     epay_notify_url: str = ""
     epay_return_url: str = ""
+    android_epay_enabled: bool = False
+    android_epay_alipay_enabled: bool = False
+    android_epay_wxpay_enabled: bool = False
+    android_epay_package_name: str = ""
+    android_epay_sha256_fingerprints: str = ""
+    android_epay_return_base_url: str = ""
+    android_epay_checkout_hosts: str = ""
+    android_epay_app_scheme: str = ""
+
 
     # Stripe Checkout（后台配置优先，环境变量用于初始默认值）
     stripe_enabled: bool = False

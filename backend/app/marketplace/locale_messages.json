@@ -1,6 +1,6 @@
 {
   "交易环境与当前服务不一致，未计入余额。": "The transaction environment does not match this wallet. No credit was added. Please use the correct production or test service.",
-  "请提供充值操作编号。": "Provide an idempotency key for this purchase.",
+  "请提供充值操作编号。": "Provide a payment idempotency key.",
   "商品价格和到账额度必须与共同套餐一致。": "The product price and credit must match the shared package.",
   "汇率须大于0且最多六位小数。": "The exchange rate must be positive with at most six decimal places.",
   "该交易已完成核算，不能覆盖原汇率。": "This transaction has been valued; its exchange rate cannot be replaced.",
@@ -980,5 +980,15 @@
   "已登记商品的应用归属不可修改，请创建新商品。": "The app binding of a registered product cannot be changed. Create a new product.",
   "应用版本参数不正确。": "Invalid app edition.",
   "应用包名尚未配置，请联系管理员。": "This app bundle has not been configured. Contact the administrator.",
-  "应用版本与包名不一致，请刷新充值页面。": "The app edition and bundle do not match. Refresh the top-up page."
+  "应用版本与包名不一致，请刷新充值页面。": "The app edition and bundle do not match. Refresh the top-up page.",
+  "安卓包名与国内支付配置不一致。": "The Android package does not match the domestic payment configuration.",
+  "国内安卓充值仅支持国内版应用。": "Domestic Android top-ups only support the domestic app.",
+  "国内安卓只支持支付宝和微信易支付充值。": "Domestic Android supports only Alipay and WeChat Pay through Epay.",
+  "国内安卓支付暂不可用，请联系管理员检查移动收银台配置。": "Domestic Android payment is unavailable. Contact support to check mobile cashier configuration.",
+  "充值订单归属异常，请联系客服核对。": "The payment order ownership could not be verified. Contact support.",
+  "收银台结果尚未确认，请查询原订单，不要重复发起付款。": "The cashier result is unconfirmed. Check the original order and do not pay again.",
+  "充值操作过于频繁，请稍后重试。": "Too many top-up attempts. Please try again later.",
+  "未知充值套餐。": "Unknown top-up package.",
+  "本次操作编号已用于其他充值参数。": "This idempotency key was already used with different payment parameters.",
+  "账户不可用。": "The account is unavailable."
 }

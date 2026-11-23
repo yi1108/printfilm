@@ -637,6 +637,18 @@ def _to_admin_flat_out(flat: dict[str, Any], *, source: str, updated_at, channel
 
 
 async def get_admin_model_settings(db: AsyncSession) -> AdminModelSettingsOut:
+    from app.services.billing.wallet_cutover import runtime_state
+    if (await runtime_state(db)).get("paused"):
+        # Maintenance must remain reachable without bootstrap writes or upstream calls.
+        row = await db.get(AppSettings, "default")
+        config = dict(row.config_json or {}) if row else {}
+        flat = _effective_flat(_decrypt_flat_config(config))
+        channels = await _load_channels(db, runtime=False)
+        logical = [LogicalModel.model_validate(item) for item in config.get("logical_models") or []]
+        defaults = default_models_from_dict(config.get("default_models"))
+        return _to_admin_flat_out(flat, source="db" if config else "env",
+            updated_at=row.updated_at if row else None, channels=channels,
+            logical_models=logical, defaults=defaults)
     channels, logical_models, defaults, flat, app_row = await _compose_runtime_state(db)
     admin_channels = await _load_channels(db, runtime=False)
     source = "db" if app_row.config_json else "env"
@@ -703,12 +715,17 @@ async def patch_admin_model_settings(
         current[field] = value
         applied.append(field)
 
-    from app.marketplace.sharing_config import validate_android_association
-    (current["marketplace_share_android_package_name"],
-     current["marketplace_share_android_sha256_fingerprints"]) = validate_android_association(
-        current.get("marketplace_share_android_package_name", ""),
-        current.get("marketplace_share_android_sha256_fingerprints", ""))
-    if current.get("marketplace_sharing_enabled"):
+    from app.services.billing.android_epay_config import validate as validate_android_payment
+    validate_android_payment(current)
+    if current.get("android_epay_enabled") and (not current["unified_wallet_enabled"] or current["wallet_environment"] != "Production"):
+        raise ValueError("国内安卓真实支付要求已启用 Production 统一钱包。")
+    if any(key in applied for key in ("marketplace_share_android_package_name", "marketplace_share_android_sha256_fingerprints")):
+        from app.marketplace.sharing_config import validate_android_association
+        (current["marketplace_share_android_package_name"],
+         current["marketplace_share_android_sha256_fingerprints"]) = validate_android_association(
+            current.get("marketplace_share_android_package_name", ""),
+            current.get("marketplace_share_android_sha256_fingerprints", ""))
+    if current.get("marketplace_sharing_enabled") and any(key in applied for key in ("marketplace_sharing_enabled", "marketplace_share_base_url")):
         from app.marketplace.sharing_config import validate_share_origin
         current["marketplace_share_base_url"] = validate_share_origin(current.get("marketplace_share_base_url", ""))
     apple_changed = any(key.startswith(("apple_", "clear_apple_")) for key in applied)
@@ -742,7 +759,7 @@ async def patch_admin_model_settings(
             if not status["configured"]:
                 raise ValueError("Apple 新购配置不完整：" + "、".join(status["missing"]))
     turning_app_on = (current.get("marketplace_app_enabled") is True and "marketplace_app_enabled" in applied) or (apple_changed and (current["apple_iap_enabled"] or current["apple_sandbox_enabled"]))
-    if turning_app_on:
+    if turning_app_on or ("android_epay_enabled" in applied and current["android_epay_enabled"]):
         from app.marketplace.app_bootstrap import ensure_schema
         try:
             missing = await ensure_schema()

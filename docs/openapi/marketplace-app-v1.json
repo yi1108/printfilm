@@ -151,6 +151,15 @@
             "title": "App Edition",
             "type": "string"
           },
+          "client": {
+            "default": "web",
+            "enum": [
+              "web",
+              "android"
+            ],
+            "title": "Client",
+            "type": "string"
+          },
           "idempotency_key": {
             "anyOf": [
               {
@@ -1464,6 +1473,94 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/admin/billing/android-epay/status": {
+      "get": {
+        "operationId": "status_api_admin_billing_android_epay_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Status"
+      }
+    },
+    "/api/admin/billing/payment-orders": {
+      "get": {
+        "operationId": "orders_api_admin_billing_payment_orders_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "default": "android_domestic",
+              "pattern": "^(android_domestic|web|all)$",
+              "title": "Source",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Orders"
+      }
+    },
     "/api/admin/marketplace/app/exchange-rates": {
       "get": {
         "operationId": "exchange_rates_api_admin_marketplace_app_exchange_rates_get",
@@ -2899,6 +2996,17 @@
               ],
               "title": "User Id"
             }
+          },
+          {
+            "in": "query",
+            "name": "payment_client",
+            "required": false,
+            "schema": {
+              "default": "",
+              "pattern": "^(|web|android_domestic|ios|android_international)$",
+              "title": "Payment Client",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3374,6 +3482,22 @@
         ]
       }
     },
+    "/api/billing/android-epay/return-config": {
+      "get": {
+        "operationId": "return_config_api_billing_android_epay_return_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Return Config"
+      }
+    },
     "/api/billing/apple/notifications": {
       "post": {
         "description": "只有验签并持久化后才返回2xx；后台任务可在关闭市场后继续处理。",
@@ -3636,6 +3760,108 @@
         ]
       }
     },
+    "/api/billing/orders/{out_trade_no}": {
+      "get": {
+        "description": "需要登录，仅可读取本人个人充值订单；查询前关闭该订单的过期待支付状态，返回支付状态、金额和到账时间。",
+        "operationId": "get_order_api_billing_orders__out_trade_no__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "out_trade_no",
+            "required": true,
+            "schema": {
+              "title": "Out Trade No",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Order Api Billing Orders  Out Trade No  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "个人充值订单状态"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "获取个人充值订单状态",
+        "tags": [
+          "统一充值与余额",
+          "billing"
+        ]
+      }
+    },
+    "/api/billing/orders/{out_trade_no}/close": {
+      "post": {
+        "description": "需要登录，仅可关闭本人的待支付个人订单。已关闭订单可重复请求，已支付订单不能关闭。",
+        "operationId": "close_order_api_billing_orders__out_trade_no__close_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "out_trade_no",
+            "required": true,
+            "schema": {
+              "title": "Out Trade No",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Close Order Api Billing Orders  Out Trade No  Close Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "关闭后的订单状态"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "关闭个人充值订单",
+        "tags": [
+          "统一充值与余额",
+          "billing"
+        ]
+      }
+    },
     "/api/billing/skus": {
       "get": {
         "description": "无需登录，返回可购买的充值套餐、支持的支付方式及计费倍率。",
@@ -3663,7 +3889,8 @@
               "default": "web",
               "enum": [
                 "web",
-                "apple_iap"
+                "apple_iap",
+                "android_epay"
               ],
               "title": "Channel",
               "type": "string"

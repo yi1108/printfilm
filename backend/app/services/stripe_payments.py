@@ -63,7 +63,14 @@ def quote_payment(amount_fen: int, settings: Settings | None = None, *, language
 
 
 def payment_snapshot(order: Order) -> dict:
-    """读取订单固定报价；上线前的空字段订单仅回退为人民币，不使用当前汇率。"""
+    """Serialize the saved payment quote according to the order's payment channel."""
+    if order.pay_type in ("alipay", "wxpay"):
+        # Epay charges the order's fixed CNY amount, including orders created before FX was saved.
+        return {
+            "payment_currency": "cny",
+            "payment_amount_minor": int(order.amount_fen),
+            "payment_exchange_rate": "1",
+        }
     if order.pay_type in ("apple_iap", "google_play"):
         return {"payment_currency": order.payment_currency, "payment_amount_minor": order.payment_amount_minor,
                 "payment_exchange_rate": order.payment_exchange_rate,

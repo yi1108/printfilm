@@ -303,13 +303,23 @@ async def test_stripe_webhook_cannot_credit_epay_order(client, db_session):
 
 @pytest.mark.asyncio
 async def test_epay_webhook_cannot_credit_stripe_order(client, db_session, monkeypatch):
+    from app.marketplace import app_bootstrap
+    from app.marketplace.android_epay_models import AndroidEpayCheckout
+
+    # The minimal ASGI app skips marketplace startup, so prepare its callback table here.
+    connection = await db_session.connection()
+    await connection.run_sync(AndroidEpayCheckout.__table__.create, checkfirst=True)
+    monkeypatch.setattr(app_bootstrap, "require_schema", AsyncMock())
+    monkeypatch.setattr(get_settings(), "epay_key", "test-signing-key")
+
     api_client, user = client
     order = await make_order(db_session, user)
-    monkeypatch.setattr(billing_api.epay, "verify", lambda params: True)
-    response = await api_client.get("/api/billing/epay/notify", params={
+    params = {
         "out_trade_no": order.out_trade_no, "trade_no": "epay_123", "money": "490.00", "trade_status": "TRADE_SUCCESS",
-    })
-    assert response.status_code >= 400
+    }
+    params["sign"] = billing_api.epay._sign_pairs(params, "test-signing-key")
+    response = await api_client.get("/api/billing/epay/notify", params=params)
+    assert response.status_code == 400
     await db_session.refresh(user)
     assert user.balance_fen == 500
     assert order.status == "pending"

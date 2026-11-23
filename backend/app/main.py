@@ -138,6 +138,8 @@ app.include_router(projects.router, prefix="/api")
 app.include_router(creation.router, prefix="/api")
 app.include_router(tasks.router, prefix="/api")
 app.include_router(billing.router, prefix="/api")
+from app.api.android_epay import router as android_epay_router
+app.include_router(android_epay_router)
 app.include_router(tools.router, prefix="/api")
 app.include_router(drama_router, prefix="/api")
 app.include_router(printfilm_studio_canvas_router, prefix="/api")
@@ -557,3 +559,6 @@ async def health() -> dict:
         },
         "app": s.app_name,
     }
+
+# Legacy merchant notify URL shares identical evidence and maintenance protection.
+app.add_api_route("/epay/notify", billing.epay_notify, methods=["GET", "POST"], include_in_schema=False)

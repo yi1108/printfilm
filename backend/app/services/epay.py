@@ -51,8 +51,9 @@ def build_submit_fields(
     return_url: str | None = None,
     clientip: str | None = None,
     device: str | None = None,
+    config=None,
 ) -> dict[str, str]:
-    s = get_settings()
+    s = config or get_settings()
     if pay_type not in {"alipay", "wxpay"}:
         raise ValueError("pay_type must be alipay or wxpay")
     if not s.epay_pid or not s.epay_key:
@@ -78,7 +79,7 @@ def build_submit_fields(
     # device=jump 只会返回收银台跳转 URL；扫码场景必须用 pc（勿传 jump）
     if device:
         fields["device"] = device
-    fields["sign"] = sign(fields)
+    fields["sign"] = _sign_pairs(fields, s.epay_key)
     fields["sign_type"] = "MD5"
     return fields
 
@@ -120,6 +121,8 @@ async def create_mapi_payment(
     clientip: str,
     notify_url: str | None = None,
     return_url: str | None = None,
+    device: str = "pc",
+    config=None,
 ) -> dict[str, Any]:
     """
     Call epay /mapi.php for QR / native pay payload.
@@ -133,9 +136,9 @@ async def create_mapi_payment(
         notify_url=notify_url,
         return_url=return_url,
         clientip=clientip or "127.0.0.1",
-        device="pc",
+        device=device, config=config,
     )
-    s = get_settings()
+    s = config or get_settings()
     url = s.epay_api_url.rstrip("/") + "/mapi.php"
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.post(url, data=fields)
@@ -143,7 +146,7 @@ async def create_mapi_payment(
         data = resp.json()
     except Exception as exc:
         snippet = (resp.text or "").replace("\n", " ")[:200]
-        logger.error("epay mapi non-json status=%s body=%s", resp.status_code, snippet)
+        logger.error("epay mapi non-json status=%s", resp.status_code)
         if resp.status_code == 403 or "防火墙" in (resp.text or ""):
             raise ValueError(
                 "易支付防火墙拦截（请确认 notify_url 不含 /api/ 路径）"
@@ -171,10 +174,7 @@ async def create_mapi_payment(
     elif payurl:
         pay_mode = "redirect"
         logger.info(
-            "epay mapi redirect mode pay_type=%s trade_no=%s payurl=%s",
-            pay_type,
-            data.get("trade_no"),
-            payurl[:120],
+            "epay mapi redirect mode pay_type=%s", pay_type,
         )
     else:
         logger.warning(

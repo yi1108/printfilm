@@ -270,6 +270,7 @@ class Order(Base):
     amount_fen: Mapped[int] = mapped_column(Integer)
     credit_fen: Mapped[int] = mapped_column(Integer)
     pay_type: Mapped[str] = mapped_column(String(16))  # alipay | wxpay | stripe
+    payment_client: Mapped[str | None] = mapped_column(String(32), nullable=True)
     # 下单时固定外币报价；历史 NULL 订单仍按人民币 amount_fen 校验。
     payment_environment: Mapped[str | None] = mapped_column(String(16), nullable=True, default="Production")
     payment_currency: Mapped[str | None] = mapped_column(String(3), nullable=True)

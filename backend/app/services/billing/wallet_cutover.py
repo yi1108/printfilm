@@ -206,17 +206,28 @@ async def pause(db, admin_id, reason):
 
 
 async def command(*args, env=None):
+    from .backup_tools import resolve
+    if args and args[0] in ("pg_dump", "pg_restore"):
+        args = (resolve(args[0]), *args[1:])
     try:
-        process = await asyncio.create_subprocess_exec(*args, env=env,
-            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+        try:
+            process = await asyncio.create_subprocess_exec(*args, env=env,
+                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+        except NotImplementedError:
+            from .backup_process import run_process
+            logging.getLogger(__name__).info("Wallet backup using compatible subprocess runner")
+            code = await run_process(args, env=env)
+        else:
+            try:
+                code = await asyncio.wait_for(process.wait(), 300)
+            except (TimeoutError, asyncio.CancelledError):
+                if process.returncode is None:
+                    process.kill()
+                await process.wait()
+                raise
     except FileNotFoundError as exc:
-        raise ValueError("服务器未安装 PostgreSQL 备份工具，请发布包含 pg_dump/pg_restore 的 API 镜像。") from exc
-    try:
-        code = await asyncio.wait_for(process.wait(), 300)
-    except (TimeoutError, asyncio.CancelledError):
-        process.kill()
-        await process.wait()
-        raise
+        raise ValueError("后端无法启动 PostgreSQL 备份工具，请检查工具安装路径。") from exc
+
     if code:
         raise ValueError("数据库备份或校验失败，未迁移。请检查备份工具版本、数据库权限和磁盘空间。")
 
@@ -308,9 +319,10 @@ async def backup(job_id):
     backup_manifest(job_id, status="preparing", sha256=None, error=None, migration_status="pending")
     try:
         # Check tools and writable storage before invoking pg_dump.
+        from .backup_tools import resolve
         for tool in ("pg_dump", "pg_restore"):
-            if not shutil.which(tool):
-                raise ValueError("服务器未安装 PostgreSQL 备份工具，请发布包含 pg_dump/pg_restore 的 API 镜像。")
+            tool_path = resolve(tool)
+            logging.getLogger(__name__).info("Wallet backup tool ready tool=%s path=%s", tool, tool_path)
         return await _backup(job_id)
     except BaseException:
         backup_manifest(job_id, status="failed", error="备份未完成；请检查工具、权限和磁盘空间")

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 
 PAYMENT_COLUMNS = {
+    "payment_client": "VARCHAR(32)",
     "payment_environment": "VARCHAR(16)",
     "payment_currency": "VARCHAR(3)",
     "payment_amount_minor": "INTEGER",

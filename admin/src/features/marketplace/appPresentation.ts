@@ -10,7 +10,7 @@ export const appPanels = {
 export type AppPanel = keyof typeof appPanels
 
 const names: Record<string, string> = {
-  payment_amount_minor: '原币实付（最小单位）', storefront: 'Apple商店地区', valuation_status: '财务核算状态',
+  payment_client: '支付客户端', payment_amount_minor: '原币实付（最小单位）', storefront: 'Apple商店地区', valuation_status: '财务核算状态',
   expected_prices: '固定售价', fx_snapshot: '财务汇率快照',
   spendable_fen: '实际可消费积分', pending_commitment_fen: '任务预留积分', sku_id: '共同套餐编号', balance_fen: '平台可用积分', frozen_fen: '冻结额度', debt_fen: '未补齐欠费',
   delta_fen: '积分变动', frozen_delta_fen: '冻结变动', frozen_after: '变动后冻结',
@@ -39,7 +39,7 @@ const names: Record<string, string> = {
 }
 const labels: Record<string, string> = {
   pending_fx: '待汇率核算', valued: '已核算',
-  web_order: 'Web充值', apple_transaction: '苹果充值', signup_grant: '注册赠额', admin_grant: '管理员赠额',
+  android_epay_order: '国内安卓充值', android_domestic: '国内 Android', web: 'Web', ios: 'iOS', android_international: '国际 Android', web_order: 'Web充值', apple_transaction: '苹果充值', signup_grant: '注册赠额', admin_grant: '管理员赠额',
   source_refund: '退款追回', ai_overage: 'AI实际费用超出预扣', legacy_overage: '历史欠费',
   debt_created: '记录欠费', debt_repay: '补齐欠费', debt_release: '退回代偿资金', debt_cancelled: '取消追偿',
   repayment_void: '代偿来源退款', freeze: 'AI预扣冻结', settle: 'AI实际结算', unfreeze: '退回未用冻结',

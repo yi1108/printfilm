@@ -26,7 +26,7 @@ class MarketplaceLocaleMiddleware:
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] != "http" or not (scope["path"].startswith(("/api/marketplace/", "/api/admin/marketplace/", "/api/billing/apple/")) or scope["path"] in {"/api/billing/wallet", "/api/billing/skus", "/api/billing/orders"}):
+        if scope["type"] != "http" or not (scope["path"].startswith(("/api/marketplace/", "/api/admin/marketplace/", "/api/billing/apple/", "/api/billing/android-epay/", "/api/billing/orders/")) or scope["path"] in {"/api/billing/wallet", "/api/billing/skus", "/api/billing/orders"}):
             return await self.app(scope, receive, send)
         headers = dict(scope.get("headers", []))
         locale = "zh" if scope["path"].startswith("/api/admin/") else negotiate_language(headers.get(b"accept-language", b"").decode("latin1"))

@@ -2,6 +2,7 @@
 import asyncio
 from datetime import timedelta
 import logging
+from app.services.billing.diagnostics import failure_fields
 import time
 import uuid
 
@@ -185,7 +186,7 @@ async def reconcile_history_once(environment=None, bundle=None) -> bool:
                 cursor.lease_token = cursor.lease_until = None
                 await db.commit()
         _state["last_error"] = message
-        logger.warning("Apple通知补偿失败 type=%s", type(exc).__name__)
+        logger.warning("Apple通知补偿失败 type=%s status=%s code=%s", *failure_fields(exc))
         return False
 
 
@@ -215,7 +216,7 @@ async def _loop():
             raise
         except Exception as exc:
             _state["last_error"] = _safe_error(exc)
-            logger.warning("Apple运行时暂时异常 type=%s", type(exc).__name__)
+            logger.warning("Apple运行时暂时异常 type=%s status=%s code=%s", *failure_fields(exc))
             await asyncio.sleep(get_app_settings().apple_notification_poll_seconds)
 
 

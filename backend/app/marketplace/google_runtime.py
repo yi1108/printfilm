@@ -1,6 +1,7 @@
 """Durable delivery, post-commit consumption, and paged voided-purchase recovery."""
 import asyncio
 import logging
+from app.services.billing.diagnostics import failure_fields
 import time
 import uuid
 import re
@@ -84,7 +85,7 @@ async def work_once():
         raise
     except Exception as exc:
         # No raw exception: HTTP URLs can contain purchase tokens and credentials.
-        logger.warning("Google purchase retry failed type=%s", type(exc).__name__)
+        logger.warning("Google purchase retry failed type=%s status=%s code=%s", *failure_fields(exc))
         detail = getattr(exc, "detail", None)
         code = detail.get("code", "") if isinstance(detail, dict) else ""
         safe_error = code if isinstance(code, str) and re.fullmatch(r"[A-Z][A-Z0-9_]{1,99}", code) else type(exc).__name__
@@ -169,7 +170,7 @@ async def loop():
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            logger.warning("Google payment worker failed type=%s", type(exc).__name__)
+            logger.warning("Google payment worker failed type=%s status=%s code=%s", *failure_fields(exc))
         await asyncio.sleep(0 if worked else 3)
 
 

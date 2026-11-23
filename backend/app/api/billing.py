@@ -28,6 +28,7 @@ from app.models import Order, Project, UsageEvent, User
 from app.models_tasks import TaskRun
 from app.services import billing, epay, stripe_payments
 from app.services.billing.http import http_exception_for_value_error
+from app.services.billing.order_origin import payment_client
 from app.services.billing.settlement import (
     billing_active,
     ensure_balance_for_task_batch,
@@ -66,6 +67,7 @@ async def quote_media(body: MediaQuoteBody, _user: User = Depends(get_current_us
 
 class CreateOrderBody(BaseModel):
     sku_id: str
+    client: Literal["web", "android"] = "web"
     pay_type: Literal["alipay", "wxpay", "stripe", "apple_iap"]
     language: Literal["zh", "en"] = "zh"
     idempotency_key: str | None = Field(None, min_length=8, max_length=128)
@@ -84,11 +86,21 @@ async def wallet(user: User = Depends(get_current_user), db: AsyncSession = Depe
     from app.marketplace.coin_service import funds_call
     from app.marketplace import app_funds
     from app.marketplace.sandbox_wallet import environment
-    account_environment = environment(user.id) if view == "app" else funds.configured_environment()
-    if app_funds.isolated(account_environment):
-        state = await funds_call(app_funds.snapshot(db, user.id, account_environment))
-    else:
-        state = await funds_call(funds.snapshot(db, user.id)) if funds.enabled() else {}
+    account_environment = "unresolved"
+    try:
+        account_environment = environment(user.id) if view == "app" else funds.configured_environment()
+        if app_funds.isolated(account_environment):
+            state = await funds_call(app_funds.snapshot(db, user.id, account_environment))
+        else:
+            state = await funds_call(funds.snapshot(db, user.id)) if funds.enabled() else {}
+    except Exception as exc:
+        from app.services.billing.diagnostics import failure_fields
+        error_type, status, code = failure_fields(exc)
+        logger.warning(
+            "Wallet query failed user_id=%s view=%s environment=%s unified_enabled=%s type=%s status=%s code=%s",
+            user.id, view, account_environment, funds.enabled(), error_type, status, code,
+        )
+        raise
     balance = int(state.get("balance_fen", user.balance_fen or 0))
     frozen = int(state.get("frozen_fen", user.frozen_fen or 0))
     return {
@@ -114,13 +126,25 @@ async def wallet(user: User = Depends(get_current_user), db: AsyncSession = Depe
     description="无需登录，返回可购买的充值套餐、支持的支付方式及计费倍率。",
     response_description="充值套餐与支付方式",
 )
-async def list_skus(request: Request, user: Visitor = None, language: Literal["zh", "en"] = Query("zh"), channel: Literal["web", "apple_iap"] = "web", app_edition: Literal["domestic", "international"] | None = None, db: AsyncSession = Depends(get_db), response: Response = None) -> dict:
+async def list_skus(request: Request, user: Visitor = None, language: Literal["zh", "en"] = Query("zh"), channel: Literal["web", "apple_iap", "android_epay"] = "web", app_edition: Literal["domestic", "international"] | None = None, db: AsyncSession = Depends(get_db), response: Response = None) -> dict:
     if channel == "apple_iap":
         from app.marketplace.apple_api import coin_products
         from app.marketplace.app_bootstrap import require_schema
         await require_schema(request)
         result = await coin_products(db, user, app_edition, request, response)
         return {**result, "skus": result["items"], "pay_types": ["apple_iap"] if result["purchasing_enabled"] else []}
+    if channel == "android_epay":
+        from app.services.billing.android_epay import check_identity
+        from app.services.billing.android_epay_config import readiness
+        from app.marketplace.app_bootstrap import require_schema
+        await require_schema(request)
+        check_identity(request, get_settings())
+        if app_edition not in (None, "domestic"):
+            raise HTTPException(409, detail="ANDROID_EPAY_APP_MISMATCH")
+        state = readiness()
+        items = [dict(sku) for sku in billing.SKUS] if state["available"] else []
+        return {**state, "purchasing_enabled": state["available"], "items": items, "skus": items,
+                "app_edition": "domestic"}
     stripe_settings = get_settings()
     stripe_ready = stripe_payments.is_ready(stripe_settings, language=language)
     return {
@@ -240,6 +264,13 @@ async def create_order(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict:
+    if body.client == "web" and request.headers.get("X-App-Package-Name"):
+        raise HTTPException(422, detail="ANDROID_EPAY_CLIENT_REQUIRED")
+    if body.client == "android":
+        from app.services.billing.android_epay import create_checkout
+        from app.marketplace.app_bootstrap import require_schema
+        await require_schema(request)
+        return await create_checkout(db, user.id, body, request, _client_ip(request))
     if body.pay_type == "apple_iap":
         from app.marketplace.apple_api import purchasing_enabled_for_app, resolve_app_edition
         from app.marketplace.app_bootstrap import require_schema
@@ -278,6 +309,7 @@ async def create_order(
         amount_fen=int(sku["amount_fen"]),
         credit_fen=int(sku["credit_fen"]),
         pay_type=body.pay_type,
+        payment_client="web",
         status="pending",
         **payment,
     )
@@ -524,6 +556,7 @@ async def list_orders(
                 "amount_fen": o.amount_fen,
                 "credit_fen": o.credit_fen,
                 "pay_type": o.pay_type,
+                "payment_client": payment_client(o),
                 "status": o.status,
                 "trade_no": o.trade_no,
                 "paid_at": o.paid_at.isoformat() if o.paid_at else None,
@@ -571,6 +604,7 @@ async def get_order(
     return {
         "out_trade_no": order.out_trade_no,
         "status": order.status,
+        "payment_client": payment_client(order),
         "environment": order.payment_environment,
         "test_only": order.payment_environment == "Sandbox" if order.payment_environment else None,
         "amount_fen": order.amount_fen,
@@ -670,70 +704,18 @@ def _notify_success(params: dict) -> bool:
     response_class=PlainTextResponse,
 )
 async def epay_notify(request: Request, db: AsyncSession = Depends(get_db)) -> PlainTextResponse:
+    from app.marketplace.app_bootstrap import require_schema
+    await require_schema(request)
+    from app.services.billing.epay_fulfillment import fulfill
     if request.method == "POST":
-        form = await request.form()
-        params = {k: str(v) for k, v in form.items()}
+        raw = await request.body()
+        if len(raw) > 16384:
+            return PlainTextResponse("fail", status_code=413)
+        pairs = list((await request.form()).multi_items())
     else:
-        params = {k: str(v) for k, v in request.query_params.items()}
-
-    if not epay.verify(params):
-        logger.warning("epay notify bad sign: %s", params)
+        if len(request.url.query) > 16384:
+            return PlainTextResponse("fail", status_code=413)
+        pairs = list(request.query_params.multi_items())
+    if len(pairs) > 40 or len({k for k, _ in pairs}) != len(pairs):
         return PlainTextResponse("fail", status_code=400)
-
-    if not _notify_success(params):
-        return PlainTextResponse("success")
-
-    out_trade_no = str(params.get("out_trade_no") or "")
-    trade_no = str(params.get("trade_no") or params.get("transaction_id") or "")
-    money = str(params.get("money") or "")
-    if not out_trade_no:
-        return PlainTextResponse("fail", status_code=400)
-
-    # 行锁串行化同一订单的并发回调：第二个回调在锁释放后读到 paid 即幂等返回，
-    # 避免重复入账（易支付会对同一笔支付重发多次 notify）。
-    result = await db.execute(
-        select(Order).where(Order.out_trade_no == out_trade_no).with_for_update().execution_options(populate_existing=True)
-    )
-    order = result.scalar_one_or_none()
-    if not order:
-        logger.warning("epay notify unknown order %s", out_trade_no)
-        return PlainTextResponse("fail", status_code=404)
-    if order.pay_type not in {"alipay", "wxpay"}:
-        return PlainTextResponse("fail", status_code=400)
-
-    # amount check
-    try:
-        amount = Decimal(money)
-        if not amount.is_finite() or amount <= 0 or amount * 100 != (amount * 100).to_integral_value():
-            return PlainTextResponse("fail", status_code=400)
-        paid_fen = int(amount * 100)
-    except (InvalidOperation, ValueError):
-        return PlainTextResponse("fail", status_code=400)
-    if paid_fen != int(order.amount_fen):
-        logger.error(
-            "epay amount mismatch order=%s expect=%s got=%s",
-            out_trade_no,
-            order.amount_fen,
-            paid_fen,
-        )
-        return PlainTextResponse("fail", status_code=400)
-
-    if order.status == "paid":
-        return PlainTextResponse("success")
-
-    user = await db.get(User, order.user_id)
-    if not user:
-        return PlainTextResponse("fail", status_code=404)
-
-    order.status = "paid"
-    order.trade_no = trade_no or None
-    order.paid_at = datetime.now(timezone.utc)
-    # 历史团队订单回款到原下单人的个人账户，转让不改变收款归属。
-    await billing.credit_topup(
-        db, user, int(order.credit_fen), ref_type="order", ref_id=order.out_trade_no,
-        note=f"epay:{order.pay_type}" + (f" legacy_team:{order.team_id}" if order.team_id else ""),
-    )
-    await db.commit()
-    logger.info("epay paid order=%s user=%s credit=%s", out_trade_no, user.id, order.credit_fen)
-    return PlainTextResponse("success")
-
+    return await fulfill(db, {k: str(v) for k, v in pairs})
