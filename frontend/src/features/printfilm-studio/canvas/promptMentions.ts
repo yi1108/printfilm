@@ -27,6 +27,18 @@ export function splitPrompt(value: string): ({ text: string } | { token: string;
 }
 export function plainPrompt(value: string) { return splitPrompt(value).map((part) => 'text' in part ? part.text : `@${part.reference.label}`).join('') }
 
+export function appendPromptReferences(value: string, references: PromptReference[]) {
+  const included = new Set(splitPrompt(value).flatMap(part => 'reference' in part ? [`${part.reference.source}:${part.reference.id}`] : []))
+  const tokens = []
+  for (const reference of references) {
+    const key = `${reference.source}:${reference.id}`
+    if (included.has(key)) continue
+    included.add(key)
+    tokens.push(mentionToken(reference))
+  }
+  return tokens.length ? `${value}\n参考素材：${tokens.join('、')}` : value
+}
+
 /** Bind only unambiguous material names, visiting each matched asset once per paste. */
 export function bindNamedPromptReferences<T extends PromptReference & { identity?: string }>(
   value: string, candidates: T[], bind: (item: T) => PromptReference | undefined,
@@ -47,22 +59,30 @@ export function bindNamedPromptReferences<T extends PromptReference & { identity
   const alternatives = [...names.keys()].sort((a, b) => b.length - a.length).map(name => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
   const pattern = new RegExp(`(?<![A-Za-z0-9_])@?(${alternatives})(?![A-Za-z0-9_]|\\.[A-Za-z0-9])`, 'gi')
   const bound = new Map<string, PromptReference | undefined>()
-  return splitPrompt(value).map(part => 'token' in part ? part.token : part.text.replace(pattern, (raw, label: string) => {
-    const matches = names.get(label.toLowerCase())
-    if (matches?.size !== 1) return raw
-    const [identity, item] = matches.entries().next().value!
-    if (!bound.has(identity)) bound.set(identity, bind(item))
-    const reference = bound.get(identity)
-    return reference ? mentionToken(reference) : raw
-  })).join('')
+  for (const part of splitPrompt(value)) {
+    if ('token' in part) continue
+    for (const [, label] of part.text.matchAll(pattern)) {
+      const matches = names.get(label.toLowerCase())
+      if (matches?.size !== 1) continue
+      const [identity, item] = matches.entries().next().value!
+      if (!bound.has(identity)) bound.set(identity, bind(item))
+    }
+  }
+  return appendPromptReferences(value, [...bound.values()].filter(reference => reference !== undefined))
 }
 
 export function bindUploadedImageMentions(value: string, images: readonly { nodeId: string; assetId?: string }[]) {
+  let inReferenceList = false
   return splitPrompt(value).map((part) => {
-    if ('text' in part) return part.text
+    if ('text' in part) {
+      if (part.text.includes('\n')) inReferenceList = part.text.slice(part.text.lastIndexOf('\n') + 1) === '参考素材：'
+      return part.text
+    }
     const { source, id, label } = part.reference
     const index = images.findIndex(image => (source === 'node' ? image.nodeId : image.assetId) === id)
-    return index >= 0 ? `@图片${index + 1}` : `@${label}`
+    if (index < 0) return `@${label}`
+    const marker = `@图片${index + 1}`
+    return inReferenceList ? `${label}（${marker}）` : marker
   }).join('')
 }
 

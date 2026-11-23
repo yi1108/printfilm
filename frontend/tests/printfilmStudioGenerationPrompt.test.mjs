@@ -12,12 +12,14 @@ test('pasted material names bind once and preserve ambiguous names and existing 
   ]
   const token = mentionToken(character)
   const calls = []
-  assert.equal(bindNamedPromptReferences(
-    `@尧帝.png、尧帝、祭台.png、未知素材。${token}`,
-    [character, library, ...duplicate],
-    item => { calls.push(item.id); return item },
-  ), `${token}、${token}、祭台.png、未知素材。${token}`)
+  const original = '  @尧帝.png、尧帝、祭台.png、未知素材。  '
+  const bind = value => bindNamedPromptReferences(value, [character, library, ...duplicate], item => {
+    calls.push(item.id)
+    return item
+  })
+  assert.equal(bind(original), `${original}\n参考素材：${token}`)
   assert.deepEqual(calls, ['role'])
+  assert.equal(bind(original + token), original + token)
 })
 
 test('omni reference binds canvas and library image mentions in upload order by ID', () => {

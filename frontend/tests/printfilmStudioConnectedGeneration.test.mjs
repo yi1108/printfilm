@@ -105,11 +105,15 @@ test('connected writing and the saved character voice reach both video requests'
     await act(async () => voiceInput.dispatchEvent(new Event('change', { bubbles: true })))
     await settle(100)
     const video = document.querySelector('.react-flow__node[data-id="video"]')
-    const paste = async (input, text) => {
+    const paste = async (input, text, offset) => {
       await act(async () => {
         input.focus()
         const range = document.createRange()
         range.selectNodeContents(input)
+        if (offset !== undefined) {
+          range.setStart(input.firstChild, offset)
+          range.collapse(true)
+        }
         window.getSelection().removeAllRanges()
         window.getSelection().addRange(range)
         const event = new Event('paste', { bubbles: true, cancelable: true })
@@ -122,7 +126,8 @@ test('connected writing and the saved character voice reach both video requests'
     await click(video)
     const input = video.querySelector('[aria-label="生成描述"]')
     assert.equal(input.textContent, stored.document.nodes[0].data.text)
-    await paste(input, writing + '，@舞者抬头。')
+    await paste(input, '，@舞者抬头。', writing.indexOf('尾部标记'))
+    assert.match(input.textContent, /，@舞者抬头。尾部标记\n参考素材：舞者$/)
     assert.equal(video.querySelector('[aria-label="生成"]').disabled, false)
     assert.equal(generationBodies.length, 0, 'opening a node does not create a paid task')
     await click(video.querySelector('[aria-label="生成"]'))
@@ -142,7 +147,8 @@ test('connected writing and the saved character voice reach both video requests'
     for (const body of generationBodies) {
       assert.equal(body.get('video_mode'), 'omni_reference')
       assert.match(body.get('prompt'), /尾部标记/)
-      assert.match(body.get('prompt'), /@图片1抬头/)
+      assert.match(body.get('prompt'), /@舞者抬头/)
+      assert.match(body.get('prompt'), /参考素材：舞者（@图片1）/)
       assert.match(body.get('prompt'), /@音频1：仅用于舞者的对白音色/)
       assert.deepEqual(JSON.parse(body.get('references')), [
         { asset_id: 8, role: 'reference_image' },

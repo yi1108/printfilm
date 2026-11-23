@@ -86,12 +86,14 @@ def test_seedance_family_switch_does_not_require_rewriting(model):
 
 def test_generated_prose_links_known_images_without_fabricating_identities():
     doc = graph()
-    result = linked_writing_result('@角色走进场景。', doc['nodes'][0], doc)
+    original = '  @角色走进场景。  '
+    result = linked_writing_result(original, doc['nodes'][0], doc)
+    assert result.startswith(original + '\n参考素材：')
     assert '(node:role)' in result and '(node:scene)' in result
     assert '@@' not in result
     assert linked_writing_result(result, doc['nodes'][0], doc) == result
     assert linked_writing_result('', doc['nodes'][0], doc) == ''
     doc['nodes'][1]['data']['label'] = doc['nodes'][2]['data']['label'] = '人'
     result = linked_writing_result('人群走过。', doc['nodes'][0], doc)
-    assert result.startswith('人群走过。\n参考图片：')
+    assert result.startswith('人群走过。\n参考素材：')
     assert '(node:role)' in result and '(node:scene)' in result

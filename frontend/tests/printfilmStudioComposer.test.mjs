@@ -123,7 +123,7 @@ test('composer menus apply parameters; writing sends configured instructions and
     const writingProps = { projectId:1,nodeId:'writer',title:'镜头提示词',text:'旧提示词',settings:{writingPrompt:'角色抬头，约5秒，16:9。'}, references:[{id:'role',label:'角色',text:'角色外貌',url:'/role.png',mediaKind:'image'}],candidates:[],headers:{},writable:true,outputs,onSetting:noop,onReference:noop,onBusy:noop,onApply:(...args)=>applied.push(args),onRunDependencies:()=>{throw Error('completed writer must regenerate instead of being skipped')} }
     await act(async()=>root.render(h(InlineTextComposer,writingProps)))
     assert.equal(document.querySelector('[aria-label="AI 写作要求"] .pf-inline-reference img').getAttribute('src'),'/role.png')
-    assert.match(document.querySelector('[aria-label="AI 写作要求"]').textContent,/约 8 秒，9:16/)
+    assert.match(document.querySelector('[aria-label="AI 写作要求"]').textContent,/^角色抬头，约5秒，16:9。\n参考素材：角色$/)
     assert.match(document.querySelector('[aria-label="下游生成参数"]').textContent,/video-model.*9:16.*8 秒/)
     await click(button('开始 AI 写作'))
     assert.deepEqual(applied.at(-1)[2],outputs)
@@ -141,7 +141,7 @@ test('composer menus apply parameters; writing sends configured instructions and
     assert.deepEqual(requests.filter(item=>item.url.endsWith('/stream')).at(-1).body.enabled_tools,[],'text writing cannot submit media or canvas tools')
     holdStreamOpen=true
     await click(button('开始 AI 写作'))
-    assert.match(applied.at(-1)[0],/^不等断开直接写回\n参考图片：.*\(node:pending-image\)/)
+    assert.match(applied.at(-1)[0],/^不等断开直接写回\n参考素材：.*\(node:pending-image\)/)
     assert.equal(cancelledStreams,1,'done event ends writing without waiting for a persistent HTTP connection')
     assert.equal(button('停止写作'),null)
 
