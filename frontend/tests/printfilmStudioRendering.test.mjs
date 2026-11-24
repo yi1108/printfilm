@@ -19,10 +19,10 @@ test('cursor traffic and another node action do not rerender an unchanged media 
     let pageRenders=0,labelReads=0,store,clicked=''
     const data={get label(){labelReads++;return '不变的图片'},mediaUrl:'/preview.png'}
     function Overlay({store}){const snapshot=useSyncExternalStore(store.subscribe,store.getSnapshot);return h('span',{'data-testid':'peers'},String(snapshot.peers.length))}
-    function Canvas({version}){
+    function Canvas({version,nodeData=data,nodeType='image'}){
       pageRenders++;const presence=useCanvasPresence(1,false,0);store=presence.store
       const actions={writable:true,selectionCount:version,panelsSuppressed:!!version,submittingNodeIds:new Set(['other']),moreMenu:()=>{clicked=String(version)}}
-      return h(ReactFlowProvider,null,h(StudioNodeActionsContext.Provider,{value:actions},h(StudioComposerContext.Provider,{value:null},h(StudioNodeCard,{id:'image',type:'image',data,selected:false,width:320,height:200}))),h(Overlay,{store}))
+      return h(ReactFlowProvider,null,h(StudioNodeActionsContext.Provider,{value:actions},h(StudioComposerContext.Provider,{value:null},h(StudioNodeCard,{id:'image',type:nodeType,data:nodeData,selected:false,width:320,height:200}))),h(Overlay,{store}))
     }
     root=createRoot(document.getElementById('root'))
     await act(async()=>root.render(h(Canvas,{version:0})))
@@ -34,6 +34,11 @@ test('cursor traffic and another node action do not rerender an unchanged media 
     assert.equal(labelReads,before,'another selection leaves unchanged card render intact')
     await act(async()=>document.querySelector('[aria-label="节点操作"]').dispatchEvent(new MouseEvent('click',{bubbles:true})))
     assert.equal(clicked,'1','memoized handlers still read the latest action')
+    const error='RuntimeError: The request failed because the output video may be related to copyright restrictions. Request id: test-request-123'
+    await act(async()=>root.render(h(Canvas,{version:0,nodeType:'video',nodeData:{label:'视频',status:'failed',error}})))
+    const alert=document.querySelector('[role="alert"]').textContent
+    assert.match(alert,/生成的视频可能涉及版权限制，未返回视频/)
+    assert.match(alert,/请求 ID：test-request-123$/)
   } finally {
     if(root){const {act}=await import('react');await act(async()=>root.unmount())}
     await server?.close();dom.window.close();for(const [key,value]of old){if(value)Object.defineProperty(globalThis,key,value);else delete globalThis[key]}

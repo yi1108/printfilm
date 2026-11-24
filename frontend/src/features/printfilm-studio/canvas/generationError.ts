@@ -8,6 +8,11 @@ export function studioGenerationError(value: unknown): string {
   }
   if (/insufficient_quota|insufficient.balance|余额不足|欠费/i.test(message)) return '供应商余额或配额不足，请检查模型账户后重试。'
   if (/InvalidApiKey|Unauthorized|AuthenticationError|invalid.api.key/i.test(message)) return '供应商鉴权失败，请检查模型配置后重试。'
+  if (/copyright restrictions/i.test(message)) {
+    const requestId = message.match(/\brequest[ _-]?id\s*[:：]\s*([a-z0-9_-]{1,128})\b/i)?.[1]
+    const explanation = '供应商判定生成的视频可能涉及版权限制，未返回视频。请检查提示词和参考素材是否包含第三方作品或角色，确认有使用授权后再提交。'
+    return requestId ? `${explanation} 请求 ID：${requestId}` : explanation
+  }
   if (/ContentPolicy|content.policy|sensitive|moderation/i.test(message)) return '供应商未通过内容审核，请调整提示词或参考素材后重试。'
   return message ? message.slice(0, 600) : '生成失败，请检查模型配置后重试。'
 }
