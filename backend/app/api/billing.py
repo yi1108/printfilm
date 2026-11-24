@@ -85,10 +85,10 @@ async def wallet(user: User = Depends(get_current_user), db: AsyncSession = Depe
     from app.services.billing import wallet as funds
     from app.marketplace.coin_service import funds_call
     from app.marketplace import app_funds
-    from app.marketplace.sandbox_wallet import environment
     account_environment = "unresolved"
     try:
-        account_environment = environment(user.id) if view == "app" else funds.configured_environment()
+        account_environment = (await app_funds.wallet_view_environment(db, user.id)
+                               if view == "app" else funds.configured_environment())
         if app_funds.isolated(account_environment):
             state = await funds_call(app_funds.snapshot(db, user.id, account_environment))
         else:
@@ -534,13 +534,20 @@ async def list_orders(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     limit: int = Query(50, ge=1, le=100, description="最多返回的记录数"),
+    view: Literal["app", "production"] = Query("app", description="App 可查看本人的 Google 测试订单；Web 使用 production。"),
 ) -> dict:
     """需要登录，按创建时间倒序返回当前用户的个人充值订单，并自动关闭已过期待支付订单；不包含历史团队订单。"""
     await billing.close_expired_pending_orders(db, user_id=user.id)
+    environment = get_settings().wallet_environment
+    environment_filter = func.coalesce(Order.payment_environment, "Production") == environment
+    if view == "app" and environment == "Production":
+        environment_filter = or_(
+            environment_filter,
+            (Order.payment_environment == "Sandbox") & (Order.pay_type == "google_play"),
+        )
     result = await db.execute(
         select(Order)
-        .where(Order.user_id == user.id, Order.team_id.is_(None),
-               func.coalesce(Order.payment_environment, "Production") == get_settings().wallet_environment)
+        .where(Order.user_id == user.id, Order.team_id.is_(None), environment_filter)
         .order_by(Order.created_at.desc())
         .limit(limit)
     )
@@ -557,6 +564,8 @@ async def list_orders(
                 "credit_fen": o.credit_fen,
                 "pay_type": o.pay_type,
                 "payment_client": payment_client(o),
+                "environment": o.payment_environment,
+                "test_only": o.payment_environment == "Sandbox",
                 "status": o.status,
                 "trade_no": o.trade_no,
                 "paid_at": o.paid_at.isoformat() if o.paid_at else None,

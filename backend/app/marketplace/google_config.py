@@ -79,6 +79,10 @@ async def read(db):
         rtdn_audience="", rtdn_service_account="", test_user_ids=[], products=DEFAULT_PRODUCTS))
 
 
+def test_user(config, user_id):
+    return user_id in config.get("test_user_ids", ())
+
+
 async def save(db, body, admin_id):
     # Settings writes serialize even before the singleton row exists.
     from app.models import User

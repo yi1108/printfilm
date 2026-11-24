@@ -15,6 +15,9 @@ from app.marketplace import google_service as service, google_client
 from app.marketplace.google_models import (GoogleSettings, GoogleAccount, GoogleIntent, GooglePurchase,
     GoogleWork, GoogleVoid, GoogleAudit, GoogleNotification, GoogleCursor)
 from app.marketplace.google_config import DEFAULT_PRODUCTS, SettingsInput, save
+from app.marketplace import sandbox_wallet
+from app.marketplace.app_models import AppleTransaction, CoinUnlock
+from app.marketplace.sandbox_models import SandboxAccount, SandboxAllocation, SandboxEntry, SandboxLot
 from app.marketplace.google_api import IntentInput, VerifyInput
 from app.marketplace.service import now
 
@@ -28,6 +31,8 @@ def ctx(monkeypatch):
         model.__table__.create(engine)
     WalletBase.metadata.create_all(engine)
     for model in (GoogleSettings, GoogleAccount, GoogleIntent, GooglePurchase, GoogleWork, GoogleVoid, GoogleAudit, GoogleNotification, GoogleCursor):
+        model.__table__.create(engine)
+    for model in (SandboxAccount, SandboxLot, SandboxAllocation, SandboxEntry):
         model.__table__.create(engine)
     session = Session(engine, expire_on_commit=False)
     class DB:
@@ -170,6 +175,115 @@ async def test_test_purchase_rejected_in_production_and_wrong_quantity(ctx):
         with pytest.raises(HTTPException):
             await apply(ctx, intent, proof(intent, quantity=quantity))
     assert ctx.user.balance_fen == 0
+
+
+@pytest.mark.asyncio
+async def test_whitelisted_legacy_intent_credits_and_refunds_only_shared_sandbox(ctx, monkeypatch):
+    import httpx
+    from fastapi import FastAPI
+    from app.api.billing import router, wallet as billing_wallet
+    from app.database import get_db
+    from app.deps import get_current_user
+    from app.marketplace.coin_api import UnlockInput, unlock, wallet_entries
+
+    monkeypatch.setattr("app.services.billing.settlement.pending_task_commitment_fen", AsyncMock(return_value=0))
+    from app.services.billing import wallet
+
+    _, intent = await checkout(ctx)
+    order = ctx.session.scalar(select(Order))
+    assert order.payment_environment == "Production"
+    pending = await apply(ctx, intent, proof(intent, purchaseState=2))
+    assert pending["status"] == "pending" and pending["environment"] == "Production"
+    config = {**ctx.config, "test_user_ids": [ctx.user.id]}
+    ctx.config = config
+    ctx.session.scalar(select(GoogleSettings)).config = config
+    await ctx.db.commit()
+
+    receipt = proof(intent, purchaseType=0)
+    body = VerifyInput(package_name="com.deep.printfilm", product_id="printfilm_credits_trial",
+                      purchase_token="raw-google-secret")
+    monkeypatch.setattr(google_client, "query", AsyncMock(return_value=receipt))
+    first = await service.verify(ctx.db, ctx.user.id, body)
+    assert first["status"] == "credited" and first["consume_purchase"] and first["test_only"]
+    assert order.status == "paid" and order.payment_environment == "Sandbox"
+    second = await service.verify(ctx.db, ctx.user.id, body)
+    assert second["status"] == "already_credited"
+    assert ctx.session.scalar(select(func.count()).select_from(SandboxLot)) == 1
+    assert ctx.session.scalar(select(func.count()).select_from(WalletFundingLot)) == 0
+    assert ctx.session.scalar(select(func.count()).select_from(WalletLedger)) == 0
+
+    app_view = await billing_wallet(ctx.user, ctx.db, view="app")
+    web_view = await billing_wallet(ctx.user, ctx.db, view="production")
+    assert app_view["balance_fen"] == 10000 and app_view["test_only"]
+    assert web_view["balance_fen"] == 0 and web_view["environment"] == "Production"
+    entries = await wallet_entries(ctx.db, ctx.user, cursor=None, page_size=20)
+    assert [entry["delta_fen"] for entry in entries["items"]] == [10000]
+
+    api = FastAPI()
+    api.include_router(router, prefix="/api")
+
+    async def database():
+        yield ctx.db
+
+    api.dependency_overrides[get_db] = database
+    api.dependency_overrides[get_current_user] = lambda: ctx.user
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://test") as client:
+        detail = (await client.get(f"/api/billing/orders/{order.out_trade_no}")).json()
+        assert detail["status"] == "paid" and detail["test_only"]
+        assert (await client.get("/api/billing/orders")).json()["orders"][0]["test_only"]
+        assert (await client.get("/api/billing/orders?view=production")).json()["orders"] == []
+
+    _, real_intent = await checkout(ctx, "checkout-real-456")
+    result = await apply(ctx, real_intent, proof(real_intent, orderId="GPA.real"), token="real-receipt")
+    await ctx.db.commit()
+    assert result["credited"] and not result["test_only"]
+    assert (await wallet.snapshot(ctx.db, ctx.user.id))["balance_fen"] == 10000
+    assert (await sandbox_wallet.snapshot(ctx.db, ctx.user.id))["balance_fen"] == 10000
+
+    # While showing test points, an App unlock must never fall back to a real debit.
+    monkeypatch.setattr("app.marketplace.coin_api.require_new_unlock", lambda: None)
+    with pytest.raises(HTTPException) as denied:
+        await unlock(UnlockInput(publication_id=1, expected_coins=100, idempotency_key="google-test-unlock"),
+                     ctx.db, ctx.user)
+    assert denied.value.detail["code"] == "SANDBOX_PURCHASE_DISABLED"
+    assert (await wallet.snapshot(ctx.db, ctx.user.id))["balance_fen"] == 10000
+
+    from app.services.billing.wallet_migration import build_report
+    rows, plans = await build_report(ctx.db, "Production")
+    assert rows[0]["status"] == "already_migrated" and not plans
+    assert "Sandbox" not in rows[0].get("reason", "")
+    lot = ctx.session.scalar(select(SandboxLot))
+    lot.total_units += 1
+    await ctx.db.flush()
+    rows, _ = await build_report(ctx.db, "Production")
+    assert "Sandbox" in rows[0]["reason"]
+    lot.total_units -= 1
+
+    # Cancellation proofs can omit the purchase type, and a removed tester still receives refunds.
+    ctx.config = {**config, "test_user_ids": []}
+    ctx.session.scalar(select(GoogleSettings)).config = ctx.config
+    await ctx.db.commit()
+    cancel = proof(intent, purchaseState=1)
+    assert (await apply(ctx, intent, cancel))["status"] == "refunded"
+    assert (await apply(ctx, intent, cancel))["status"] == "refunded"
+    await ctx.db.commit()
+    assert (await sandbox_wallet.snapshot(ctx.db, ctx.user.id))["balance_fen"] == 0
+    assert (await wallet.snapshot(ctx.db, ctx.user.id))["balance_fen"] == 10000
+    assert ctx.session.scalar(select(func.count()).select_from(SandboxEntry)) == 2
+    assert (await apply(ctx, intent, receipt))["status"] == "refunded"
+
+
+@pytest.mark.asyncio
+async def test_paid_production_receipt_cannot_be_reassigned_to_sandbox(ctx):
+    _, intent = await checkout(ctx)
+    await apply(ctx, intent)
+    await ctx.db.commit()
+    ctx.config = {**ctx.config, "test_user_ids": [ctx.user.id]}
+    with pytest.raises(HTTPException) as error:
+        await apply(ctx, intent, proof(intent, purchaseType=0))
+    assert error.value.detail["code"] == "GOOGLE_ORDER_CONFLICT"
+    assert ctx.session.scalar(select(func.count()).select_from(SandboxLot)) == 0
+    assert ctx.user.balance_fen == 10000
 
 
 @pytest.mark.asyncio

@@ -104,6 +104,8 @@ class GoogleVerificationOut(BaseModel):
     credited: bool
     consume_purchase: bool
     credit_fen: int
+    environment: Literal["Production", "Sandbox"]
+    test_only: bool
 
 
 @router.get("/skus", response_model=GoogleCatalogOut, summary="Google Play 充值商品及当前用户绑定标识")
@@ -161,7 +163,8 @@ async def transactions(db: DB, admin: Admin, limit: int = 50):
     return {"items": [dict(id=t.id, user_id=t.user_id, order_id=t.order_id, google_order_id=t.google_order_id,
         product_id=t.product_id, environment=t.environment, status=t.status, credit_fen=t.credit_fen,
         consumed=t.consumed, currency=t.currency, amount_micros=t.amount_micros,
-        valuation_status="pending", last_verified_at=t.last_verified_at) for t in rows]}
+        valuation_status="test_only" if t.environment == "Sandbox" else "pending",
+        last_verified_at=t.last_verified_at) for t in rows]}
 
 
 @admin_router.get("/queue", summary="Google 持久补单队列；只返回脱敏错误码")

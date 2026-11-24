@@ -52,6 +52,37 @@ async def test_credit_is_separate_idempotent_and_ai_stays_production(sandbox):
 
 
 @pytest.mark.asyncio
+async def test_google_and_apple_share_one_test_account_with_separate_funding(sandbox, monkeypatch):
+    from app.marketplace import google_service
+    from app.marketplace.google_config import DEFAULT_PRODUCTS
+    from app.marketplace.google_models import GoogleSettings
+    from test_google_play_billing import checkout, proof
+
+    ctx = sandbox
+    apple = await purchase(ctx)
+    config = dict(package_name="com.deep.printfilm", purchasing_enabled=True, test_user_ids=[ctx.buyer.id],
+                  products=[{**DEFAULT_PRODUCTS[0], "credit_fen": 10000, "reference_amount_fen": 10000}])
+    ctx.db.add(GoogleSettings(key="billing", config=config, credentials="unused"))
+    await ctx.db.commit()
+    monkeypatch.setattr(google_service, "available", lambda *_: True)
+    _, intent = await checkout(SimpleNamespace(db=ctx.db, user=ctx.buyer))
+    package, product, token = config["package_name"], DEFAULT_PRODUCTS[0]["product_id"], "test-google-token"
+    await google_service.apply_proof(ctx.db, package, product, token, proof(intent, purchaseType=0),
+                                     config, user_id=ctx.buyer.id)
+    await ctx.db.commit()
+    assert await ctx.db.scalar(select(func.count()).select_from(SandboxAccount)) == 1
+    assert (await sandbox_wallet.snapshot(ctx.db, ctx.buyer.id))["balance_fen"] == 10600
+    await google_service.apply_proof(ctx.db, package, product, token, proof(intent, purchaseType=0, purchaseState=1),
+                                     config, user_id=ctx.buyer.id)
+    await ctx.db.commit()
+    assert (await sandbox_wallet.snapshot(ctx.db, ctx.buyer.id))["balance_fen"] == 600
+    apple_lot = await ctx.db.scalar(select(SandboxLot).where(SandboxLot.transaction_id == apple.id))
+    assert apple_lot.active and apple_lot.available_units == 600
+    assert ctx.buyer.balance_fen == 0
+    assert not await ctx.db.scalar(select(WalletFundingLot.id))
+
+
+@pytest.mark.asyncio
 async def test_non_whitelisted_and_cross_account_transactions_rejected(apple_ctx):
     ctx = apple_ctx
     with pytest.raises(HTTPException) as error:

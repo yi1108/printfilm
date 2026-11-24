@@ -176,7 +176,7 @@ async def test_backup_journal_survives_rollback_and_retry_keeps_old_snapshot(mon
 @pytest.mark.asyncio
 async def test_missing_backup_tools_do_not_claim_success(monkeypatch, tmp_path):
     monkeypatch.setattr(cutover, "BACKUPS", tmp_path)
-    monkeypatch.setattr(cutover.shutil, "which", lambda tool: None)
+    monkeypatch.setattr(cutover.shutil, "which", lambda *args, **kwargs: None)
     with pytest.raises(ValueError):
         await cutover.backup("a" * 32)
     assert cutover.backup_records()[0]["status"] == "failed"

@@ -27,7 +27,7 @@ async def ensure_schema() -> list[str]:
 
     The transaction lock covers both the legacy marketplace tables required by
     App foreign keys and all App content/social/financial tables.  Only
-    additive, checkfirst/IF NOT EXISTS operations are performed; no historical
+    compatible schema changes are performed; no historical
     rows, balances, orders, or columns are deleted or rewritten.
     """
     from app.database import engine

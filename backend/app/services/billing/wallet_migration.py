@@ -495,6 +495,28 @@ async def build_report(db, environment, approvals=None):
         entries = list((await db.execute(select(WalletLedger).where(WalletLedger.user_id == user.id)
                       .order_by(WalletLedger.id).execution_options(populate_existing=True))).scalars())
         orders = list((await db.execute(select(Order).where(Order.user_id == user.id).order_by(Order.id).execution_options(populate_existing=True))).scalars())
+        if environment == "Production" and {"marketplace_sandbox_lots", "marketplace_google_purchases"} <= tables:
+            sandbox_orders = [
+                order for order in orders
+                if order.status == "paid" and order.pay_type == "google_play" and order.payment_environment == "Sandbox"
+            ]
+            if sandbox_orders:
+                from app.marketplace.google_models import GooglePurchase
+                from app.marketplace.sandbox_models import SandboxLot
+
+                ledger_refs = {str(entry.ref_id) for entry in entries if entry.ref_type == "order"}
+                candidate_ids = {order.id for order in sandbox_orders
+                                 if order.out_trade_no not in ledger_refs and str(order.id) not in ledger_refs}
+                isolated_ids = set((await db.scalars(
+                    select(Order.id).join(GooglePurchase, GooglePurchase.order_id == Order.id)
+                    .join(SandboxLot, SandboxLot.google_purchase_id == GooglePurchase.id)
+                    .where(Order.id.in_(candidate_ids), GooglePurchase.user_id == user.id,
+                           GooglePurchase.environment == "Sandbox", GooglePurchase.was_credited.is_(True),
+                           GooglePurchase.status == "credited", GooglePurchase.credit_fen == Order.credit_fen,
+                           GooglePurchase.google_order_id == Order.trade_no, SandboxLot.user_id == user.id,
+                           SandboxLot.total_units == Order.credit_fen, SandboxLot.active.is_(True))
+                )).all())
+                orders = [order for order in orders if order.id not in isolated_ids]
         resolution = resolutions.get(user.id)
         if resolution:
             prior = resolution.snapshot

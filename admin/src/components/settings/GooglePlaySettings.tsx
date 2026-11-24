@@ -76,7 +76,7 @@ export function GooglePlaySettings() {
         <label className="block">Pub/Sub OIDC audience<input className="admin-input block w-full" value={form.rtdn_audience} onChange={e => setForm({ ...form, rtdn_audience: e.target.value })} /></label>
         <label className="block">Pub/Sub 推送身份服务账号邮箱<input className="admin-input block w-full" value={form.rtdn_service_account} onChange={e => setForm({ ...form, rtdn_service_account: e.target.value })} /></label>
         <label className="block">许可测试用户 ID（逗号分隔）<input className="admin-input block w-full" value={testIds} onChange={e => setTestIds(e.target.value)} /></label>
-        <p>测试付款仅限统一钱包环境为 Sandbox 的测试部署及获准账号；正式部署拒绝测试资金，不改变正式账户环境。客户端价格使用 Google formattedPrice。</p>
+        <p>填写 PrintFilm 用户 ID。Google 确认的许可测试付款进入独立沙箱积分账本，正式付款进入正式钱包。客户端价格使用 Google formattedPrice。</p>
         <div className="overflow-x-auto"><table className="w-full text-left"><thead><tr><th>共同套餐</th><th>Google 商品 ID</th><th>英文名称</th><th>冻结积分</th><th>新购</th></tr></thead><tbody>
           {form.products.map((p, i) => <tr key={i}>
             <td><input className="admin-input" value={p.sku_id} disabled={!!p.credit_fen} onChange={e => product(i, { sku_id: e.target.value })} /></td>
@@ -94,7 +94,7 @@ export function GooglePlaySettings() {
         <p>购买凭证不包含可信实付时显示待同步，不用人民币套餐价冒充当地支付金额。相关来源保持待核算，不能打款。</p>
         <details><summary>补单队列及脱敏错误码</summary>{queue.map(w => <p key={w.id}>任务 {w.id} · {w.product_id} · 尝试 {w.attempts} · {w.last_error || "等待查询/定期核对"} · 下次 {w.next_attempt_at}</p>)}</details>
         <details><summary>最近 Google 交易（不展示 purchase token）</summary><div className="overflow-x-auto"><table className="w-full text-left"><thead><tr><th>用户</th><th>Google 订单</th><th>环境</th><th>状态</th><th>积分</th><th>消耗</th><th>实付</th></tr></thead><tbody>
-          {transactions.map(t => <tr key={t.id}><td>{t.user_id}</td><td>{t.google_order_id ?? "待付款"}</td><td>{t.environment}</td><td>{t.status}</td><td>{t.credit_fen}</td><td>{t.consumed ? "已消耗" : "未消耗"}</td><td>{t.amount_micros == null ? "待同步" : `${t.currency} ${t.amount_micros / 1000000}`}</td></tr>)}
+          {transactions.map(t => <tr key={t.id}><td>{t.user_id}</td><td>{t.google_order_id ?? "待付款"}</td><td>{t.environment}</td><td>{t.status}</td><td>{t.credit_fen}</td><td>{t.consumed ? "已消耗" : "未消耗"}</td><td>{t.environment === "Sandbox" ? "测试付款" : t.amount_micros == null ? "待同步" : `${t.currency} ${t.amount_micros / 1000000}`}</td></tr>)}
         </tbody></table></div></details>
       </>}
     </div>

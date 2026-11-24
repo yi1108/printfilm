@@ -26,9 +26,13 @@
 
 ## 测试资金隔离
 
-Google `purchaseType=0` 由服务端查询识别为许可测试付款，不能根据客户端 test 标志判断。**本次 Google 测试采用独立 Sandbox 钱包部署/数据库**，并核验后台 Google 测试用户白名单；Production 钱包部署拒绝测试付款，不改正式账户环境、不自动补发正式积分。不能直接在生产开启许可测试付款。此规则与 Apple 已有的同部署隔离测试账本不是同一条接入路径。
+Google `purchaseType=0` 由服务端查询识别为许可测试付款。生产钱包部署可以为获准账号使用与 Apple 共用的隔离沙箱账户和流水，Apple 与 Google 资金批次各自关联原始交易。Google Play Console 的许可测试账号和 PrintFilm 后台的测试用户 ID 均需配置。普通 Google 实付仍由正式钱包履约。
 
-Sandbox 部署的 `/api/billing/wallet` 仍读取其测试数据库中的统一钱包，测试充值可用于该部署的 AI 和视频测试，不污染生产。测试用 User/WalletAccount 也必须已完成对应环境的初始化核对。
+操作路径为「系统设置 → 支付计费 → Google Play 安卓支付 → 许可测试用户 ID」。App 使用当前 API 地址和原验单接口。匹配原购买意向且从未入账的待支付订单（含部署前创建的订单），在 Google 确认许可测试凭证后转为 `Sandbox` 订单；已退款或失效的凭证按 Google 状态处理。移出白名单后，已确认的沙箱交易可以继续退款和补偿。
+
+验单响应的 `environment=Sandbox`、`test_only=true` 表示测试付款。App 默认 `GET /api/billing/wallet` 和 App v1 钱包、流水展示沙箱记录；显式 `view=production` 读取部署的正式钱包。个人订单列表默认包含本人的 Google 测试订单并带测试标记；Web 使用 `GET /api/billing/orders?view=production`。后台可在 Sandbox 环境查看测试资金来源和订单。Google 许可测试付款开放的是充值与查询，App 视频沙箱授权仍使用现有 Apple 测试开关和白名单。
+
+独立 Sandbox 部署继续使用该测试库的统一钱包。API 启动会给现有沙箱资金批次添加 Google 交易关联，并校验每个批次只对应一个渠道。
 
 ## 客户端流程
 
@@ -116,7 +120,8 @@ Idempotency-Key: google-<purchaseToken的SHA256小写十六进制>
 {
   "package_name":"com.deep.printfilm","product_id":"printfilm_credits_trial",
   "purchase_token_sha256":"<真实64位小写SHA256>","order_id":"GPA.xxxx-xxxx-xxxx-xxxxx",
-  "status":"credited","credited":true,"consume_purchase":true,"credit_fen":10000
+  "status":"credited","credited":true,"consume_purchase":true,"credit_fen":10000,
+ "environment":"Sandbox","test_only":true
 }
 ```
 
@@ -139,6 +144,6 @@ Idempotency-Key: google-<purchaseToken的SHA256小写十六进制>
 
 本地自动化覆盖幂等、跨账号、PENDING 转支付、过期意向付款、测试隔离、退款后延迟成功、AI 消费欠费、提交失败回滚、后端消耗失败重试、OIDC 身份与 audience、商品冻结快照及订单超时兼容。SQLite 回归不代表 PostgreSQL 并发锁验收。
 
-上线前在测试部署使用 Play 安装的测试轨道版本验证四档商品、真实许可测试付款、断网/杀 App、客户端和后台同时消耗、RTDN 到账、退款及 Voided 补偿；再做 PostgreSQL 并发/故障恢复和生产付款验收。Google 账号、商品、IAM、Pub/Sub、支付确认时限以 Google 实际配置和官方文档为准。
+上线前使用 Play 安装的测试轨道版本和获准账号验证四档商品、许可测试付款、断网/杀 App、客户端和后台同时消耗、RTDN 到账、退款及 Voided 补偿；再做 PostgreSQL 并发/故障恢复和生产付款验收。Google 账号、商品、IAM、Pub/Sub、支付确认时限以 Google 实际配置和官方文档为准。
 
 官方参考：[服务端安全](https://developer.android.com/google/play/billing/security)、[ProductPurchase](https://developers.google.com/android-publisher/api-ref/rest/v3/purchases.products/get)、[消耗](https://developers.google.com/android-publisher/api-ref/rest/v3/purchases.products/consume)、[Voided Purchases](https://developers.google.com/android-publisher/api-ref/rest/v3/purchases.voidedpurchases/list)、[Pub/Sub 认证推送](https://cloud.google.com/pubsub/docs/authenticate-push-subscriptions)。完整契约见 [OpenAPI](openapi/marketplace-app-v1.json)。

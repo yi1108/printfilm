@@ -4,6 +4,8 @@ from sqlalchemy.dialects.postgresql import insert
 from app.config import get_settings
 from app.models import User
 from .sandbox_models import SandboxAccount, SandboxLot, SandboxAllocation, SandboxEntry
+
+
 def app_fail(*args):
     from .coin_service import app_fail as fail
     return fail(*args)
@@ -28,7 +30,12 @@ async def lock_account(db, user_id):
     user = await db.scalar(select(User).where(User.id == user_id).with_for_update(key_share=True))
     if not user:
         app_fail("WALLET_ACCOUNT_NOT_FOUND", "账号不存在。", 404)
-    await db.execute(insert(SandboxAccount).values(user_id=user_id, balance_fen=0).on_conflict_do_nothing(index_elements=['user_id']))
+    if db.bind.dialect.name == "sqlite":
+        from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+        insert_account = sqlite_insert(SandboxAccount)
+    else:
+        insert_account = insert(SandboxAccount)
+    await db.execute(insert_account.values(user_id=user_id, balance_fen=0).on_conflict_do_nothing(index_elements=["user_id"]))
     return await db.scalar(select(SandboxAccount).where(SandboxAccount.user_id == user_id)
                            .execution_options(populate_existing=True))
 
@@ -69,6 +76,13 @@ async def credit_transaction(db, item):
     item.settlement_status = 'test_only'
 
 
+async def credit_google(db, purchase):
+    account = await lock_account(db, purchase.user_id)
+    db.add(SandboxLot(user_id=purchase.user_id, google_purchase_id=purchase.id,
+                      total_units=purchase.credit_fen, available_units=purchase.credit_fen, active=True))
+    await post(db, account, purchase.credit_fen, "recharge", f"google:{purchase.id}:credit")
+
+
 async def consume(db, user_id, amount, *, business_type, business_ref, environment=None):
     if not new_purchase_allowed(user_id):
         app_fail('SANDBOX_PURCHASE_DISABLED', '沙箱新购及测试解锁已暂停。', 403)
@@ -91,8 +105,6 @@ async def consume(db, user_id, amount, *, business_type, business_ref, environme
 
 
 async def refund(db, item, reversed=False):
-    from .app_models import CoinUnlock, CoinGrant
-    from .models import ContentOrder
     account = await lock_account(db, item.user_id)
     lot = await db.scalar(select(SandboxLot).where(SandboxLot.transaction_id == item.id))
     if not lot:
@@ -103,10 +115,25 @@ async def refund(db, item, reversed=False):
         lot.active = True
         await post(db, account, lot.available_units, 'refund_reversed', f'apple:{item.id}:restore:{item.revision}')
         return
+    await refund_lot(db, account, lot, f"apple:{item.id}:refund:{item.revision}")
+
+
+async def refund_google(db, purchase):
+    account = await lock_account(db, purchase.user_id)
+    lot = await db.scalar(select(SandboxLot).where(SandboxLot.google_purchase_id == purchase.id,
+                                                   SandboxLot.user_id == purchase.user_id))
+    if not lot:
+        app_fail("SANDBOX_LEGACY_REVIEW_REQUIRED", "Google 测试交易缺少沙箱资金来源，请人工核对。", 409)
+    await refund_lot(db, account, lot, f"google:{purchase.id}:refund")
+
+
+async def refund_lot(db, account, lot, reference):
+    from .app_models import CoinUnlock, CoinGrant
+    from .models import ContentOrder
     if not lot.active:
         return
     lot.active = False
-    await post(db, account, -lot.available_units, 'refund', f'apple:{item.id}:refund:{item.revision}')
+    await post(db, account, -lot.available_units, "refund", reference)
     allocations = list((await db.scalars(select(SandboxAllocation).where(
         SandboxAllocation.lot_id == lot.id, SandboxAllocation.returned.is_(False)))).all())
     for allocation in allocations:
@@ -152,7 +179,9 @@ async def records(db, kind, page, page_size, user_id=None):
         if kind == 'wallets':
             item.update(frozen_fen=0, debt_fen=0)
         elif kind == 'funding-sources':
-            item.update(total_amount_fen=0, source_type='apple_sandbox', source_ref=str(row.transaction_id),
-                        settlement_status='test_only')
+            google = row.google_purchase_id is not None
+            item.update(total_amount_fen=0, source_type="google_sandbox" if google else "apple_sandbox",
+                        source_ref=str(row.google_purchase_id if google else row.transaction_id),
+                        settlement_status="test_only")
         items.append(item)
     return {'items': items, 'meta': {'page': page, 'page_size': page_size, 'total': total}}

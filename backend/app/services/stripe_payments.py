@@ -72,9 +72,10 @@ def payment_snapshot(order: Order) -> dict:
             "payment_exchange_rate": "1",
         }
     if order.pay_type in ("apple_iap", "google_play"):
+        valuation_pending = (order.payment_environment != "Sandbox" if order.pay_type == "google_play"
+                             else bool(order.payment_currency and order.payment_exchange_rate is None))
         return {"payment_currency": order.payment_currency, "payment_amount_minor": order.payment_amount_minor,
-                "payment_exchange_rate": order.payment_exchange_rate,
-                "valuation_pending": order.pay_type == "google_play" or bool(order.payment_currency and order.payment_exchange_rate is None)}
+                "payment_exchange_rate": order.payment_exchange_rate, "valuation_pending": valuation_pending}
     if order.payment_currency is None and order.payment_amount_minor is None:
         return {"payment_currency": "cny", "payment_amount_minor": int(order.amount_fen), "payment_exchange_rate": "1"}
     if (order.payment_currency not in PAYMENT_CURRENCIES or order.payment_amount_minor is None

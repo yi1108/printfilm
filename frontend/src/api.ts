@@ -605,7 +605,7 @@ export const api = {
     )
   },
   listBillingOrders(limit = 50) {
-    return request<{ orders: BillingOrder[] }>(`/api/billing/orders?limit=${limit}`)
+    return request<{ orders: BillingOrder[] }>(`/api/billing/orders?limit=${limit}&view=production`)
   },
   usageSummary() {
     return request<UsageSummary>('/api/billing/usage/summary')

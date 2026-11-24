@@ -14,11 +14,19 @@ class SandboxAccount(Record, MarketBase):
 class SandboxLot(Record, MarketBase):
     __tablename__ = "marketplace_sandbox_lots"
     user_id: Mapped[int] = mapped_column(Integer, index=True)
-    transaction_id: Mapped[int] = mapped_column(ForeignKey("marketplace_apple_transactions.id"), unique=True)
+    transaction_id: Mapped[int | None] = mapped_column(ForeignKey("marketplace_apple_transactions.id"), unique=True)
+    google_purchase_id: Mapped[int | None] = mapped_column(
+        ForeignKey("marketplace_google_purchases.id", name="fk_sandbox_lot_google_purchase"), unique=True
+    )
     total_units: Mapped[int] = mapped_column(BigInteger)
     available_units: Mapped[int] = mapped_column(BigInteger)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
-    __table_args__ = (CheckConstraint("available_units >= 0 AND available_units <= total_units"),)
+    __table_args__ = (
+        CheckConstraint("available_units >= 0 AND available_units <= total_units"),
+        CheckConstraint(
+            "(transaction_id IS NULL) <> (google_purchase_id IS NULL)", name="ck_sandbox_lot_one_purchase"
+        ),
+    )
 
 
 class SandboxAllocation(Record, MarketBase):

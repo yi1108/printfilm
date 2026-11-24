@@ -7,8 +7,8 @@ from app.models import User, Order
 from app.services.billing import wallet
 from app.services.model_settings import _encrypt_secret
 from .google_models import GoogleAccount, GoogleIntent, GooglePurchase, GoogleWork, GoogleVoid
-from .google_config import fail, read, credentials
-from . import google_client
+from .google_config import fail, read, credentials, test_user
+from . import app_funds, google_client, sandbox_wallet
 from .service import now
 
 
@@ -115,12 +115,6 @@ async def apply_proof(db, package, product_id, token, proof, config, user_id=Non
     purchase_type = proof.get("purchaseType")
     if purchase_type is not None and (type(purchase_type) is not int or purchase_type not in (0, 1, 2)):
         fail("GOOGLE_PROOF_INVALID", "Google 购买类型无法确认。", "Invalid Google purchase type.", 502)
-    test = purchase_type == 0
-    env = wallet.configured_environment() if status == 2 and "purchaseType" not in proof else "Sandbox" if test else "Production"
-    # License payments can only fund a test deployment, never production users.
-    if env != wallet.configured_environment() or (env == "Sandbox" and intent.user_id not in config.get("test_user_ids", [])):
-        fail("GOOGLE_TEST_PURCHASE_ISOLATED", "测试付款只允许获准账号在 Sandbox 测试部署使用，不计入正式余额。",
-             "License test purchases require an approved account on a Sandbox wallet deployment.", 403)
     # Account closure cannot discard a valid paid transaction or prevent refunds.
     await lock_user(db, intent.user_id, allow_closed=True)
     intent = await db.scalar(select(GoogleIntent).where(GoogleIntent.id == intent.id).execution_options(populate_existing=True))
@@ -133,8 +127,31 @@ async def apply_proof(db, package, product_id, token, proof, config, user_id=Non
     order = await db.get(Order, intent.order_id)
     if not order or order.user_id != intent.user_id or order.pay_type != "google_play":
         fail("GOOGLE_ORDER_CONFLICT", "原充值订单不一致。", "Original recharge order mismatch.")
+    env = "Sandbox" if purchase_type == 0 else "Production"
+    if purchase_type is None and status in (1, 2):
+        # Pending and cancelled proofs may omit purchase type. Follow the frozen order.
+        env = order.payment_environment
+    previous_sandbox = txn is not None and txn.environment == "Sandbox"
+    if ((env == "Sandbox" and not (test_user(config, intent.user_id) or previous_sandbox))
+            or (env == "Production" and wallet.configured_environment() != "Production")):
+        fail("GOOGLE_TEST_PURCHASE_ISOLATED", "Google 测试付款仅限获准的账号，且必须进入沙箱钱包。",
+             "Google license test purchases require an approved account and a Sandbox wallet.", 403)
     if order.payment_environment != env:
-        fail("GOOGLE_ORDER_CONFLICT", "交易环境与原订单不一致。", "Purchase environment differs from the original order.")
+        # A previously created Production intent can accept a verified test payment
+        # only while it has never been fulfilled. Production credits stay immutable.
+        uncredited_order = (
+            order.status == "pending" and not order.paid_at and not order.trade_no
+            and (txn is None or (txn.status == "pending" and not txn.was_credited))
+        )
+        if (order.payment_environment == "Production" and purchase_type == 0
+                and app_funds.isolated(env) and uncredited_order):
+            order.payment_environment = env
+            if txn is not None:
+                txn.environment = env
+        else:
+            fail("GOOGLE_ORDER_CONFLICT", "交易环境与原订单不一致。", "Purchase environment differs from the original order.")
+    if txn is not None and txn.environment != env:
+        fail("GOOGLE_ORDER_CONFLICT", "交易环境与原凭证不一致。", "Purchase environment differs from the original receipt.")
     # Current time expiry must not erase a real payment or approved pending order.
     if status == 0:
         try:
@@ -166,12 +183,15 @@ async def apply_proof(db, package, product_id, token, proof, config, user_id=Non
             txn.status = "refunded" if tombstone or prior == "refunded" else "cancelled"
             order.status = txn.status
     elif status == 0 and prior != "credited":
-        lot = await wallet.credit(db, intent.user_id, txn.credit_fen, source_type="google_transaction",
-            source_ref=f"{package}:{token_hash}", amount_fen=0, environment=env,
-            note="Google Play 充值；原币实付与资金成本待核算")
-        lot.settlement_status = "pending_fx"
+        if app_funds.isolated(env):
+            await sandbox_wallet.credit_google(db, txn)
+        else:
+            lot = await wallet.credit(db, intent.user_id, txn.credit_fen, source_type="google_transaction",
+                source_ref=f"{package}:{token_hash}", amount_fen=0, environment=env,
+                note="Google Play 充值；原币实付与资金成本待核算")
+            lot.settlement_status = "pending_fx"
         txn.was_credited = True
-        txn.status = order.status = "credited"
+        txn.status = "credited"
         order.status, order.trade_no, order.paid_at = "paid", txn.google_order_id, purchased
         order.payment_environment = env
     if proof.get("consumptionState") == 1:
@@ -189,7 +209,8 @@ def response(txn, status):
     granted = status in ("credited", "already_credited")
     return dict(package_name=txn.package_name, product_id=txn.product_id, purchase_token_sha256=txn.token_hash,
         order_id=txn.google_order_id, status=status, credited=granted, consume_purchase=granted,
-        credit_fen=txn.credit_fen if granted else 0)
+        credit_fen=txn.credit_fen if granted else 0, environment=txn.environment,
+        test_only=txn.environment == "Sandbox")
 
 
 async def queue(db, package, product_id, token):
@@ -205,6 +226,17 @@ async def refund(db, txn):
     """Same debt/AI reserve/video entitlement reversal as other wallet channels."""
     if txn.status != "credited":
         return
+    if app_funds.isolated(txn.environment):
+        await sandbox_wallet.refund_google(db, txn)
+    else:
+        await refund_unified_wallet(db, txn)
+    txn.status = "refunded"
+    order = await db.get(Order, txn.order_id)
+    if order:
+        order.status = "refunded"
+
+
+async def refund_unified_wallet(db, txn):
     result = await wallet.revoke_source(db, txn.user_id, "google_transaction",
         f"{txn.package_name}:{txn.token_hash}", environment=txn.environment)
     from .app_models import CoinUnlock
@@ -223,10 +255,6 @@ async def refund(db, txn):
         if unlock and unlock.user_id == txn.user_id and unlock.environment == txn.environment:
             await _reverse_unlock(db, unlock, txn, channel="Google Play", transaction_id=txn.google_order_id or txn.token_hash)
     await wallet.sweep_debts(db, txn.user_id, environment=txn.environment)
-    txn.status = "refunded"
-    order = await db.get(Order, txn.order_id)
-    if order:
-        order.status = "refunded"
 
 
 async def verify(db, user_id, body):

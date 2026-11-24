@@ -449,6 +449,14 @@
             "title": "Credited",
             "type": "boolean"
           },
+          "environment": {
+            "enum": [
+              "Production",
+              "Sandbox"
+            ],
+            "title": "Environment",
+            "type": "string"
+          },
           "order_id": {
             "anyOf": [
               {
@@ -482,6 +490,10 @@
             ],
             "title": "Status",
             "type": "string"
+          },
+          "test_only": {
+            "title": "Test Only",
+            "type": "boolean"
           }
         },
         "required": [
@@ -491,7 +503,9 @@
           "status",
           "credited",
           "consume_purchase",
-          "credit_fen"
+          "credit_fen",
+          "environment",
+          "test_only"
         ],
         "title": "GoogleVerificationOut",
         "type": "object"
@@ -3650,6 +3664,22 @@
               "title": "Limit",
               "type": "integer"
             }
+          },
+          {
+            "description": "App 可查看本人的 Google 测试订单；Web 使用 production。",
+            "in": "query",
+            "name": "view",
+            "required": false,
+            "schema": {
+              "default": "app",
+              "description": "App 可查看本人的 Google 测试订单；Web 使用 production。",
+              "enum": [
+                "app",
+                "production"
+              ],
+              "title": "View",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -6515,7 +6545,7 @@
     },
     "/api/marketplace/app/v1/me/wallet": {
       "get": {
-        "description": "读取与 Web 相同的平台余额，兼容币字段只是单位别名。",
+        "description": "读取当前账号的 App 钱包，测试积分单独展示。",
         "operationId": "wallet_info_api_marketplace_app_v1_me_wallet_get",
         "parameters": [
           {
@@ -6610,7 +6640,7 @@
     },
     "/api/marketplace/app/v1/me/wallet/entries": {
       "get": {
-        "description": "Web充值、Apple充值和AI消费读取同一历史，不再读取旧币流水。",
+        "description": "返回当前 App 钱包的流水，正式积分和测试积分分开查询。",
         "operationId": "wallet_entries_api_marketplace_app_v1_me_wallet_entries_get",
         "parameters": [
           {

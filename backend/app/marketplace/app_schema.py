@@ -70,7 +70,37 @@ def check_schema(connection) -> list[str]:
             missing.append(f"{name}.app_editions")
     if "orders" not in available or "payment_client" not in {c["name"] for c in inspector.get_columns("orders")}:
         missing.append("orders.payment_client")
+    if "marketplace_sandbox_lots" in available:
+        columns = {column["name"]: column for column in inspector.get_columns("marketplace_sandbox_lots")}
+        if "transaction_id" in columns and not columns["transaction_id"]["nullable"]:
+            missing.append("marketplace_sandbox_lots.transaction_id:nullable")
+        if not any(
+            fk["constrained_columns"] == ["google_purchase_id"]
+            and fk["referred_table"] == "marketplace_google_purchases"
+            and fk["referred_columns"] == ["id"]
+            for fk in inspector.get_foreign_keys("marketplace_sandbox_lots")
+        ):
+            missing.append("marketplace_sandbox_lots:fk_sandbox_lot_google_purchase")
+        if "ck_sandbox_lot_one_purchase" not in {
+            check["name"] for check in inspector.get_check_constraints("marketplace_sandbox_lots")
+        }:
+            missing.append("marketplace_sandbox_lots:ck_sandbox_lot_one_purchase")
     return missing
+
+
+def _add_google_sandbox_source(connection) -> None:
+    if connection.dialect.name != "postgresql":
+        return
+    columns = {column["name"]: column for column in inspect(connection).get_columns("marketplace_sandbox_lots")}
+    if "google_purchase_id" not in columns:
+        connection.execute(text("""
+            ALTER TABLE marketplace_sandbox_lots
+                ADD COLUMN google_purchase_id INTEGER UNIQUE
+                    CONSTRAINT fk_sandbox_lot_google_purchase REFERENCES marketplace_google_purchases(id),
+                ADD CONSTRAINT ck_sandbox_lot_one_purchase
+                    CHECK ((transaction_id IS NULL) <> (google_purchase_id IS NULL)),
+                ALTER COLUMN transaction_id DROP NOT NULL
+        """))
 
 
 def apply_schema(connection) -> None:
@@ -83,6 +113,7 @@ def apply_schema(connection) -> None:
         raise RuntimeError("请先初始化原数字资产市场表，再执行 App 增量迁移。")
     for table in tables:
         table.create(connection, checkfirst=True)
+    _add_google_sandbox_source(connection)
     patches = {
         "orders": {"payment_client": "VARCHAR(32)"},
         "marketplace_works": {"app_editions": "JSON NOT NULL DEFAULT '[\"domestic\"]'"},

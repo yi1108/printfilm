@@ -7,6 +7,16 @@ def isolated(environment):
     return environment == 'Sandbox' and production.configured_environment() == 'Production'
 
 
+async def wallet_view_environment(db, user_id):
+    environment = sandbox_wallet.environment(user_id)
+    if environment == "Production" and production.enabled():
+        from .google_config import read, test_user
+        row, config = await read(db)
+        if row is not None and test_user(config, user_id):
+            return "Sandbox"
+    return environment
+
+
 async def lock_account(db, user_id, environment):
     if isolated(environment):
         return await sandbox_wallet.lock_account(db, user_id)
