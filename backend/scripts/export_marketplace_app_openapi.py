@@ -9,7 +9,7 @@ def validate_document(document: dict, routes) -> int:
     """检查内部引用与已挂载HTTP操作，防止交付断裂或漏接口的OpenAPI。"""
     from fastapi.routing import APIRoute
 
-    allowed = ("/api/marketplace/app/v1/", "/api/admin/marketplace/app/", "/api/admin/marketplace/curation/", "/api/billing/")
+    allowed = ("/api/marketplace/app/v1/", "/api/admin/marketplace/app/", "/api/admin/marketplace/curation/", "/api/admin/settings/google-play", "/api/admin/billing/", "/api/billing/")
     notification = "/api/marketplace/payments/apple/notifications"
     paths = document.get("paths", {})
     if not paths or any(not path.startswith(allowed) and path != notification for path in paths):
@@ -41,7 +41,14 @@ def validate_document(document: dict, routes) -> int:
             count += 1
     required = {
         "/api/billing/wallet", "/api/billing/skus", "/api/billing/orders",
+        "/api/billing/orders/{out_trade_no}", "/api/billing/android-epay/return-config",
+        "/api/admin/billing/payment-orders",
         "/api/billing/apple/transactions/verify", "/api/billing/apple/notifications",
+        "/api/marketplace/app/v1/iap/google/skus",
+        "/api/marketplace/app/v1/iap/google/purchase-intents",
+        "/api/marketplace/app/v1/iap/google/transactions/verify",
+        "/api/billing/google/notifications",
+        "/api/admin/settings/google-play",
         "/api/marketplace/app/v1/capabilities",
         "/api/marketplace/app/v1/categories",
         "/api/marketplace/app/v1/feed",
@@ -105,8 +112,10 @@ def export_document(output: Path) -> tuple[int, int]:
     install(application)
     shared = APIRouter()
     shared.routes.extend(route for route in billing_router.routes if route.path in (
-        "/billing/wallet", "/billing/skus", "/billing/orders"))
+        "/billing/wallet", "/billing/skus", "/billing/orders", "/billing/orders/{out_trade_no}", "/billing/orders/{out_trade_no}/close"))
     application.include_router(shared, prefix="/api", tags=["统一充值与余额"])
+    from app.api.android_epay import router as android_router
+    application.include_router(android_router)
     document = application.openapi()
     for path, operations in document['paths'].items():
         if not path.startswith('/api/marketplace/app/v1/'):

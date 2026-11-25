@@ -54,6 +54,9 @@ async def apply_verified_transaction(db, txn: dict, *, expected_user_id: int | N
                               AppleTransaction.transaction_id == txn["transaction_id"])
                               .with_for_update().execution_options(populate_existing=True))).scalar_one_or_none()
     if previous:
+        previous_bundle = (previous.raw_payload or {}).get("bundleId")
+        if previous_bundle and txn.get("bundle_id") and previous_bundle != txn["bundle_id"]:
+            app_fail("MARKETPLACE_IAP_ACCOUNT_MISMATCH", "苹果交易的应用归属发生冲突，请联系客服。", 403)
         if previous.user_id != owner.user_id or previous.product_id != txn["product_id"] or previous.app_account_token != txn["app_account_token"]:
             app_fail("MARKETPLACE_IAP_ACCOUNT_MISMATCH", "苹果交易归属发生冲突，请联系客服。", 403)
         if isolated(txn["environment"]):
@@ -122,6 +125,7 @@ async def consumption_request_snapshot(db, transaction: dict) -> dict:
         from .sandbox_models import SandboxLot
         lot = await db.scalar(select(SandboxLot).where(SandboxLot.transaction_id == item.id)) if item else None
         return {"transaction_id": transaction["transaction_id"], "environment": "Sandbox",
+                "bundle_id": transaction.get("bundle_id"),
                 "delivered": bool(lot), "consumed_milli_percent":
                 (lot.total_units - lot.available_units) * 100000 // lot.total_units if lot else 0}
     from app.services.billing import wallet
@@ -136,14 +140,16 @@ async def consumption_request_snapshot(db, transaction: dict) -> dict:
     spent = await db.scalar(select(func.coalesce(func.sum(WalletAllocation.units), 0)).where(
         WalletAllocation.lot_id == lot.id, WalletAllocation.state == "consumed")) if lot else 0
     consumed = min(100000, int(spent or 0) * 100000 // lot.total_units) if lot else 0
-    return {"transaction_id": transaction["transaction_id"], "delivered": delivered, "consumed_milli_percent": consumed}
+    return {"transaction_id": transaction["transaction_id"], "environment": transaction["environment"],
+            "bundle_id": transaction.get("bundle_id"), "delivered": delivered, "consumed_milli_percent": consumed}
 
 
 async def send_consumption_snapshot(snapshot: dict) -> str:
     """无数据库事务地回传已授权的最小数据，失败由通知租约队列重试。"""
     if snapshot.get("note"):
         return snapshot["note"]
-    await apple_client.in_environment(snapshot.get("environment", apple_client.get_app_settings().apple_environment),
+    await apple_client.in_application(snapshot.get("bundle_id"), apple_client.in_environment,
+        snapshot.get("environment", apple_client.get_app_settings().apple_environment),
         apple_client.send_consumption, snapshot["transaction_id"], delivered=snapshot["delivered"],
         consumed_milli_percent=snapshot["consumed_milli_percent"])
     return ""

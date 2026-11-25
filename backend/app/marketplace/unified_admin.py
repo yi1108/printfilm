@@ -1,5 +1,5 @@
 """统一资金运营查询与Web来源对账，不提供手工伪造支付成功的入口。"""
-from sqlalchemy import func, select, text
+from sqlalchemy import case, func, select, text
 
 from app.models import Order, User
 from app.models_wallet import WalletAccount, WalletAllocation, WalletDebt, WalletEvent, WalletFundingLot, WalletRepayment
@@ -13,7 +13,7 @@ def fields(row, names):
     return {name: getattr(row, name) for name in names.split()}
 
 
-async def records(db, kind, environment, page, page_size, status="", user_id=None):
+async def records(db, kind, environment, page, page_size, status="", user_id=None, payment_client_filter=""):
     """按服务端分页读取同一部署的统一账户，不读取历史独立币余额。"""
     from .app_funds import isolated
     if isolated(environment) and kind != 'recharge-orders':
@@ -52,6 +52,11 @@ async def records(db, kind, environment, page, page_size, status="", user_id=Non
         if status and hasattr(model, "status"):
             conditions.append(model.status == status)
         if model is Order:
+            if payment_client_filter:
+                effective_client = func.coalesce(Order.payment_client, case(
+                    (Order.pay_type == "apple_iap", "ios"),
+                    (Order.pay_type == "google_play", "android_international"), else_="web"))
+                conditions.append(effective_client == payment_client_filter)
             conditions.append(Order.team_id.is_(None))
             conditions.append(Order.payment_environment == 'Sandbox' if environment == 'Sandbox'
                 else func.coalesce(Order.payment_environment, 'Production') == 'Production')
@@ -59,6 +64,10 @@ async def records(db, kind, environment, page, page_size, status="", user_id=Non
         rows = list((await db.scalars(select(model).where(*conditions).order_by(model.id.desc())
                                     .offset((page-1)*page_size).limit(page_size))).all())
         items = [fields(row, names) for row in rows]
+        if model is Order:
+            from app.services.billing.order_origin import payment_client
+            for row, item in zip(rows, items):
+                item["payment_client"] = payment_client(row)
         if model is WalletFundingLot:
             for row, item in zip(rows, items):
                 item["available_units"] = sum(end-start for start, end in row.available_ranges)
@@ -75,7 +84,7 @@ async def review_web_funding(db, body, operator_id):
     await db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
                      {"key": "wallet-funding-review:" + body.idempotency_key})
     lot = await db.get(WalletFundingLot, body.lot_id)
-    if not lot or lot.source_type != "web_order":
+    if not lot or lot.source_type not in ("web_order", "android_epay_order"):
         app_fail("WALLET_REVIEW_SOURCE_INVALID", "请选择已核验的Web充值来源；苹果交易请使用苹果月度对账。", 409)
     await wallet.lock_account(db, lot.user_id, lot.environment)
     lot = await db.scalar(select(WalletFundingLot).where(WalletFundingLot.id == body.lot_id)
@@ -89,8 +98,10 @@ async def review_web_funding(db, body, operator_id):
     order = await db.scalar(select(Order).where(Order.out_trade_no == lot.source_ref))
     from app.services.billing.wallet_valuation import order_cash
     cash = order_cash(order) if order else None
+    from app.services.billing.order_origin import funding_source
     if (not order or order.pay_type not in ("alipay", "wxpay", "stripe") or order.status != "paid"
             or order.user_id != lot.user_id or order.credit_fen != lot.total_units or not lot.active
+            or funding_source(order) != lot.source_type
             or lot.settlement_status == "reconciled" or cash != lot.total_amount_fen):
         app_fail("WALLET_REVIEW_SOURCE_INVALID", "来源未付款、已失效、已对账或金额不一致，请人工核对。", 409)
     if body.received_fen != lot.total_amount_fen-body.channel_fee_fen-body.tax_fen:

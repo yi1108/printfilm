@@ -20,9 +20,11 @@ const STATUS_CN: Record<string, string> = {
   pending: '待支付',
   paid: '已到账',
   closed: '已关闭',
+  cancelled: '已取消',
+  refunded: '已退款',
 }
 
-const PAY_LABELS: Record<string, string> = { alipay: '支付宝', wxpay: '微信支付', stripe: 'Stripe' }
+const PAY_LABELS: Record<string, string> = { alipay: '支付宝', wxpay: '微信支付', stripe: 'Stripe', apple_iap: '苹果内购', google_play: 'Google Play' }
 
 function formatTime(iso?: string | null) {
   if (!iso) return '—'

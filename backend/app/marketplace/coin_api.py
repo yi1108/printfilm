@@ -39,8 +39,8 @@ def require_new_unlock() -> None:
 
 @router.get("/me/wallet", response_model=dict)
 async def wallet_info(db: DB, user: Actor):
-    """读取与 Web 相同的平台余额，兼容币字段只是单位别名。"""
-    environment = current_environment(user.id)
+    """读取当前账号的 App 钱包，测试积分单独展示。"""
+    environment = await wallet.wallet_view_environment(db, user.id)
     state = await funds_call(wallet.snapshot(db, user.id, environment))
     from .locale import localized
     return {**state, "balance_coins": state["balance_fen"], "frozen_coins": state["frozen_fen"],
@@ -50,9 +50,10 @@ async def wallet_info(db: DB, user: Actor):
 
 @router.get("/me/wallet/entries", response_model=dict)
 async def wallet_entries(db: DB, user: Actor, cursor: int | None = Query(None, gt=0), page_size: int = Query(20, ge=1, le=50)):
-    """Web充值、Apple充值和AI消费读取同一历史，不再读取旧币流水。"""
-    await funds_call(wallet.snapshot(db, user.id, current_environment(user.id)))
-    if wallet.isolated(current_environment(user.id)):
+    """返回当前 App 钱包的流水，正式积分和测试积分分开查询。"""
+    environment = await wallet.wallet_view_environment(db, user.id)
+    await funds_call(wallet.snapshot(db, user.id, environment))
+    if wallet.isolated(environment):
         from .sandbox_models import SandboxEntry
         model = SandboxEntry
     else:
@@ -73,7 +74,7 @@ async def unlock(body: UnlockInput, db: DB, user: Actor):
     from .app_media_models import AppMedia
     from .models import Publication
     from .coin_service import has_access
-    environment = current_environment(user.id)
+    environment = await wallet.wallet_view_environment(db, user.id)
     if wallet.isolated(environment):
         from .sandbox_wallet import new_purchase_allowed
         if not new_purchase_allowed(user.id):

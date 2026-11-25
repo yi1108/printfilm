@@ -67,6 +67,20 @@ async def test_saved_credentials_encrypted_redacted_and_live(settings_client, db
 
 
 @pytest.mark.asyncio
+async def test_domestic_application_admin_roundtrip(settings_client, credentials):
+    client, _ = settings_client
+    response = await client.patch(SETTINGS_URL, json={**credentials,
+        "apple_domestic_bundle_id": "com.example.printfilm.cn", "apple_domestic_app_id": 123456789})
+    assert response.status_code == 200
+    saved = response.json()["settings"]
+    assert saved["apple_domestic_bundle_id"] == "com.example.printfilm.cn"
+    assert saved["apple_domestic_app_id"] == 123456789
+    assert get_app_settings().apple_domestic_bundle_id == "com.example.printfilm.cn"
+    response = await client.patch(SETTINGS_URL, json={"apple_domestic_bundle_id": credentials["apple_bundle_id"]})
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
 async def test_invalid_material_is_not_persisted(settings_client):
     client, _ = settings_client
     response = await client.patch(SETTINGS_URL, json={"apple_private_key": "invalid-secret-material"})

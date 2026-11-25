@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     apple_iap_enabled: bool = Field(False, validation_alias="MARKETPLACE_APPLE_IAP_ENABLED")
     apple_bundle_id: str = Field("", validation_alias="MARKETPLACE_APPLE_BUNDLE_ID")
     apple_app_id: int = 0
+    apple_domestic_bundle_id: str = ""
+    apple_domestic_app_id: int = 0
     apple_issuer_id: str = Field("", validation_alias="MARKETPLACE_APPLE_ISSUER_ID")
     apple_key_id: str = Field("", validation_alias="MARKETPLACE_APPLE_KEY_ID")
     apple_private_key: str = ""
@@ -165,6 +167,15 @@ class Settings(BaseSettings):
     epay_key: str = ""
     epay_notify_url: str = ""
     epay_return_url: str = ""
+    android_epay_enabled: bool = False
+    android_epay_alipay_enabled: bool = False
+    android_epay_wxpay_enabled: bool = False
+    android_epay_package_name: str = ""
+    android_epay_sha256_fingerprints: str = ""
+    android_epay_return_base_url: str = ""
+    android_epay_checkout_hosts: str = ""
+    android_epay_app_scheme: str = ""
+
 
     # Stripe Checkout（后台配置优先，环境变量用于初始默认值）
     stripe_enabled: bool = False

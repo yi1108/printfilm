@@ -3,6 +3,7 @@ from dataclasses import asdict, dataclass, field
 import hashlib
 import json
 
+from .order_origin import funding_source
 from sqlalchemy import or_, select
 
 from app.models import Order, User, WalletLedger
@@ -142,7 +143,7 @@ def replay_ledger(entries, orders, expected_balance, expected_frozen, *, opening
                 if order.credit_fen != delta:
                     raise RuntimeError(f"流水 {entry.id} 到账 {delta}，订单 {order.out_trade_no} 到账 {order.credit_fen}")
                 cash = order_cash(order)
-                source = Source("web_order", order.out_trade_no, delta, cash or 0, [[0, delta]], cash is None)
+                source = Source(funding_source(order), order.out_trade_no, delta, cash or 0, [[0, delta]], cash is None)
             elif kind == "grant":
                 source = Source("signup_grant" if entry.ref_type == "signup" else "admin_grant",
                                 f"legacy-ledger:{entry.id}", delta, 0, [[0, delta]])
@@ -209,12 +210,12 @@ def ledger_findings(entries, balance):
     return parts
 
 
-def payment_findings(entries, orders, lots=(), apple_transactions=()):
+def payment_findings(entries, orders, lots=(), apple_transactions=(), google_transactions=()):
     """已支付订单必须能在流水或来源批次中找到，Sandbox 不并入正式余额。"""
     refs = {str(entry.ref_id) for entry in entries
             if entry.kind == "topup" and entry.ref_type == "order" and int(entry.delta_fen) > 0}
     refs.update(str(lot.source_ref) for lot in lots
-                if lot.source_type == "web_order" and getattr(lot, "source_ref", None))
+                if lot.source_type in ("web_order", "android_epay_order") and getattr(lot, "source_ref", None))
     missing, sandbox = [], []
     for order in orders:
         if order.status != "paid" or order.team_id is not None:
@@ -222,6 +223,14 @@ def payment_findings(entries, orders, lots=(), apple_transactions=()):
         text = f"{order.out_trade_no} 实付 {order.amount_fen} 到账 {order.credit_fen}"
         if getattr(order, "payment_environment", None) not in (None, "Production"):
             sandbox.append(text)
+        elif getattr(order, "pay_type", None) == "google_play":
+            matching = [txn for txn in google_transactions if txn.order_id == order.id
+                        and txn.user_id == order.user_id and txn.credit_fen == order.credit_fen
+                        and txn.environment == "Production" and txn.status == "credited"
+                        and any(lot.source_type == "google_transaction"
+                            and lot.source_ref == f"{txn.package_name}:{txn.token_hash}" for lot in lots)]
+            if len(matching) != 1:
+                missing.append(text)
         elif getattr(order, "pay_type", None) == "apple_iap":
             matching = [txn for txn in apple_transactions
                         if getattr(txn, "recharge_order_id", None) == order.id and txn.status == "paid"
@@ -266,7 +275,7 @@ def source_payment_problems(lots, orders):
     problems = []
     seen_orders = set()
     for lot in lots:
-        if lot.source_type == "web_order":
+        if lot.source_type in ("web_order", "android_epay_order"):
             order = by_ref.get(str(lot.source_ref))
             if order is not None and order.out_trade_no in seen_orders:
                 problems.append(f"订单 {order.out_trade_no} 存在重复来源")
@@ -283,6 +292,8 @@ def source_payment_problems(lots, orders):
                   or getattr(order, "pay_type", "alipay") not in ("alipay", "wxpay", "stripe")
                   or getattr(order, "payment_environment", None) not in (None, "Production")):
                 problems.append(f"来源订单 {lot.source_ref} 不是已支付的正式个人订单")
+            elif funding_source(order) != lot.source_type:
+                problems.append(f"来源订单 {order.out_trade_no} 的 App/Web 标记不一致")
             elif int(order.credit_fen) != int(lot.total_units) or (cash is not None and cash != int(lot.total_amount_fen)):
                 problems.append(f"来源订单 {order.out_trade_no} 额度或历史实付成本不一致")
             elif cash is None and lot.settlement_status != "pending_fx":
@@ -294,13 +305,13 @@ def source_payment_problems(lots, orders):
     return problems
 
 
-def existing_account_row(user, marker, lots, reserved, environment, entries=(), orders=(), apple_transactions=()):
+def existing_account_row(user, marker, lots, reserved, environment, entries=(), orders=(), apple_transactions=(), google_transactions=()):
     """已有统一钱包账户时带回当前积分，并把环境、来源、流水和订单差额写进核对原因。"""
     balance = int(user.balance_fen or 0)
     frozen = int(user.frozen_fen or 0)
     available, unreadable = _active_available(lots)
     reserved_units = sum(int(item.units) for item in reserved)
-    missing, sandbox = payment_findings(entries, orders, lots, apple_transactions)
+    missing, sandbox = payment_findings(entries, orders, lots, apple_transactions, google_transactions)
     lot_problems = source_payment_problems(lots, orders) + payment_evidence_problems(entries, orders)
     valid = (not unreadable and marker.environment == environment
              and all(lot.environment == environment for lot in lots)
@@ -484,6 +495,28 @@ async def build_report(db, environment, approvals=None):
         entries = list((await db.execute(select(WalletLedger).where(WalletLedger.user_id == user.id)
                       .order_by(WalletLedger.id).execution_options(populate_existing=True))).scalars())
         orders = list((await db.execute(select(Order).where(Order.user_id == user.id).order_by(Order.id).execution_options(populate_existing=True))).scalars())
+        if environment == "Production" and {"marketplace_sandbox_lots", "marketplace_google_purchases"} <= tables:
+            sandbox_orders = [
+                order for order in orders
+                if order.status == "paid" and order.pay_type == "google_play" and order.payment_environment == "Sandbox"
+            ]
+            if sandbox_orders:
+                from app.marketplace.google_models import GooglePurchase
+                from app.marketplace.sandbox_models import SandboxLot
+
+                ledger_refs = {str(entry.ref_id) for entry in entries if entry.ref_type == "order"}
+                candidate_ids = {order.id for order in sandbox_orders
+                                 if order.out_trade_no not in ledger_refs and str(order.id) not in ledger_refs}
+                isolated_ids = set((await db.scalars(
+                    select(Order.id).join(GooglePurchase, GooglePurchase.order_id == Order.id)
+                    .join(SandboxLot, SandboxLot.google_purchase_id == GooglePurchase.id)
+                    .where(Order.id.in_(candidate_ids), GooglePurchase.user_id == user.id,
+                           GooglePurchase.environment == "Sandbox", GooglePurchase.was_credited.is_(True),
+                           GooglePurchase.status == "credited", GooglePurchase.credit_fen == Order.credit_fen,
+                           GooglePurchase.google_order_id == Order.trade_no, SandboxLot.user_id == user.id,
+                           SandboxLot.total_units == Order.credit_fen, SandboxLot.active.is_(True))
+                )).all())
+                orders = [order for order in orders if order.id not in isolated_ids]
         resolution = resolutions.get(user.id)
         if resolution:
             prior = resolution.snapshot
@@ -515,7 +548,13 @@ async def build_report(db, environment, approvals=None):
                     .execution_options(populate_existing=True))).scalars())
             funded_refs = {lot.source_ref for lot in lots if lot.source_type == "apple_transaction"}
             funded_transactions = [txn for txn in apple_transactions if f"{environment}:{txn.transaction_id}" in funded_refs]
-            row = existing_account_row(user, marker, lots, reserved, environment, entries, orders, funded_transactions)
+            google_transactions = []
+            if "marketplace_google_purchases" in tables:
+                from app.marketplace.google_models import GooglePurchase
+                google_transactions = list((await db.scalars(select(GooglePurchase).where(
+                    GooglePurchase.user_id == user.id, GooglePurchase.environment == environment)
+                    .execution_options(populate_existing=True))).all())
+            row = existing_account_row(user, marker, lots, reserved, environment, entries, orders, funded_transactions, google_transactions)
             if resolution:
                 row["balance_resolution"] = {"operator_id": resolution.operator_id, "reason": resolution.reason,
                     "backup_reference": resolution.backup_reference, **resolution.result}
@@ -526,6 +565,16 @@ async def build_report(db, environment, approvals=None):
                                          "units": lot.total_units, "valuation_status": "pending"}
                                         for lot in lots if lot.settlement_status == "pending_fx"])
             try:
+                google_lots = [lot for lot in lots if lot.source_type == "google_transaction"]
+                for txn in google_transactions:
+                    matched = [lot for lot in google_lots if lot.source_ref == f"{txn.package_name}:{txn.token_hash}"]
+                    if txn.was_credited and len(matched) != 1:
+                        raise RuntimeError("Google交易缺少唯一统一资金来源")
+                for lot in google_lots:
+                    matched = [txn for txn in google_transactions if lot.source_ref == f"{txn.package_name}:{txn.token_hash}"
+                        and txn.credit_fen == lot.total_units and lot.active == (txn.status == "credited")]
+                    if (len(matched) != 1 or lot.settlement_status != "pending_fx" or lot.total_amount_fen != 0):
+                        raise RuntimeError("Google来源与原交易或待核算成本不一致")
                 if len(funded_transactions) != len(apple_transactions):
                     raise RuntimeError("已有账户仍有Apple交易缺少统一来源，必须人工核对")
                 if any(lot.source_type == "apple_transaction" for lot in lots):

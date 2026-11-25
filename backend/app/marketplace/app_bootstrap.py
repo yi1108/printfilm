@@ -27,7 +27,7 @@ async def ensure_schema() -> list[str]:
 
     The transaction lock covers both the legacy marketplace tables required by
     App foreign keys and all App content/social/financial tables.  Only
-    additive, checkfirst/IF NOT EXISTS operations are performed; no historical
+    compatible schema changes are performed; no historical
     rows, balances, orders, or columns are deleted or rewritten.
     """
     from app.database import engine
@@ -75,14 +75,14 @@ async def require_schema(request: Request) -> None:
 
 def install(app: FastAPI) -> None:
     """独立挂载App及运营路由，不继承市场展示开关依赖。"""
-    from . import app_admin, app_content, app_playback, apple_api, coin_api, app_social, app_sharing, metrics_admin, curation_admin
+    from . import app_admin, app_content, app_playback, apple_api, coin_api, app_social, app_sharing, metrics_admin, curation_admin, google_api
     from .app_logging import install_access_filter
     from .locale import locale_header
     from .locale_middleware import install_locale
     install_locale(app)
     register_models()
     install_access_filter()
-    for router in (app_content.router, app_playback.router, coin_api.router, apple_api.router, app_social.router, app_sharing.router):
+    for router in (app_content.router, app_playback.router, coin_api.router, apple_api.router, app_social.router, app_sharing.router, google_api.router):
         app.include_router(router, prefix="/api/marketplace/app/v1", dependencies=[Depends(require_schema), Depends(locale_header)], tags=["App视频与观影币"])
     app.include_router(app_admin.router, prefix="/api/admin/marketplace/app", dependencies=[Depends(require_schema)], tags=["App运营与财务"])
     app.include_router(metrics_admin.router, prefix="/api/admin/marketplace/app", dependencies=[Depends(require_schema)], tags=["互动运营"])
@@ -90,6 +90,8 @@ def install(app: FastAPI) -> None:
     app.include_router(app_sharing.public_router, dependencies=[Depends(require_schema)])
     app.include_router(apple_api.notifications_router, dependencies=[Depends(require_schema)], tags=["Apple服务器通知"])
     app.include_router(apple_api.billing_router, dependencies=[Depends(require_schema)], tags=["统一钱包Apple支付"])
+    app.include_router(google_api.admin_router, dependencies=[Depends(require_schema)], tags=["Google Play 配置"])
+    app.include_router(google_api.public_router, dependencies=[Depends(require_schema)], tags=["Google Play 通知"])
 
 
 async def start_app_services() -> None:
@@ -103,6 +105,8 @@ async def start_app_services() -> None:
         logger.exception("App 数据库结构迁移失败，原 API 继续启动")
     from .engagement_runtime import start_engagement_runtime
     await start_engagement_runtime()
+    from .google_runtime import start as start_google
+    await start_google()
     try:
         await start_apple_runtime()
     except Exception:
@@ -115,6 +119,8 @@ async def stop_app_services() -> None:
     from .app_playback import session_store
     from .engagement_runtime import stop_engagement_runtime
     await stop_engagement_runtime()
+    from .google_runtime import stop as stop_google
+    await stop_google()
     await stop_apple_runtime()
     if session_store.cache_info().currsize:
         await session_store().aclose()

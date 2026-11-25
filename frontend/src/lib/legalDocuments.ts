@@ -23,7 +23,7 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
   "terms": {
     "slug": "terms",
     "title": "Terms of Use",
-    "updatedAt": "November 9, 2026",
+    "updatedAt": "November 12, 2026",
     "intro": [
       "These Terms of Use (“Terms”) are a contract between you and Shenzhen Depei Open Source Data Technology Co., Ltd. (“PRINTFILM,” “we,” “us,” or “our”). They govern your access to and use of the PRINTFILM mobile application, the website at [https://www.printfilm.com](https://www.printfilm.com), and related generation, playback, and account services (together, the “Service”).",
       "By creating an account, tapping agree, purchasing credits or Studio access, or otherwise using the Service, you agree to these Terms and to our [Privacy Policy](/privacy). If you do not agree, do not use the Service."
@@ -100,7 +100,7 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
           },
           {
             "type": "paragraph",
-            "text": "In-app digital goods are sold through Apple In-App Purchase. Apple’s payment sheet shows the price and currency before you confirm. We do not ask you to pay for credits, Studio access, or other digital items inside the iOS app by any method other than Apple In-App Purchase."
+            "text": "Digital goods inside the iOS app are sold through Apple In-App Purchase. Apple’s payment sheet shows the price and currency before you confirm. We do not ask you to pay for credits, Studio access, or other digital items inside the iOS app by any method other than Apple In-App Purchase."
           }
         ]
       },
@@ -114,7 +114,7 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
           {
             "type": "bullets",
             "items": [
-              "Credit packs are consumable in-app purchases. The price is the price displayed by Apple at checkout.",
+              "Credit packs are consumable in-app purchases. The price is the price displayed by the applicable store at checkout.",
               "Credits do not expire and have no cash value. They are not a bank balance, deposit, or e-money, and they cannot be redeemed for cash or transferred to another person, except where we expressly agree in writing, for example an enterprise arrangement requested through support.",
               "A completed credit purchase is added to the PRINTFILM account that was signed in at checkout. Sign in to that same account to see the balance and purchase history. Using Restore Purchases does not grant those credits a second time.",
               "When generation starts, we may place a hold based on an estimate and then settle the charge from actual use, including tokens processed for the request. Image generation and video generation can cost different amounts. The usage screen shows the record we have for your account.",
@@ -124,7 +124,7 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
           },
           {
             "type": "paragraph",
-            "text": "Buying credits does not guarantee that an AI result will match your prompt, be error-free, or be suitable for a particular purpose."
+            "text": "The international Android app sells one-time consumable credit packs through Google Play Billing. Google displays the local price and currency. We verify purchases with Google and credit the PRINTFILM account bound at checkout; pending payments grant no credits, and retries never grant them twice. Google-confirmed refunds may reverse unused credits and associated video access; completed generation use may leave an outstanding debt. This recharge feature does not add charges to local Android Studio tools. Contact Google Play or our support for payment and refund assistance. Buying credits does not guarantee that an AI result will match your prompt, be error-free, or be suitable for a particular purpose."
           }
         ]
       },
@@ -325,7 +325,7 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
   "privacy": {
     "slug": "privacy",
     "title": "Privacy Policy",
-    "updatedAt": "November 9, 2026",
+    "updatedAt": "November 12, 2026",
     "intro": [
       "Shenzhen Depei Open Source Data Technology Co., Ltd. (“PRINTFILM,” “we,” “us,” or “our”) respects your privacy. This policy explains how we collect, use, and share information when you use the PRINTFILM iOS app, [https://www.printfilm.com](https://www.printfilm.com), and related generation, playback, and account services (the “Service”).",
       "If you do not agree with this policy, do not use the Service. Our [Terms of Use](/terms) explain the rules for using PRINTFILM."
@@ -369,7 +369,7 @@ export const LEGAL_DOCS: Record<'terms' | 'privacy', LegalDocument> = {
           },
           {
             "type": "paragraph",
-            "text": "**Purchases and usage.** We receive records of credit packs and the Studio unlock so we can deliver what you bought. Apple processes the payment. We do not receive your full payment-card number. We keep credit balance, holds, generation charges, token usage, unlocks of paid videos, and purchase history for the account."
+            "text": "**Purchases and usage.** We receive records of credit packs and the Studio unlock so we can deliver what you bought. Apple processes iOS payments; Google Play processes in-app payments in the international Android app. For delivery and refunds, we store store-order identifiers, purchase credentials and opaque account/checkout identifiers, and query the relevant store. Google purchase tokens are encrypted at rest and are never public links or app login credentials. We do not receive your full payment-card number. We keep credit balance, holds, generation charges, token usage, unlocks of paid videos, and purchase history for the account."
           },
           {
             "type": "paragraph",

@@ -12,6 +12,7 @@ class AppleProduct(Record, MarketBase):
     """商品币数映射永久保存，停用商品仍可履约历史交易。"""
     __tablename__ = "marketplace_apple_products"
     product_id: Mapped[str] = mapped_column(String(200), unique=True)
+    app_edition: Mapped[str] = mapped_column(String(16), default="international", server_default="international")
     sku_id: Mapped[str] = mapped_column(String(64), default="", index=True)
     sku_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     coins: Mapped[int] = mapped_column(BigInteger)

@@ -4,6 +4,8 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 def order_cash(order):
     """Use the historical payment snapshot; unknown FX is not certified zero cash."""
+    if getattr(order, "pay_type", None) == "google_play" and getattr(order, "payment_amount_minor", None) is None:
+        return None
     currency = (getattr(order, "payment_currency", None) or "cny").lower()
     if currency == "cny":
         minor = getattr(order, "payment_amount_minor", None)

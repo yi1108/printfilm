@@ -226,7 +226,9 @@ export type BillingOrder = {
   out_trade_no: string
   sku_id: string
   sku_name: string
-  amount_fen: number
+  amount_fen: number | null
+  amount_micros?: number | null
+  currency?: string | null
   credit_fen: number
   pay_type: string
   status: string
@@ -604,7 +606,7 @@ export const api = {
     )
   },
   listBillingOrders(limit = 50) {
-    return request<{ orders: BillingOrder[] }>(`/api/billing/orders?limit=${limit}`)
+    return request<{ orders: BillingOrder[] }>(`/api/billing/orders?limit=${limit}&view=production`)
   },
   usageSummary() {
     return request<UsageSummary>('/api/billing/usage/summary')

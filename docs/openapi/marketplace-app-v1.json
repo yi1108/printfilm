@@ -142,6 +142,24 @@
       },
       "CreateOrderBody": {
         "properties": {
+          "app_edition": {
+            "default": "international",
+            "enum": [
+              "domestic",
+              "international"
+            ],
+            "title": "App Edition",
+            "type": "string"
+          },
+          "client": {
+            "default": "web",
+            "enum": [
+              "web",
+              "android"
+            ],
+            "title": "Client",
+            "type": "string"
+          },
           "idempotency_key": {
             "anyOf": [
               {
@@ -295,6 +313,203 @@
         "title": "FundingReviewInput",
         "type": "object"
       },
+      "GoogleCatalogOut": {
+        "properties": {
+          "obfuscated_account_id": {
+            "title": "Obfuscated Account Id",
+            "type": "string"
+          },
+          "package_name": {
+            "title": "Package Name",
+            "type": "string"
+          },
+          "purchasing_enabled": {
+            "title": "Purchasing Enabled",
+            "type": "boolean"
+          },
+          "skus": {
+            "items": {
+              "$ref": "#/components/schemas/GoogleProductOut"
+            },
+            "title": "Skus",
+            "type": "array"
+          }
+        },
+        "required": [
+          "package_name",
+          "purchasing_enabled",
+          "obfuscated_account_id",
+          "skus"
+        ],
+        "title": "GoogleCatalogOut",
+        "type": "object"
+      },
+      "GoogleIntentOut": {
+        "properties": {
+          "credit_fen": {
+            "title": "Credit Fen",
+            "type": "integer"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "intent_id": {
+            "title": "Intent Id",
+            "type": "string"
+          },
+          "obfuscated_account_id": {
+            "title": "Obfuscated Account Id",
+            "type": "string"
+          },
+          "obfuscated_profile_id": {
+            "title": "Obfuscated Profile Id",
+            "type": "string"
+          },
+          "package_name": {
+            "title": "Package Name",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "sku_id": {
+            "title": "Sku Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "package_name",
+          "intent_id",
+          "sku_id",
+          "product_id",
+          "credit_fen",
+          "obfuscated_account_id",
+          "obfuscated_profile_id",
+          "expires_at"
+        ],
+        "title": "GoogleIntentOut",
+        "type": "object"
+      },
+      "GoogleProductOut": {
+        "properties": {
+          "credit_fen": {
+            "title": "Credit Fen",
+            "type": "integer"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "offer_id": {
+            "title": "Offer Id",
+            "type": "null"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "purchase_option_id": {
+            "title": "Purchase Option Id",
+            "type": "string"
+          },
+          "sku_id": {
+            "title": "Sku Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sku_id",
+          "product_id",
+          "name",
+          "credit_fen",
+          "purchase_option_id",
+          "enabled"
+        ],
+        "title": "GoogleProductOut",
+        "type": "object"
+      },
+      "GoogleVerificationOut": {
+        "properties": {
+          "consume_purchase": {
+            "title": "Consume Purchase",
+            "type": "boolean"
+          },
+          "credit_fen": {
+            "title": "Credit Fen",
+            "type": "integer"
+          },
+          "credited": {
+            "title": "Credited",
+            "type": "boolean"
+          },
+          "environment": {
+            "enum": [
+              "Production",
+              "Sandbox"
+            ],
+            "title": "Environment",
+            "type": "string"
+          },
+          "order_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Id"
+          },
+          "package_name": {
+            "title": "Package Name",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "purchase_token_sha256": {
+            "title": "Purchase Token Sha256",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "credited",
+              "already_credited",
+              "pending",
+              "refunded",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "test_only": {
+            "title": "Test Only",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "package_name",
+          "product_id",
+          "purchase_token_sha256",
+          "status",
+          "credited",
+          "consume_purchase",
+          "credit_fen",
+          "environment",
+          "test_only"
+        ],
+        "title": "GoogleVerificationOut",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -341,6 +556,43 @@
           }
         },
         "title": "InitializationInput",
+        "type": "object"
+      },
+      "IntentInput": {
+        "additionalProperties": false,
+        "properties": {
+          "idempotency_key": {
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "package_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Package Name",
+            "type": "string"
+          },
+          "product_id": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Product Id",
+            "type": "string"
+          },
+          "sku_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Sku Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "package_name",
+          "sku_id",
+          "product_id",
+          "idempotency_key"
+        ],
+        "title": "IntentInput",
         "type": "object"
       },
       "MetricsInput": {
@@ -507,10 +759,88 @@
         "title": "PlaybackInput",
         "type": "object"
       },
+      "ProductConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "credit_fen": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credit Fen"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "offer_id": {
+            "title": "Offer Id",
+            "type": "null"
+          },
+          "product_id": {
+            "maxLength": 200,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9_.]*$",
+            "title": "Product Id",
+            "type": "string"
+          },
+          "purchase_option_id": {
+            "default": "buy",
+            "title": "Purchase Option Id",
+            "type": "string"
+          },
+          "reference_amount_fen": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Amount Fen"
+          },
+          "sku_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Sku Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sku_id",
+          "product_id",
+          "name"
+        ],
+        "title": "ProductConfig",
+        "type": "object"
+      },
       "ProductInput": {
         "additionalProperties": false,
         "description": "苹果商品绑定现有Web套餐，赠送额度也必须原样冻结；已使用映射不可改。",
         "properties": {
+          "app_edition": {
+            "default": "international",
+            "enum": [
+              "domestic",
+              "international"
+            ],
+            "title": "App Edition",
+            "type": "string"
+          },
           "coins": {
             "exclusiveMinimum": 0.0,
             "maximum": 100000000.0,
@@ -587,6 +917,85 @@
           "idempotency_key"
         ],
         "title": "PurchaseIntentInput",
+        "type": "object"
+      },
+      "SettingsInput": {
+        "additionalProperties": false,
+        "properties": {
+          "clear_credentials": {
+            "default": false,
+            "title": "Clear Credentials",
+            "type": "boolean"
+          },
+          "package_name": {
+            "default": "com.deep.printfilm",
+            "maxLength": 200,
+            "pattern": "^[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+$",
+            "title": "Package Name",
+            "type": "string"
+          },
+          "products": {
+            "items": {
+              "$ref": "#/components/schemas/ProductConfig"
+            },
+            "maxItems": 30,
+            "title": "Products",
+            "type": "array"
+          },
+          "purchasing_enabled": {
+            "default": false,
+            "title": "Purchasing Enabled",
+            "type": "boolean"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          },
+          "rtdn_audience": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Rtdn Audience",
+            "type": "string"
+          },
+          "rtdn_service_account": {
+            "default": "",
+            "maxLength": 300,
+            "title": "Rtdn Service Account",
+            "type": "string"
+          },
+          "service_account_json": {
+            "anyOf": [
+              {
+                "maxLength": 30000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Account Json"
+          },
+          "test_user_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 500,
+            "title": "Test User Ids",
+            "type": "array"
+          },
+          "version": {
+            "minimum": 0.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "reason"
+        ],
+        "title": "SettingsInput",
         "type": "object"
       },
       "SettlementInput": {
@@ -895,7 +1304,22 @@
         "title": "ValuationInput",
         "type": "object"
       },
-      "VerifyInput": {
+      "app__marketplace__app_social__ReportInput": {
+        "properties": {
+          "reason": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "ReportInput",
+        "type": "object"
+      },
+      "app__marketplace__apple_api__VerifyInput": {
         "additionalProperties": false,
         "description": "回传 StoreKit 2 的原始 JWS，不能提交用户编号认领交易。",
         "properties": {
@@ -924,19 +1348,77 @@
         "title": "VerifyInput",
         "type": "object"
       },
-      "app__marketplace__app_social__ReportInput": {
+      "app__marketplace__google_api__VerifyInput": {
+        "additionalProperties": false,
         "properties": {
-          "reason": {
-            "maxLength": 300,
+          "intent_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intent Id"
+          },
+          "obfuscated_account_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Obfuscated Account Id"
+          },
+          "obfuscated_profile_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Obfuscated Profile Id"
+          },
+          "package_name": {
+            "maxLength": 200,
             "minLength": 1,
-            "title": "Reason",
+            "title": "Package Name",
             "type": "string"
+          },
+          "product_id": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Product Id",
+            "type": "string"
+          },
+          "purchase_token": {
+            "maxLength": 8192,
+            "minLength": 1,
+            "title": "Purchase Token",
+            "type": "string"
+          },
+          "quantity": {
+            "default": 1,
+            "maximum": 1.0,
+            "minimum": 1.0,
+            "title": "Quantity",
+            "type": "integer"
           }
         },
         "required": [
-          "reason"
+          "package_name",
+          "product_id",
+          "purchase_token"
         ],
-        "title": "ReportInput",
+        "title": "VerifyInput",
         "type": "object"
       },
       "app__marketplace__schemas__ReportInput": {
@@ -1005,6 +1487,94 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/admin/billing/android-epay/status": {
+      "get": {
+        "operationId": "status_api_admin_billing_android_epay_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Status"
+      }
+    },
+    "/api/admin/billing/payment-orders": {
+      "get": {
+        "operationId": "orders_api_admin_billing_payment_orders_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "default": "android_domestic",
+              "pattern": "^(android_domestic|web|all)$",
+              "title": "Source",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Orders"
+      }
+    },
     "/api/admin/marketplace/app/exchange-rates": {
       "get": {
         "operationId": "exchange_rates_api_admin_marketplace_app_exchange_rates_get",
@@ -1280,6 +1850,22 @@
     "/api/admin/marketplace/app/product-presets": {
       "get": {
         "operationId": "product_presets_api_admin_marketplace_app_product_presets_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "app_edition",
+            "required": false,
+            "schema": {
+              "default": "international",
+              "enum": [
+                "domestic",
+                "international"
+              ],
+              "title": "App Edition",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -1292,6 +1878,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -2414,6 +3010,17 @@
               ],
               "title": "User Id"
             }
+          },
+          {
+            "in": "query",
+            "name": "payment_client",
+            "required": false,
+            "schema": {
+              "default": "",
+              "pattern": "^(|web|android_domestic|ios|android_international)$",
+              "title": "Payment Client",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2731,6 +3338,180 @@
         ]
       }
     },
+    "/api/admin/settings/google-play": {
+      "get": {
+        "operationId": "settings_api_admin_settings_google_play_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Google Play 服务端配置和待处理数量（不返回密钥）",
+        "tags": [
+          "Google Play 配置"
+        ]
+      },
+      "patch": {
+        "operationId": "update_settings_api_admin_settings_google_play_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "保存 Google 凭证、商品映射及测试账号；私钥加密存储",
+        "tags": [
+          "Google Play 配置"
+        ]
+      }
+    },
+    "/api/admin/settings/google-play/queue": {
+      "get": {
+        "operationId": "work_queue_api_admin_settings_google_play_queue_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Google 持久补单队列；只返回脱敏错误码",
+        "tags": [
+          "Google Play 配置"
+        ]
+      }
+    },
+    "/api/admin/settings/google-play/transactions": {
+      "get": {
+        "operationId": "transactions_api_admin_settings_google_play_transactions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Google 交易、原币待同步与消耗状态",
+        "tags": [
+          "Google Play 配置"
+        ]
+      }
+    },
+    "/api/billing/android-epay/return-config": {
+      "get": {
+        "operationId": "return_config_api_billing_android_epay_return_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Return Config"
+      }
+    },
     "/api/billing/apple/notifications": {
       "post": {
         "description": "只有验签并持久化后才返回2xx；后台任务可在关闭市场后继续处理。",
@@ -2783,7 +3564,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/VerifyInput"
+                "$ref": "#/components/schemas/app__marketplace__apple_api__VerifyInput"
               }
             }
           },
@@ -2824,6 +3605,47 @@
         ]
       }
     },
+    "/api/billing/google/notifications": {
+      "post": {
+        "operationId": "notifications_api_billing_google_notifications_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Pub/Sub RTDN；验证 OIDC，持久化后应答",
+        "tags": [
+          "Google Play 通知"
+        ]
+      }
+    },
     "/api/billing/orders": {
       "get": {
         "description": "需要登录，按创建时间倒序返回当前用户的个人充值订单，并自动关闭已过期待支付订单；不包含历史团队订单。",
@@ -2841,6 +3663,22 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "description": "App 可查看本人的 Google 测试订单；Web 使用 production。",
+            "in": "query",
+            "name": "view",
+            "required": false,
+            "schema": {
+              "default": "app",
+              "description": "App 可查看本人的 Google 测试订单；Web 使用 production。",
+              "enum": [
+                "app",
+                "production"
+              ],
+              "title": "View",
+              "type": "string"
             }
           }
         ],
@@ -2882,6 +3720,30 @@
       "post": {
         "description": "需要登录，选择充值套餐及支付宝、微信或已启用的 Stripe 支付方式，返回二维码或收银台链接和订单有效期。创建订单不会立即增加余额，实际到账由支付回调确认。",
         "operationId": "create_order_api_billing_orders_post",
+        "parameters": [
+          {
+            "description": "Catalog selection only; must match explicit app_edition and configured bundle.",
+            "in": "header",
+            "name": "X-App-Edition",
+            "required": false,
+            "schema": {
+              "enum": [
+                "domestic",
+                "international"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Configured iOS bundle identifier; never accepted as payment proof.",
+            "in": "header",
+            "name": "X-App-Bundle-ID",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -2928,6 +3790,108 @@
         ]
       }
     },
+    "/api/billing/orders/{out_trade_no}": {
+      "get": {
+        "description": "需要登录，仅可读取本人个人充值订单；查询前关闭该订单的过期待支付状态，返回支付状态、金额和到账时间。",
+        "operationId": "get_order_api_billing_orders__out_trade_no__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "out_trade_no",
+            "required": true,
+            "schema": {
+              "title": "Out Trade No",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Order Api Billing Orders  Out Trade No  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "个人充值订单状态"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "获取个人充值订单状态",
+        "tags": [
+          "统一充值与余额",
+          "billing"
+        ]
+      }
+    },
+    "/api/billing/orders/{out_trade_no}/close": {
+      "post": {
+        "description": "需要登录，仅可关闭本人的待支付个人订单。已关闭订单可重复请求，已支付订单不能关闭。",
+        "operationId": "close_order_api_billing_orders__out_trade_no__close_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "out_trade_no",
+            "required": true,
+            "schema": {
+              "title": "Out Trade No",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Close Order Api Billing Orders  Out Trade No  Close Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "关闭后的订单状态"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "关闭个人充值订单",
+        "tags": [
+          "统一充值与余额",
+          "billing"
+        ]
+      }
+    },
     "/api/billing/skus": {
       "get": {
         "description": "无需登录，返回可购买的充值套餐、支持的支付方式及计费倍率。",
@@ -2955,9 +3919,52 @@
               "default": "web",
               "enum": [
                 "web",
-                "apple_iap"
+                "apple_iap",
+                "android_epay"
               ],
               "title": "Channel",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "app_edition",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "domestic",
+                    "international"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "App Edition"
+            }
+          },
+          {
+            "description": "Catalog selection only; must match explicit app_edition and configured bundle.",
+            "in": "header",
+            "name": "X-App-Edition",
+            "required": false,
+            "schema": {
+              "enum": [
+                "domestic",
+                "international"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Configured iOS bundle identifier; never accepted as payment proof.",
+            "in": "header",
+            "name": "X-App-Bundle-ID",
+            "required": false,
+            "schema": {
               "type": "string"
             }
           }
@@ -3000,8 +4007,24 @@
     },
     "/api/billing/wallet": {
       "get": {
-        "description": "需要登录，返回个人可用余额、冻结金额、套餐和计费开关。金额同时提供分和元两种单位。",
+        "description": "需要登录，返回个人可用余额、冻结金额、套餐和计费开关。默认按账号选择钱包：沙箱白名单读取隔离测试余额，其他账号读取正式余额。Web使用view=production明确读取正式钱包；此参数仅影响查询，不改变AI扣费环境。金额同时提供分和元两种单位。",
         "operationId": "wallet_api_billing_wallet_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "view",
+            "required": false,
+            "schema": {
+              "default": "app",
+              "enum": [
+                "app",
+                "production"
+              ],
+              "title": "View",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -3014,6 +4037,16 @@
               }
             },
             "description": "个人钱包与计费配置"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -3219,6 +4252,26 @@
         "operationId": "coin_products_api_marketplace_app_v1_coin_products_get",
         "parameters": [
           {
+            "in": "query",
+            "name": "app_edition",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "domestic",
+                    "international"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "App Edition"
+            }
+          },
+          {
             "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
             "in": "header",
             "name": "accept-language",
@@ -3234,6 +4287,28 @@
               ],
               "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
               "title": "Accept-Language"
+            }
+          },
+          {
+            "description": "Catalog selection only; must match explicit app_edition and configured bundle.",
+            "in": "header",
+            "name": "X-App-Edition",
+            "required": false,
+            "schema": {
+              "enum": [
+                "domestic",
+                "international"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Configured iOS bundle identifier; never accepted as payment proof.",
+            "in": "header",
+            "name": "X-App-Bundle-ID",
+            "required": false,
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -4021,6 +5096,28 @@
               "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
               "title": "Accept-Language"
             }
+          },
+          {
+            "description": "Catalog selection only; must match explicit app_edition and configured bundle.",
+            "in": "header",
+            "name": "X-App-Edition",
+            "required": false,
+            "schema": {
+              "enum": [
+                "domestic",
+                "international"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Configured iOS bundle identifier; never accepted as payment proof.",
+            "in": "header",
+            "name": "X-App-Bundle-ID",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -4132,7 +5229,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/VerifyInput"
+                "$ref": "#/components/schemas/app__marketplace__apple_api__VerifyInput"
               }
             }
           },
@@ -4204,6 +5301,320 @@
           }
         ],
         "summary": "Verify Apple Transaction",
+        "tags": [
+          "App视频与观影币"
+        ]
+      }
+    },
+    "/api/marketplace/app/v1/iap/google/purchase-intents": {
+      "post": {
+        "operationId": "purchase_intents_api_marketplace_app_v1_iap_google_purchase_intents_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+            "in": "header",
+            "name": "accept-language",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+              "title": "Accept-Language"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntentInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleIntentOut"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "创建绑定原账号和冻结积分的 Google 购买意向",
+        "tags": [
+          "App视频与观影币"
+        ]
+      }
+    },
+    "/api/marketplace/app/v1/iap/google/skus": {
+      "get": {
+        "operationId": "skus_api_marketplace_app_v1_iap_google_skus_get",
+        "parameters": [
+          {
+            "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+            "in": "header",
+            "name": "accept-language",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+              "title": "Accept-Language"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleCatalogOut"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Google Play 充值商品及当前用户绑定标识",
+        "tags": [
+          "App视频与观影币"
+        ]
+      }
+    },
+    "/api/marketplace/app/v1/iap/google/transactions/verify": {
+      "post": {
+        "operationId": "verify_api_marketplace_app_v1_iap_google_transactions_verify_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+            "in": "header",
+            "name": "accept-language",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Display language: zh-CN or en-US (quality weights supported). Defaults to Chinese. Business codes, amounts and user content are unchanged.",
+              "title": "Accept-Language"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__marketplace__google_api__VerifyInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleVerificationOut"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error",
+            "headers": {
+              "Content-Language": {
+                "description": "Resolved display language",
+                "schema": {
+                  "enum": [
+                    "zh-CN",
+                    "en"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Localized responses vary by Accept-Language",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Google 服务端验单并原子履约；提交后才允许消耗",
         "tags": [
           "App视频与观影币"
         ]
@@ -5134,7 +6545,7 @@
     },
     "/api/marketplace/app/v1/me/wallet": {
       "get": {
-        "description": "读取与 Web 相同的平台余额，兼容币字段只是单位别名。",
+        "description": "读取当前账号的 App 钱包，测试积分单独展示。",
         "operationId": "wallet_info_api_marketplace_app_v1_me_wallet_get",
         "parameters": [
           {
@@ -5229,7 +6640,7 @@
     },
     "/api/marketplace/app/v1/me/wallet/entries": {
       "get": {
-        "description": "Web充值、Apple充值和AI消费读取同一历史，不再读取旧币流水。",
+        "description": "返回当前 App 钱包的流水，正式积分和测试积分分开查询。",
         "operationId": "wallet_entries_api_marketplace_app_v1_me_wallet_entries_get",
         "parameters": [
           {

@@ -20,16 +20,19 @@ BarrierSession = async_sessionmaker(_engine, expire_on_commit=False)
 
 
 def guarded(method, path):
+    if path == "/epay/notify":
+        return True
     if not path.startswith("/api/") or path.startswith("/api/admin/settings/wallet-migration"):
         return False
     if path in ("/api/auth/login", "/api/auth/logout"):
         return False
     return (method not in ("GET", "HEAD", "OPTIONS") or "notify" in path or "webhook" in path
+            or path == "/api/marketplace/app/v1/iap/google/skus"
             or path == "/api/admin/settings/models")
 
 
 async def middleware(request, call_next):
-    if not request.url.path.startswith("/api/") or request.url.path == "/api/health":
+    if (not request.url.path.startswith("/api/") and request.url.path != "/epay/notify") or request.url.path == "/api/health":
         return await call_next(request)
     write = guarded(request.method, request.url.path)
     async with (BarrierSession() if write else AsyncSessionLocal()) as db:
@@ -39,7 +42,8 @@ async def middleware(request, call_next):
         await cutover.sync_runtime(db, value)
         # Cancellation can drain existing tasks; it cannot create new spending.
         cancelling = request.method == "POST" and re.fullmatch(r"/api/(?:admin/)?tasks/\d+/cancel", request.url.path) is not None
-        if write and value.get("paused") and not cancelling:
+        settings_read = request.method == "GET" and request.url.path == "/api/admin/settings/models"
+        if write and value.get("paused") and not cancelling and not settings_read:
             return JSONResponse(status_code=503, headers={"Retry-After": "30"}, content={
                 "detail": ("Financial reconciliation maintenance is in progress. Please try again later."
                            if request.headers.get("Accept-Language", "").lower().startswith("en")

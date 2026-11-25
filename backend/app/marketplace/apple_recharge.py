@@ -29,20 +29,28 @@ def product_snapshot(product: AppleProduct) -> dict:
     return snapshot
 
 
-async def find_product_for_sku(db, sku_id: str) -> AppleProduct:
+def validate_product_application(product, txn, cfg):
+    """Only the verified Apple bundle identifies which app may use a product."""
+    bundle = txn.get("bundle_id") or (txn.get("raw_payload") or {}).get("bundleId")
+    expected = cfg.apple_domestic_bundle_id if product.app_edition == "domestic" else cfg.apple_bundle_id
+    if (bundle and bundle != expected) or (product.app_edition == "domestic" and not bundle):
+        app_fail("MARKETPLACE_IAP_PRODUCT_APP_MISMATCH", "苹果商品与当前应用不匹配，请刷新充值套餐。", 409)
+
+
+async def find_product_for_sku(db, sku_id: str, app_edition: str = "international") -> AppleProduct:
     """同一套餐有多个在售映射时拒绝猜选，要求后台停用旧档位。"""
     products = list((await db.execute(select(AppleProduct).where(
-        AppleProduct.sku_id == sku_id, AppleProduct.enabled.is_(True)))).scalars())
+        AppleProduct.sku_id == sku_id, AppleProduct.app_edition == app_edition, AppleProduct.enabled.is_(True)))).scalars())
     if len(products) != 1:
         app_fail("MARKETPLACE_IAP_PRODUCT_UNAVAILABLE", "该套餐的苹果商品暂不可购买，请联系管理员。", 503)
     product_snapshot(products[0])
     return products[0]
 
 
-async def list_recharge_products(db) -> list[dict]:
+async def list_recharge_products(db, app_edition: str = "international") -> list[dict]:
     """共同套餐列表展示冻结额度，苹果实际售价仍由 StoreKit 提供。"""
     rows = list((await db.execute(select(AppleProduct).where(
-        AppleProduct.enabled.is_(True)).order_by(AppleProduct.coins, AppleProduct.id))).scalars())
+        AppleProduct.enabled.is_(True), AppleProduct.app_edition == app_edition).order_by(AppleProduct.coins, AppleProduct.id))).scalars())
     result = []
     seen = set()
     for product in rows:
@@ -54,7 +62,7 @@ async def list_recharge_products(db) -> list[dict]:
         if product.sku_id in seen:
             app_fail("MARKETPLACE_IAP_PRODUCT_CONFLICT", "同一套餐存在多个启用商品，请联系管理员核对。", 503)
         seen.add(product.sku_id)
-        result.append({**snapshot, "product_id": product.product_id,
+        result.append({**snapshot, "app_edition": product.app_edition, "product_id": product.product_id,
                        "coins": product.coins, "reference_price_fen": product.price_fen,
                        "credit_currency": "CNY", "bonus_fen": max(0, product.coins - snapshot["amount_fen"]),
                        "expected_prices": expected_prices(product)})

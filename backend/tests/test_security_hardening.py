@@ -50,7 +50,7 @@ async def _make_pending_order(db: AsyncSession, user: User) -> Order:
 
 
 async def test_epay_notify_duplicate_callback_credits_once(
-    db_session: AsyncSession,
+    db_session: AsyncSession, monkeypatch,
 ) -> None:
     """易支付重复回调只入账一次（行锁 + paid 幂等返回）。"""
     user = await make_user(db_session, balance_fen=0)
@@ -63,9 +63,16 @@ async def test_epay_notify_duplicate_callback_credits_once(
         "sign": "x",
     }
 
-    with patch.object(epay, "verify", return_value=True):
-        resp1 = await billing_api.epay_notify(_FakeNotifyRequest(params), db=db_session)
-        resp2 = await billing_api.epay_notify(_FakeNotifyRequest(params), db=db_session)
+    from app.config import get_settings
+    from app.marketplace.android_epay_models import AndroidEpayCheckout, EpayReceipt
+    from app.services.billing.epay_fulfillment import fulfill
+    monkeypatch.setattr(get_settings(), "epay_key", "test-epay-key")
+    connection = await db_session.connection()
+    for table in (AndroidEpayCheckout.__table__, EpayReceipt.__table__):
+        await connection.run_sync(lambda sync, table=table: table.create(sync, checkfirst=True))
+    params["sign"] = epay._sign_pairs(params, "test-epay-key")
+    resp1 = await fulfill(db_session, params)
+    resp2 = await fulfill(db_session, params)
 
     assert resp1.body == b"success"
     assert resp2.body == b"success"
@@ -87,7 +94,8 @@ async def test_epay_notify_duplicate_callback_credits_once(
 
 def test_epay_notify_source_locks_order_row() -> None:
     """源码守卫：回调必须用 SELECT ... FOR UPDATE 锁订单行，防并发双入账。"""
-    assert "with_for_update" in inspect.getsource(billing_api.epay_notify)
+    from app.services.billing.epay_fulfillment import fulfill
+    assert "with_for_update" in inspect.getsource(fulfill)
 
 
 def test_epay_verify_constant_time_signature() -> None:

@@ -31,8 +31,8 @@ test('React 法务页使用 AppShell 和结构化正文，不嵌套独立 HTML',
 test('参考文件的全部条款转换为结构化内容且保留关键规则', () => {
   assert.equal(LEGAL_DOCS.terms.title, 'Terms of Use')
   assert.equal(LEGAL_DOCS.privacy.title, 'Privacy Policy')
-  assert.equal(LEGAL_DOCS.terms.updatedAt, 'November 9, 2026')
-  assert.equal(LEGAL_DOCS.privacy.updatedAt, 'November 9, 2026')
+  assert.equal(LEGAL_DOCS.terms.updatedAt, 'November 12, 2026')
+  assert.equal(LEGAL_DOCS.privacy.updatedAt, 'November 12, 2026')
   assert.equal(LEGAL_DOCS.terms.sections.length, 20)
   assert.equal(LEGAL_DOCS.privacy.sections.length, 13)
 

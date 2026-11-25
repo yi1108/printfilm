@@ -183,18 +183,24 @@ async def apple_association():
 
 @public_router.get("/.well-known/assetlinks.json", include_in_schema=False)
 async def android_association():
-    sharing_configuration()
+    # Payment returns remain associated even when sharing/new purchases are disabled.
     from .sharing_config import validate_android_association
-    config = get_app_settings()
-    try:
-        package, fingerprints = validate_android_association(
-            getattr(config, "share_android_package_name", ""),
-            getattr(config, "share_android_sha256_fingerprints", ""))
-        if not package:
-            raise ValueError("Missing Android association")
-    except (ValueError, TypeError):
-        error("MARKETPLACE_SHARE_UNAVAILABLE", localized("请先在系统管理中补齐 Android 包名及签名证书 SHA-256 指纹。", "Configure the Android package name and signing certificate SHA-256 fingerprints in system settings."), 503)
+    from app.config import get_settings
+    config, billing = get_app_settings(), get_settings()
+    associations = {}
+    for package, fingerprints in (
+        (getattr(config, "share_android_package_name", ""), getattr(config, "share_android_sha256_fingerprints", "")),
+        (billing.android_epay_package_name, billing.android_epay_sha256_fingerprints),
+    ):
+        try:
+            package, fingerprints = validate_android_association(package, fingerprints)
+        except (ValueError, TypeError):
+            continue
+        if package:
+            associations.setdefault(package, set()).update(fingerprints.splitlines())
+    if not associations:
+        error("MARKETPLACE_SHARE_UNAVAILABLE", localized("请先配置 Android 包名和证书指纹。", "Configure Android package names and certificate fingerprints first."), 503)
     return JSONResponse([{"relation": ["delegate_permission/common.handle_all_urls"], "target": {
         "namespace": "android_app", "package_name": package,
-        "sha256_cert_fingerprints": fingerprints.splitlines(),
-    }}], headers={"Cache-Control": "no-store"})
+        "sha256_cert_fingerprints": sorted(fingerprints),
+    }} for package, fingerprints in sorted(associations.items())], headers={"Cache-Control": "no-store"})

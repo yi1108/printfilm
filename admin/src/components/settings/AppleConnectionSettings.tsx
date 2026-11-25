@@ -51,6 +51,7 @@ export function AppleConnectionSettings() {
       apple_sandbox_enabled: form.apple_sandbox_enabled, apple_sandbox_user_ids: form.apple_sandbox_user_ids,
       apple_iap_enabled: form.apple_iap_enabled, apple_environment: form.apple_environment, apple_bundle_id: form.apple_bundle_id.trim(),
       apple_app_id: form.apple_app_id, apple_issuer_id: form.apple_issuer_id.trim(), apple_key_id: form.apple_key_id.trim(),
+      apple_domestic_bundle_id: form.apple_domestic_bundle_id.trim(), apple_domestic_app_id: form.apple_domestic_app_id,
       apple_private_key: privateKey || undefined, clear_apple_private_key: clearKey,
       apple_root_certificates: form.apple_root_certificates,
     }, 'Apple 接入配置已保存');
@@ -67,8 +68,27 @@ export function AppleConnectionSettings() {
       </LabeledControl>
       <div className="settings-field-grid">
         <LabeledControl label="交易环境" hint="仅影响 Apple 渠道，不改变统一钱包及 AI 消费环境。正式站请保留 Production。同部署沙箱请使用上方白名单开关，不要切换正式钱包环境。"><select className="settings-input" value={form.apple_environment} onChange={e => patchField('apple_environment', e.target.value as 'Production' | 'Sandbox')}><option value="Production">Production（生产）</option><option value="Sandbox">Sandbox（沙箱测试）</option></select></LabeledControl>
-        <LabeledControl label="Bundle ID"><input className="settings-input" value={form.apple_bundle_id} onChange={e => patchField('apple_bundle_id', e.target.value)} placeholder="com.deep.printfilm" /></LabeledControl>
-        <LabeledControl label="Apple App ID" hint="App Store Connect 应用的数字 Apple ID；生产必填，不是 Bundle ID。"><input className="settings-input" type="number" min="0" step="1" value={form.apple_app_id || ''} onChange={e => patchField('apple_app_id', Number(e.target.value))} /></LabeledControl>
+      </div>
+      <section className="rounded-xl border p-4 space-y-3">
+        <h3 className="font-medium">国际版应用</h3>
+        <p className="text-sm text-muted-foreground">保留原上线配置；未指定应用版本的旧客户端默认读取国际版商品。</p>
+        <div className="settings-field-grid">
+          <LabeledControl label="国际版 Bundle ID"><input className="settings-input" value={form.apple_bundle_id} onChange={e => patchField('apple_bundle_id', e.target.value)} /></LabeledControl>
+          <LabeledControl label="国际版 Apple App ID" hint="App Store Connect 的数字 Apple ID，不是包名。"><input className="settings-input" type="number" min="0" step="1" value={form.apple_app_id || ''} onChange={e => patchField('apple_app_id', Number(e.target.value))} /></LabeledControl>
+        </div>
+      </section>
+      <section className="rounded-xl border p-4 space-y-3">
+        <h3 className="font-medium">国内版应用</h3>
+        <p className="text-sm text-muted-foreground">独立包名和商品编号，共用下方开发者凭证。国内版客户端获取套餐时传 app_edition=domestic；商品在下方双版本充值商品中单独登记。</p>
+        <div className="settings-field-grid">
+          <LabeledControl label="国内版 Bundle ID"><input className="settings-input" value={form.apple_domestic_bundle_id || ''} onChange={e => patchField('apple_domestic_bundle_id', e.target.value)} /></LabeledControl>
+          <LabeledControl label="国内版 Apple App ID" hint="国内版对应的数字 Apple ID，生产必填。"><input className="settings-input" type="number" min="0" step="1" value={form.apple_domestic_app_id || ''} onChange={e => patchField('apple_domestic_app_id', Number(e.target.value))} /></LabeledControl>
+        </div>
+      </section>
+      <section className="rounded-xl border p-4 space-y-3">
+        <h3 className="font-medium">公共服务器连接</h3>
+        <p className="text-sm text-muted-foreground">两款应用须属于同一 Apple 开发者账号，且服务器凭证有权访问两款应用。不同开发者账号暂不支持共用此配置。</p>
+        <div className="settings-field-grid">
         <LabeledControl label="Issuer ID"><input className="settings-input" value={form.apple_issuer_id} onChange={e => patchField('apple_issuer_id', e.target.value)} /></LabeledControl>
         <LabeledControl label="Key ID"><input className="settings-input" value={form.apple_key_id} onChange={e => patchField('apple_key_id', e.target.value)} /></LabeledControl>
         <LabeledControl label="Apple .p8 私钥" hint={clearKey ? '保存后清除。' : keyName ? '已选择新私钥，保存后生效。' : form.has_apple_private_key ? '已配置；不上传则保留。' : '尚未配置，请上传内购服务器 API 私钥。'}>
@@ -80,6 +100,7 @@ export function AppleConnectionSettings() {
           <p className="text-sm text-muted-foreground">{form.apple_root_certificates ? '已载入根证书集合' : '尚未配置根证书'}</p>
         </LabeledControl>
       </div>
+      </section>
       <p className="text-sm">根证书来源：<a href="https://www.apple.com/certificateauthority/" target="_blank" rel="noopener noreferrer" className="underline">Apple PKI</a>。配置检查只校验身份字段、证书和私钥可解析性，不证明凭证权限或商品可售。</p>
       {status && <div className="rounded-lg border p-4 space-y-2 text-sm">
         <p>已保存配置：{status.configured ? '配置完整，仍需真实联调' : '待补充：' + status.missing.join('、')}</p>

@@ -16,6 +16,7 @@ import ContactPage from './pages/ContactPage'
 import { PrivacyPage, TermsPage } from './pages/LegalDocPage'
 import SettingsPage from './pages/SettingsPage'
 import PricingPage from './pages/PricingPage'
+import PaymentReturnPage from './pages/PaymentReturnPage'
 import StudioPage from './pages/StudioPage'
 import TemplatesPage from './pages/TemplatesPage'
 import CreateProjectPage from './pages/studio/CreateProjectPage'
@@ -92,6 +93,7 @@ export default function App() {
         {/* Legacy URL remains routable for bookmarks but opens the new workspace. */}
         <Route path="/drama/projects/:projectId/canvas" element={<RequireAuth><PrintfilmStudioPage /></RequireAuth>} />
         <Route path="/drama/projects/:projectId/printfilm-studio" element={<RequireAuth><PrintfilmStudioPage /></RequireAuth>} />
+        <Route path="/payments/return" element={<PaymentReturnPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <WeChatGroupFab />

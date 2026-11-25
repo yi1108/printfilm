@@ -33,6 +33,7 @@ def test_additive_schema_upgrades_an_old_stats_table_twice_without_losing_counts
     engine = create_engine("sqlite://")
     with engine.begin() as connection:
         MarketBase.metadata.create_all(connection)
+        connection.execute(text("CREATE TABLE orders (id INTEGER PRIMARY KEY)"))
         connection.execute(text("ALTER TABLE marketplace_app_content_stats DROP COLUMN share_count"))
         connection.execute(text("INSERT INTO marketplace_app_content_stats (target_type,target_id,like_count,favorite_count,comment_count) VALUES ('work', 1, 23, 7, 2)"))
         apply_schema(connection)

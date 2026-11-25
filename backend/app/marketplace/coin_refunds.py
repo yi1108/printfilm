@@ -9,7 +9,7 @@ from .models import ContentOrder, Entitlement, Publication, RevenueLedger
 from .service import event, notify, now
 
 
-async def _reverse_unlock(db, item: CoinUnlock, refunded_transaction: AppleTransaction) -> None:
+async def _reverse_unlock(db, item: CoinUnlock, refunded_transaction, *, channel="苹果", transaction_id=None) -> None:
     """整单只撤销一次，只撤回该次授予，返还其他有效资金后先补欠费。"""
     if item.status != "paid":
         return
@@ -37,7 +37,7 @@ async def _reverse_unlock(db, item: CoinUnlock, refunded_transaction: AppleTrans
             ledger.settlement_status = "revoked"
         db.add(RevenueAdjustment(unlock_id=item.id, owner_id=ledger.owner_id, environment=item.environment,
             gross_fen=-ledger.gross_fen, platform_fen=-ledger.platform_fen, creator_fen=-ledger.creator_fen,
-            reason=f"苹果充值退款 {refunded_transaction.transaction_id}"))
+            reason=f"{channel}充值退款 {transaction_id or refunded_transaction.transaction_id}"))
     if item.environment == "Production" and entitlement and entitlement.active and entitlement.order_id != item.order_id:
         # 在途Web付款此前因同版本已有余额权益而暂不重复记收益；余额收益撤回后，
         # 保留其独立实收来源，并把存活Web订单的收益补齐一次。
@@ -53,7 +53,7 @@ async def _reverse_unlock(db, item: CoinUnlock, refunded_transaction: AppleTrans
                     event(db, item.user_id, "content_order", surviving_order.id, "paid_revenue_recovered",
                           "余额购买已撤销，按存活的易支付实收订单补齐收益；不重复授予权益", publication.version)
     await funds_call(wallet.restore_consumption(db, item.user_id, "video_unlock", str(item.id), environment=item.environment))
-    notify(db, item.user_id, f"充值已由苹果退款，关联解锁订单 {order.out_trade_no if order else item.id} 已撤销；其他有效来源已退回平台余额并优先抵扣欠费。")
+    notify(db, item.user_id, f"充值已由{channel}退款，关联解锁订单 {order.out_trade_no if order else item.id} 已撤销；其他有效来源已退回平台余额并优先抵扣欠费。")
 
 
 async def refund_apple_transaction(db, environment: str, transaction_id: str, reversed: bool = False):

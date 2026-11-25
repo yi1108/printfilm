@@ -48,7 +48,8 @@ async def client_for(ctx, monkeypatch):
     app.dependency_overrides[get_current_user] = actor
     app.dependency_overrides[get_current_admin] = administrator
     app.dependency_overrides[app_bootstrap.require_schema] = schema_ready
-    monkeypatch.setattr(billing_api.epay, "verify", lambda _params: True)
+    from app.config import get_settings
+    monkeypatch.setattr(get_settings(), "epay_key", "test-epay-key")
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         yield client
 
@@ -73,7 +74,9 @@ async def test_web_callback_and_app_wallet_share_balance_and_preserve_ai_freeze(
     await ctx.db.commit()
     async with client_for(ctx, monkeypatch) as client:
         params = {"out_trade_no": order.out_trade_no, "money": "0.90", "trade_status": "TRADE_SUCCESS"}
+        params["sign"] = billing_api.epay._sign_pairs(params, "test-epay-key")
         assert (await client.get("/api/billing/epay/notify", params=params)).text == "success"
+        params["sign"] = billing_api.epay._sign_pairs(params, "test-epay-key")
         assert (await client.get("/api/billing/epay/notify", params=params)).text == "success"
         await wallet.reserve_task(ctx.db, ctx.buyer.id, 4567, 50)
         await ctx.db.commit()

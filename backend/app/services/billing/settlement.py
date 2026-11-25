@@ -490,7 +490,8 @@ async def credit_topup(
             raise ValueError("充值资金来源缺少有效订单")
         from .wallet_valuation import order_cash
         amount = order_cash(order)
-        lot = await wallet.credit(db, user.id, int(credit_fen), source_type="web_order", source_ref=ref_id, amount_fen=amount or 0, note=note)
+        from .order_origin import funding_source
+        lot = await wallet.credit(db, user.id, int(credit_fen), source_type=funding_source(order), source_ref=ref_id, amount_fen=amount or 0, note=note)
         if amount is None:
             lot.settlement_status = "pending_fx"
         return
@@ -517,7 +518,7 @@ async def close_expired_pending_orders(
     now = datetime.now(timezone.utc)
     # Stripe owns its Checkout expiry; never apply Epay's five-minute timeout.
     stmt = (
-        select(Order).where(Order.status == "pending", Order.pay_type.notin_(("stripe", "apple_iap")))
+        select(Order).where(Order.status == "pending", Order.pay_type.notin_(("stripe", "apple_iap", "google_play")))
         .with_for_update().execution_options(populate_existing=True)
     )
     if team_id is not None:
