@@ -45,6 +45,37 @@ def _stage(name, snapshot):
                     snapshot.get("content_id"), snapshot.get("asset_id"), time.monotonic() - started)
 
 
+_FPS_FLAG_BY_BINARY: dict[tuple[str, int], str] = {}
+
+
+async def _supports_fps_mode(ffmpeg_path: str) -> bool:
+    """Probe the actual binary: -fps_mode exists only since FFmpeg 5.1."""
+    from .worker import command
+    try:
+        await command(ffmpeg_path, "-hide_banner", "-v", "error",
+                      "-f", "lavfi", "-i", "color=size=16x16:duration=0.1:rate=1",
+                      "-frames:v", "1", "-fps_mode", "passthrough", "-f", "null", "-", timeout=30)
+        return True
+    except Exception:
+        # 探测失败（旧版不支持或二进制异常）时退回所有版本都接受的 -vsync；
+        # 若 ffmpeg 本身损坏，真正的转码仍会报出原始错误。
+        return False
+
+
+async def _fps_passthrough_args(ffmpeg_path: str) -> list[str]:
+    # 以 (路径, mtime) 为键缓存探测结果：替换同路径二进制后重新探测。
+    try:
+        key = (ffmpeg_path, Path(ffmpeg_path).stat().st_mtime_ns)
+    except OSError:
+        key = (ffmpeg_path, -1)
+    flag = _FPS_FLAG_BY_BINARY.get(key)
+    if flag is None:
+        flag = "-fps_mode" if await _supports_fps_mode(ffmpeg_path) else "-vsync"
+        if key[1] != -1:
+            _FPS_FLAG_BY_BINARY[key] = flag
+    return [flag, "passthrough"]
+
+
 async def _probe(path):
     from .worker import command
     return json.loads(await command(get_settings().ffprobe_path, "-v", "error",
@@ -129,7 +160,8 @@ async def render_preview(snapshot):
             if not copied:
                 await command(*args, "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
                     "-c:v", "libx264", "-preset", "fast", "-crf", "16", "-threads", "2",
-                    "-fps_mode", "passthrough", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
+                    *(await _fps_passthrough_args(upstream.ffmpeg_path)),
+                    "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
                     "-movflags", "+faststart", str(output), timeout=600)
         with _stage("输出校验", snapshot):
             if not output.is_file() or not output.stat().st_size or not _compatible_clip(await _probe(output), probe, maximum):
