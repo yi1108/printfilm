@@ -10,6 +10,8 @@ from app.marketplace import preview_worker
 def _independent_probe(ffmpeg_path: str) -> str:
     """独立的同步探针：直接执行真实二进制，不复用产品实现。"""
     try:
+        from app.marketplace.worker import resolve_tool
+        ffmpeg_path = resolve_tool(ffmpeg_path)
         subprocess.run(
             [ffmpeg_path, "-hide_banner", "-v", "error",
              "-f", "lavfi", "-i", "color=size=16x16:duration=0.1:rate=1",
