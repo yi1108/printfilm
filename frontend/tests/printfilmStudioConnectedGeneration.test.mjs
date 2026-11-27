@@ -16,6 +16,15 @@ test('connected writing and the saved character voice reach both video requests'
   install('requestAnimationFrame', dom.window.requestAnimationFrame.bind(dom.window))
   install('cancelAnimationFrame', dom.window.cancelAnimationFrame.bind(dom.window))
   install('IS_REACT_ACT_ENVIRONMENT', true)
+  let roleHeight = 262
+  install('Image', class {
+    naturalWidth = 570
+    get naturalHeight() {
+      if (this.src.startsWith('blob:')) return 262
+      return this.src.endsWith('/role.png') ? roleHeight : 300
+    }
+    async decode() {}
+  })
   install('ResizeObserver', class {
     constructor(callback) { this.callback = callback; this.targets = new Set() }
     observe(target) { this.targets.add(target); queueMicrotask(() => { if (this.targets.has(target)) this.callback([{ target, contentRect: target.getBoundingClientRect() }]) }) }
@@ -66,7 +75,7 @@ test('connected writing and the saved character voice reach both video requests'
       data = { id: 42, asset_type: 'audio', name: 'voice.wav', url: '/voice.wav' }
       assets.push(data)
     }
-    else if (path.includes('media-models')) data = { image_models: [], video_models: [], defaults: {} }
+    else if (path.includes('media-models')) data = { image_models: [], video_models: [{ id: 'seedance-2.5', name: 'Seedance 2.5' }], defaults: { video_model: 'seedance-2.5' } }
     else if (path.includes('wallet')) data = { balance_yuan: 0 }
     else if (path === '/api/tools/estimate') data = { estimate_fen: 588, price_version: 1 }
     else if (path.endsWith('/generations')) { generationBodies.push(init.body); data = { status: 'queued', task_id: 'unit-generation' } }
@@ -105,6 +114,13 @@ test('connected writing and the saved character voice reach both video requests'
     await act(async () => voiceInput.dispatchEvent(new Event('change', { bubbles: true })))
     await settle(100)
     const video = document.querySelector('.react-flow__node[data-id="video"]')
+    await act(async () => {
+      const event = new Event('drop', { bubbles: true, cancelable: true })
+      const file = new File(['mock image'], '尺寸不足.png', { type: 'image/png' })
+      Object.defineProperty(event, 'dataTransfer', { value: { files: [file], getData: () => '' } })
+      video.firstElementChild.dispatchEvent(event)
+    })
+    assert.match(document.querySelector('.pf-workspace-feedback').textContent, /尺寸不足\.png.*570 × 262.*高度至少为 300/)
     const paste = async (input, text, offset) => {
       await act(async () => {
         input.focus()
@@ -130,6 +146,10 @@ test('connected writing and the saved character voice reach both video requests'
     assert.match(input.textContent, /，@舞者抬头。尾部标记\n参考素材：舞者$/)
     assert.equal(video.querySelector('[aria-label="生成"]').disabled, false)
     assert.equal(generationBodies.length, 0, 'opening a node does not create a paid task')
+    await click(video.querySelector('[aria-label="生成"]'))
+    assert.equal(generationBodies.length, 0, 'a short saved reference blocks Seedance submission')
+    assert.match(video.textContent, /舞者.*570 × 262.*高度至少为 300/)
+    roleHeight = 300
     await click(video.querySelector('[aria-label="生成"]'))
     await settle(120)
     assert.equal(generationBodies.length, 1, video.textContent)

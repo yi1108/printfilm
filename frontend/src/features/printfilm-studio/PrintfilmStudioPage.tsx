@@ -71,6 +71,7 @@ import { captureRecipe, instantiateRecipe } from './canvas/recipeGraph'
 import type { CanvasDocument } from './canvas/canvasCodec'
 import { ASSET_DRAG_TYPE, AssetLibraryPanel, assetMediaKind } from './canvas/AssetLibraryPanel'
 import { studioGenerationError } from './canvas/generationError'
+import { isSeedanceVideoModel, seedanceReferenceImageError } from './canvas/seedanceImageSize'
 import { fixedFrameNodes, videoFileReferences, videoReferenceError, VIDEO_MODES, type StudioVideoMode, type MediaKind } from './canvas/generationReferences'
 import { characterVoicePrompt, characterVoiceReferences, isCanvasCharacter, storyVideoInputs, storyAssetPrompt } from './canvas/storyGenerationInputs'
 import { applyProposal, type AgentProposal, type ProposalAction, type ProposalStates } from './agent/proposals'
@@ -1046,11 +1047,21 @@ function PrintfilmStudioWorkspace() {
     commitGraph(next, edgesRef.current.filter((edge) => !groups.has(edge.source) && !groups.has(edge.target)), group ? '已合并分组' : '已取消分组，保留所有子节点')
     setSelectedNodeId(group?.id || null); setSelectedNodeIds(group ? [group.id] : next.filter((node) => node.selected).map((node) => node.id))
   }
-  const uploadFiles = async (files: FileList | null) => {
+  const isSeedanceReferenceTarget = (id: string) => {
+    const node = nodesRef.current.find(item => item.id === id)
+    return nodeMediaKind(node) === 'video' && isSeedanceVideoModel(
+      (id === selectedNodeId && genModel) || node?.data.modelId || resolveCatalogModelSelection(mediaCatalog, 'video', ''),
+    )
+  }
+  const uploadFiles = async (files: FileList | null, referenceTarget?: string | null) => {
     if (!files?.length || !canEdit) return
     const created: Node<Data>[] = []
     for (const file of Array.from(files)) {
       try {
+        if (referenceTarget && isSeedanceReferenceTarget(referenceTarget) && file.type.startsWith('image/')) {
+          const error = await seedanceReferenceImageError(file, file.name)
+          if (error) throw new Error(error)
+        }
         setStatus(`正在上传 ${file.name}`)
         const asset = await printfilmStudioApi.uploadAsset(projectId, file, editLockRequestHeaders(canvasTarget))
         if (!mountedRef.current) return
@@ -1138,6 +1149,10 @@ function PrintfilmStudioWorkspace() {
       const addReference = async (node: { id: string; data: Data }, url: string, kind: MediaKind) => {
         const absolute = absoluteMediaUrl(url)
         if (!absolute) return false
+        if (isVideoAction && isSeedanceVideoModel(genModel) && kind === 'image' && !referencedUrls.has(absolute)) {
+          const error = await seedanceReferenceImageError(absolute, String(node.data.label || '参考图片'))
+          if (error) throw new Error(error)
+        }
         if (isVideoAction && !referencedUrls.has(absolute)) {
           const matches = (asset: ProjectAsset) => assetMediaKind(asset) === kind
             && absoluteMediaUrl(String(kind === 'image' ? asset.url || asset.cover || '' : asset.url || '')) === absolute
@@ -1374,6 +1389,12 @@ function PrintfilmStudioWorkspace() {
     const file = files[0]
     if (nodesRef.current.find((node) => node.id === id)?.type === 'frameAnalysis' && !file.type.startsWith('video/')) { setStatus('逐帧拉片只能上传视频'); return }
     try {
+      if (file.type.startsWith('image/') && (
+        isSeedanceReferenceTarget(id) || edgesRef.current.some(edge => edge.source === id && isSeedanceReferenceTarget(edge.target))
+      )) {
+        const error = await seedanceReferenceImageError(file, file.name)
+        if (error) throw new Error(error)
+      }
       setStatus(`正在上传 ${file.name}`)
       const asset = await printfilmStudioApi.uploadAsset(projectId, file, editLockRequestHeaders(canvasTarget))
       if (!mountedRef.current) return
@@ -1393,6 +1414,11 @@ function PrintfilmStudioWorkspace() {
   }
   const placeReferenceAsset = async (sourceAsset: ProjectAsset, targetId: string) => {
     if (!canEdit) return
+    const imageUrl = sourceAsset.url || sourceAsset.cover
+    if (imageUrl && assetMediaKind(sourceAsset) === 'image' && isSeedanceReferenceTarget(targetId)) {
+      const error = await seedanceReferenceImageError(absoluteMediaUrl(imageUrl), sourceAsset.name || '参考图片')
+      if (error) throw new Error(error)
+    }
     const existing = referenceAssetNode(nodesRef.current, sourceAsset, targetId, edgesRef.current)
     if (existing) {
       citeNode(existing.id, targetId)
@@ -2080,7 +2106,7 @@ function PrintfilmStudioWorkspace() {
       if (target && file) void uploadCharacterVoice(target, file)
       event.target.value = ''
     }} />
-    <input ref={uploadRef} className="pf-upload-input" type="file" accept="image/*,video/*,audio/*" multiple onChange={(event) => { const files = event.target.files; const replacement = replaceTargetRef.current; replaceTargetRef.current = null; if (replacement && files?.length) { void uploadOntoNode(replacement, files); event.target.value = ''; return }; const target = selectedNodeId ? nodesRef.current.find((node) => node.id === selectedNodeId) : undefined; const empty = target && !(target.data.mediaUrl || target.data.url || target.data.cover) && (target.type === 'image' || target.type === 'video' || target.type === 'audio' || target.type === 'asset' || target.type === 'inpaint' || target.type === 'outpaint' || target.type === 'upscale'); if (empty && selectedNodeId) void uploadOntoNode(selectedNodeId, files); else void uploadFiles(files); event.target.value = '' }} />
+    <input ref={uploadRef} className="pf-upload-input" type="file" accept="image/*,video/*,audio/*" multiple onChange={(event) => { const files = event.target.files; const replacement = replaceTargetRef.current; replaceTargetRef.current = null; if (replacement && files?.length) { void uploadOntoNode(replacement, files); event.target.value = ''; return }; const target = selectedNodeId ? nodesRef.current.find((node) => node.id === selectedNodeId) : undefined; const empty = target && !(target.data.mediaUrl || target.data.url || target.data.cover) && (target.type === 'image' || target.type === 'video' || target.type === 'audio' || target.type === 'asset' || target.type === 'inpaint' || target.type === 'outpaint' || target.type === 'upscale'); if (empty && selectedNodeId) void uploadOntoNode(selectedNodeId, files); else void uploadFiles(files, referenceTargetId); event.target.value = '' }} />
     <WorkspaceChrome dockWidth={agentOpen ? agentDockWidth : 0} title={projectTitle || `项目 #${projectId || '—'}`} status={savingRef.current ? '保存中…' : saveBlockedRef.current ? '保存冲突' : dirtyRef.current ? '待保存' : !canvasReady ? '加载中…' : '已保存'} balance={points(wallet?.balance_fen)} mode={viewMode} onMode={setViewMode} onAction={workspaceAction} />
     {tourOpen && <WorkspaceTour onClose={() => { setTourOpen(false); setAgentOpen(tourAgentWasOpen.current) }} onStep={step => {
       setPaneAddMenu(null)
