@@ -2,10 +2,17 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createWritingReferenceResolver, writingContext, linkedWritingPrompt, linkedWritingResult, writingRequest, toggleWritingReference, writingParametersChanged, assertWritingParameters } from '../src/features/printfilm-studio/canvas/writingContext.ts'
 import { studioGenerationError } from '../src/features/printfilm-studio/canvas/generationError.ts'
+import { seedanceImageHeightError } from '../src/features/printfilm-studio/canvas/seedanceImageSize.ts'
 import { dependencyPlan, dependencySignature } from '../src/features/printfilm-studio/agent/dependencyRun.ts'
 import { splitPrompt, plainPrompt } from '../src/features/printfilm-studio/canvas/promptMentions.ts'
 import { editableWritingRequirements } from '../src/features/printfilm-studio/canvas/textWriting.ts'
 import { currentImageModel, currentTextModel } from '../src/features/printfilm-studio/modelPreferences.ts'
+
+test('explains Seedance reference height limits using actual image dimensions', () => {
+  assert.match(seedanceImageHeightError('参考图.png', 570, 262), /参考图\.png.*570 × 262.*高度至少为 300/)
+  assert.equal(seedanceImageHeightError('参考图.png', 653, 300), undefined)
+  assert.match(studioGenerationError('RuntimeError: Seedance create error 400: expected the height to be atleast 300px, but received a570x262px image instead'), /570 × 262.*高度至少需要 300/)
+})
 
 test('retired model preferences fall forward and legacy preamble is hidden without losing user requirements',()=>{
   assert.equal(currentTextModel('kimi-k2.6'),'gpt-6.1-sol')

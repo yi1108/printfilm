@@ -1,5 +1,7 @@
 export function studioGenerationError(value: unknown): string {
   const message = typeof value === 'string' ? value : ''
+  const size = message.match(/expected the (height|width) to be at\s*least\s*(\d+)\s*px[\s\S]*?received\s*(?:a\s*)?(\d+)\s*[x×]\s*(\d+)\s*px/i)
+  if (size) return `Seedance 参考图片尺寸不足。收到的图片为 ${size[3]} × ${size[4]} 像素，${size[1].toLowerCase() === 'height' ? '高度' : '宽度'}至少需要 ${size[2]} 像素。请更换该图片或等比放大后重试。`
   if (/at most one first[_ ]frame/i.test(message)) return '上次任务提交了多张首帧。图生视频只接受一张首帧；要指定结束画面请选择「首尾帧」，要参考多张图片请选择「全能参考」。'
   if (/ModelNotOpen|model.+not.+activated/i.test(message)) {
     const model = message.match(/(?:doubao-)?seedance-2[.-](?:0|5)(?:-fast)?(?:-\d{6})?/i)?.[0]
